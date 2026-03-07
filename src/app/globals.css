@@ -1,0 +1,178 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  * { @apply box-border; }
+  body { @apply bg-slate-50 text-gray-900 text-[13px] leading-relaxed; }
+  @media (max-width: 768px) {
+    html { font-size: 18px; }
+    body { @apply text-base leading-snug; }
+  }
+  h1 { @apply text-lg font-bold; }
+  h2 { @apply text-base font-semibold; }
+  @media (max-width: 768px) {
+    h1 { @apply text-xl; }
+    h2 { @apply text-lg; }
+  }
+}
+
+@layer components {
+  /* ─── 버튼 */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5
+      bg-slate-600 hover:bg-slate-700 active:bg-slate-800
+      text-white text-[13px] font-medium rounded px-4 py-2
+      transition-colors select-none
+      disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5
+      bg-white hover:bg-gray-50 active:bg-gray-100
+      border border-gray-300 text-gray-700 text-[13px] font-medium
+      rounded px-4 py-2 transition-colors select-none
+      disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5
+      bg-rose-500 hover:bg-rose-600 text-white text-[13px] font-medium
+      rounded px-4 py-2 transition-colors disabled:opacity-40;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-1.5
+      text-gray-600 hover:bg-gray-100 text-[13px] rounded px-3 py-1.5
+      transition-colors select-none;
+  }
+  .btn-sm { @apply px-3 py-1.5 text-xs; }
+  .btn-lg { @apply px-5 py-2.5 text-sm; }
+  @media (max-width: 768px) {
+    .btn-primary, .btn-secondary, .btn-danger { @apply text-[15px] py-2.5 px-4; }
+    .btn-sm { @apply text-sm py-2 px-3; }
+    .input { @apply text-[15px] py-2.5; }
+  }
+
+  /* ─── 입력 */
+  .input {
+    @apply w-full border border-gray-300 rounded px-2.5 py-2 text-[13px]
+      bg-white placeholder-gray-400
+      focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+      disabled:bg-gray-50 disabled:text-gray-400
+      transition-colors;
+  }
+  .label { @apply block text-xs font-medium text-gray-600 mb-1; }
+
+  /* ─── 카드 — 최소한의 shadow, 엔터프라이즈 느낌 */
+  .card {
+    @apply bg-white rounded border border-gray-200 p-4;
+  }
+  .card-sm { @apply bg-white rounded border border-gray-200 p-3; }
+
+  /* ─── 페이지 헤더 */
+  .page-title { @apply text-base font-bold text-gray-900; }
+  .page-subtitle { @apply text-xs text-gray-500 mt-0.5; }
+  @media (max-width: 768px) {
+    .page-title { @apply text-xl; }
+    .page-subtitle { @apply text-sm; }
+  }
+
+  /* ─── 배지 — 작고 단정 */
+  .badge {
+    @apply inline-flex items-center text-[11px] font-medium px-1.5 py-0.5 rounded;
+  }
+  @media (max-width: 768px) {
+    .badge { @apply text-xs px-2 py-1; }
+  }
+  .badge-success { @apply bg-emerald-50 text-emerald-700 border border-emerald-200; }
+  .badge-warning { @apply bg-amber-50 text-amber-700 border border-amber-200; }
+  .badge-danger  { @apply bg-rose-50 text-rose-700 border border-rose-200; }
+  .badge-default { @apply bg-gray-100 text-gray-600 border border-gray-200; }
+  .badge-blue    { @apply bg-slate-100 text-slate-700 border border-slate-200; }
+  .badge-purple  { @apply bg-violet-50 text-violet-700 border border-violet-200; }
+
+  /* ─── 테이블 — 모바일에서 글씨·패딩 확대, 가로 스크롤 */
+  .table-scroll { @apply overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0; }
+  .data-table { @apply w-full text-[13px] border-collapse min-w-[480px]; }
+  /* 신청 내역 등: 한 행이 가로 스크롤 시 완전히 보이도록 열 너비 고정 */
+  .request-list-table { min-width: 640px; }
+  .request-list-th.type,   .request-list-td.type   { min-width: 90px; }
+  .request-list-th.period, .request-list-td.period { min-width: 120px; }
+  .request-list-th.status, .request-list-td.status { min-width: 68px; }
+  .request-list-th.approval,.request-list-td.approval { min-width: 88px; }
+  .request-list-th.reason, .request-list-td.reason { min-width: 100px; }
+  .request-list-th.action, .request-list-td.action { min-width: 90px; }
+  /* 유형별 잔여 등: 모바일에서 가로 스크롤 시 한 행 완전히 보이도록 */
+  .data-table.allocation-table { min-width: 520px; }
+  .data-table.allocation-table th,
+  .data-table.allocation-table td { min-width: 72px; }
+  .data-table.allocation-table th:first-child,
+  .data-table.allocation-table td:first-child { min-width: 100px; }
+  .data-table thead { @apply bg-gray-50 border-b border-gray-200; }
+  .data-table th {
+    @apply px-3 py-2.5 text-left text-[11px] font-semibold text-gray-500
+      uppercase tracking-wide whitespace-nowrap;
+  }
+  .data-table td {
+    @apply px-3 py-2.5 text-gray-700 border-b border-gray-100 align-middle;
+  }
+  .data-table tbody tr:hover td { @apply bg-slate-50; }
+  .data-table tbody tr:last-child td { @apply border-b-0; }
+  @media (max-width: 768px) {
+    .data-table { @apply text-[15px]; }
+    .data-table th { @apply text-xs px-3 py-3; }
+    .data-table td { @apply px-3 py-3; }
+  }
+
+  /* ─── 폼 레이아웃 */
+  .form-section {
+    @apply border-b border-gray-100 pb-4 mb-4;
+  }
+  .form-section-title {
+    @apply text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3;
+  }
+
+  /* ─── 패널 / 구분선 */
+  .panel { @apply bg-white border border-gray-200 rounded overflow-hidden; }
+  .panel-header {
+    @apply flex items-center justify-between px-4 py-2.5 border-b border-gray-200 bg-gray-50;
+  }
+  .panel-title { @apply text-[13px] font-semibold text-gray-800; }
+  .panel-body { @apply p-4; }
+  @media (max-width: 768px) {
+    .panel-header { @apply px-4 py-3 text-[15px]; }
+    .panel-body { @apply p-4 text-[15px]; }
+    .panel-title { @apply text-base; }
+  }
+
+  /* ─── 정보 행 */
+  .info-row {
+    @apply flex items-center justify-between py-2 border-b border-gray-100 last:border-0;
+  }
+  .info-label { @apply text-xs text-gray-500 min-w-[80px]; }
+  .info-value { @apply text-[13px] font-medium text-gray-800; }
+
+  /* ─── 스탯 카드 */
+  .stat-card { @apply bg-white border border-gray-200 rounded p-3 text-center; }
+  .stat-num  { @apply text-2xl font-bold text-blue-700 leading-none; }
+  .stat-label{ @apply text-[11px] text-gray-500 mt-1; }
+  @media (max-width: 768px) {
+    .stat-card { @apply p-4; }
+    .stat-num { @apply text-2xl md:text-2xl; }
+    .stat-label { @apply text-sm mt-1.5; }
+  }
+
+  /* ─── 로딩 */
+  .spinner {
+    @apply inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
+  }
+
+  /* ─── 섹션 구분자 레이블 */
+  .section-divider {
+    @apply text-[10px] font-semibold text-gray-400 uppercase tracking-widest
+      px-2 pt-4 pb-1;
+  }
+}

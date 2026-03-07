@@ -1,0 +1,423 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────
+// 조직
+// ─────────────────────────────────────────
+model Team {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  sortOrder Int        @default(0)
+  leaderId  String?    @unique
+  leader    Employee?  @relation("TeamLeader", fields: [leaderId], references: [id])
+  employees Employee[] @relation("TeamMembers")
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+}
+
+// ─────────────────────────────────────────
+// 사원 마스터
+// ─────────────────────────────────────────
+model Employee {
+  id           String       @id @default(cuid())
+  empNo        String       @unique
+  name         String
+  teamId       String?
+  team         Team?        @relation("TeamMembers", fields: [teamId], references: [id])
+  position     String
+  dutyDept     String?       // 직급부서: OPERATIONS/EDUCATION/WELFARE → 귀속연도 초기화 시 2일 부여, NONE=해당사항없음
+  employeeType String       @default("FULL")   // FULL / FREE
+  hireDate     DateTime
+  birthDate    DateTime?     // 생년월일 (생일반차쿠폰 등)
+  phone        String   @default("")
+  email        String?
+  status       String       @default("PENDING") // PENDING/INVITED/ACTIVE/INACTIVE
+  role         String       @default("STAFF")   // STAFF/TEAM_LEAD/PM/ADMIN
+
+  user              User?
+  inviteTokens      InviteToken[]
+  leaveRequests     LeaveRequest[]
+  leaveAllocations  LeaveAllocation[]
+  stampCoupons      StampCoupon[]
+  stampRequests     StampRequest[]    @relation("StampRequester")
+  stampApprovals    StampRequest[]    @relation("StampApprover")
+  approvals         LeaveApproval[]
+  auditLogs         AuditLog[]        @relation("AuditActor")
+  teamLeaderOf      Team?             @relation("TeamLeader")
+  notifications     Notification[]
+  jejuAccommodations JejuAccommodation[]
+  jejuApprovedBy    JejuAccommodation[] @relation("JejuApprover")
+
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+// ─────────────────────────────────────────
+// 사용자 계정
+// ─────────────────────────────────────────
+model User {
+  id           String    @id @default(cuid())
+  employeeId   String    @unique
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  username     String    @unique
+  passwordHash String
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────
+// 초대 토큰
+// ─────────────────────────────────────────
+model InviteToken {
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  token      String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────
+// 휴가 유형 마스터 (메타데이터)
+// ─────────────────────────────────────────
+model LeaveType {
+  id               String  @id @default(cuid())
+  code             String  @unique
+  name             String
+  daysPerUnit      Float   @default(1)
+  // 연차 잔여에서 차감 여부 (false = 경조/돌봄/공가/인정 등)
+  deductFromBalance Boolean @default(true)
+  // 결재 단계: 1=팀장만, 2=PM까지
+  approvalSteps    Int     @default(2)
+  // 월 최대 사용 횟수 (하프데이=1)
+  maxPerMonth      Float?
+  // 연간 최대 사용일 (null=무제한)
+  maxPerYear       Float?
+  // 스탬프 필요 여부
+  requiresStamp    Boolean @default(false)
+  stampCount       Int?
+  // 같은 날 중복 허용 (오전반차+오후인정 등)
+  allowSameDay     Boolean @default(true)
+  // 반차 여부 (AM or PM 선택)
+  isHalf           Boolean @default(false)
+  isAmOnly         Boolean @default(false)
+  isPmOnly         Boolean @default(false)
+  // 사용 가능 기간 기준: FISCAL=귀속연도, HIRE=입사일기준, GRANT=부여일기준
+  validityBasis    String  @default("FISCAL")
+  // 유효기간 (개월 수, null=귀속연도 끝까지)
+  validityMonths   Int?
+  isActive         Boolean @default(true)
+  sortOrder        Int     @default(0)
+  color            String  @default("#3b82f6") // 캘린더 색상
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  requestItems  LeaveRequestItem[]
+}
+
+// ─────────────────────────────────────────
+// 휴가 할당 (부여 단위 - 각 종류별 별도 관리)
+// 예: 기본연차 15일, 5년근속 5일(유효기간 별도), 부서추가 2일 등
+// ─────────────────────────────────────────
+model LeaveAllocation {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  // 할당 분류: BASE_ANNUAL/TENURE_BONUS/DEPT_BONUS/TENURE_1Y/TENURE_5Y/TENURE_10Y/AWARD/CARRYOVER/SICK_RECOGNITION
+  sourceCode  String
+  label       String    // 표시명 (기본연차 15일, 5년근속 5일 등)
+  totalDays   Float
+  usedDays    Float     @default(0)
+  validFrom   DateTime
+  validUntil  DateTime
+  fiscalYear  Int?      // 귀속연도 기준이면 기입. null=5년/10년 근속 등 귀속년도 없음 (MySQL PK 아님, NULL 허용)
+  note        String?
+  grantedById String?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  usages     LeaveRequestItem[]
+
+  @@index([employeeId, fiscalYear])
+  @@index([employeeId, validUntil])
+}
+
+// ─────────────────────────────────────────
+// 휴가 신청 (헤더)
+// ─────────────────────────────────────────
+model LeaveRequest {
+  id           String    @id @default(cuid())
+  employeeId   String
+  employee     Employee  @relation(fields: [employeeId], references: [id])
+  // 날짜 (같은 날 다중 유형이면 startDate=endDate)
+  startDate    DateTime
+  endDate      DateTime
+  totalDays    Float                          // 전체 합산 일수
+  reason       String?
+  status       String    @default("PENDING")  // PENDING/APPROVED/REJECTED/CANCELLED
+  currentStep  Int       @default(1)
+  totalSteps   Int       @default(2)
+  cancelledAt  DateTime?
+  cancelReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  items        LeaveRequestItem[]
+  approvals    LeaveApproval[]
+  histories    LeaveHistory[]
+}
+
+// ─────────────────────────────────────────
+// 휴가 신청 항목 (같은 날 여러 유형 지원)
+// ─────────────────────────────────────────
+model LeaveRequestItem {
+  id             String           @id @default(cuid())
+  leaveRequestId String
+  leaveRequest   LeaveRequest     @relation(fields: [leaveRequestId], references: [id])
+  leaveTypeId    String
+  leaveType      LeaveType        @relation(fields: [leaveTypeId], references: [id])
+  allocationId   String?
+  allocation     LeaveAllocation? @relation(fields: [allocationId], references: [id])
+  days           Float
+  startDate      DateTime
+  endDate        DateTime
+  reason         String?          // 항목별 사유
+  createdAt      DateTime         @default(now())
+}
+
+// ─────────────────────────────────────────
+// 결재
+// ─────────────────────────────────────────
+model LeaveApproval {
+  id             String       @id @default(cuid())
+  leaveRequestId String
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id])
+  approverId     String
+  approver       Employee     @relation(fields: [approverId], references: [id])
+  step           Int
+  status         String       @default("PENDING")
+  comment        String?
+  approvedAt     DateTime?
+  createdAt      DateTime     @default(now())
+}
+
+// ─────────────────────────────────────────
+// 휴가 이력
+// ─────────────────────────────────────────
+model LeaveHistory {
+  id             String       @id @default(cuid())
+  leaveRequestId String
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id])
+  action         String
+  actorId        String?
+  comment        String?
+  snapshot       String?
+  createdAt      DateTime     @default(now())
+}
+
+// ─────────────────────────────────────────
+// 스탬프 요청 (팀장 서명 승인)
+// ─────────────────────────────────────────
+model StampRequest {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation("StampRequester", fields: [employeeId], references: [id])
+  stampDate   DateTime
+  description String
+  status      String    @default("PENDING")  // PENDING/APPROVED/REJECTED
+  approverId  String?
+  approver    Employee? @relation("StampApprover", fields: [approverId], references: [id])
+  approvedAt  DateTime?
+  comment     String?
+  stampId     String?   // 승인 후 생성된 StampCoupon.id
+  createdAt   DateTime  @default(now())
+
+  @@index([employeeId])
+}
+
+// ─────────────────────────────────────────
+// 스탬프 쿠폰
+// ─────────────────────────────────────────
+model StampCoupon {
+  id             String    @id @default(cuid())
+  employeeId     String
+  employee       Employee  @relation(fields: [employeeId], references: [id])
+  stampDate      DateTime
+  isUsed         Boolean   @default(false)
+  usedForType    String?
+  usedAt         DateTime?
+  usedRequestId  String?
+  createdAt      DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────
+// 공휴일 캘린더
+// ─────────────────────────────────────────
+model Holiday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  name      String
+  isHalfDay Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────
+// 테스트 우회 로그인 (개발용)
+// ─────────────────────────────────────────
+model TestBypass {
+  id         String    @id @default(cuid())
+  employeeId String
+  token      String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// ─────────────────────────────────────────
+// 귀속연도 자동 부여 구분 (휴가관리에서 추가/제거 용이)
+// ─────────────────────────────────────────
+model AllocationSourceConfig {
+  id          String   @id @default(cuid())
+  sourceCode  String   @unique  // BASE_ANNUAL, TENURE_BONUS, CARE, HOLIDAY_EXT, DUTY_DEPT 등
+  label       String   // 표시명
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  defaultDays Float?   // 고정 부여일 수 (CARE=2, HOLIDAY_EXT=1 등), null이면 계산 로직 사용
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────
+// 스케줄러 유형 (유형별 조회·관리용 기준데이터)
+// ─────────────────────────────────────────
+model SchedulerJobType {
+  id          String   @id @default(cuid())
+  jobKey      String   @unique  // monthly_accrual, tenure_check, birthday_half
+  name        String   // 표시명
+  description String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────
+// 시스템 설정 (메뉴권한 JSON 등)
+// ─────────────────────────────────────────
+model SystemConfig {
+  key       String   @id
+  value     String   // JSON
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────
+// 알림 로그
+// ─────────────────────────────────────────
+model NotificationLog {
+  id           String   @id @default(cuid())
+  targetId     String
+  phone        String
+  type         String
+  templateCode String
+  params       String?
+  status       String   @default("PENDING")
+  errorMsg     String?
+  sentAt       DateTime?
+  createdAt    DateTime @default(now())
+}
+
+// ─────────────────────────────────────────
+// 감사 로그
+// ─────────────────────────────────────────
+model AuditLog {
+  id         String    @id @default(cuid())
+  entityType String    // LeaveRequest / LeaveAllocation / Employee / Scheduler / System
+  entityId   String
+  action     String    // CREATED / UPDATED / DELETED / APPROVED / REJECTED / CANCELLED / RESTORED
+  actorId    String?
+  actor      Employee? @relation("AuditActor", fields: [actorId], references: [id])
+  actorName  String?   // actorId 없는 경우(시스템 자동) 표시명
+  before     String?   // JSON 변경 전
+  after      String?   // JSON 변경 후
+  note       String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────
+// 알림
+// ─────────────────────────────────────────
+model Notification {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  type       String   // LEAVE_REQUEST / LEAVE_APPROVED / LEAVE_REJECTED / LEAVE_CANCEL / STAMP_REQUEST / STAMP_APPROVED / STAMP_REJECTED
+  title      String
+  body       String
+  isRead     Boolean  @default(false)
+  link       String?
+  createdAt  DateTime @default(now())
+
+  @@index([employeeId, isRead])
+  @@index([employeeId, createdAt])
+}
+
+// ─────────────────────────────────────────
+// 제주도 숙소 신청 (복지부 승인, 주말 포함 가능, 1박 이상)
+// ─────────────────────────────────────────
+model JejuAccommodation {
+  id            String    @id @default(cuid())
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id])
+  startDate     DateTime
+  endDate       DateTime
+  nights        Int       // 1 이상 (1박 이상 필수)
+  reason        String?
+  status        String    @default("PENDING")  // PENDING / APPROVED / REJECTED / CANCELLED
+  approvedById  String?
+  approvedBy    Employee? @relation("JejuApprover", fields: [approvedById], references: [id])
+  approvedAt    DateTime?
+  rejectComment String?
+  cancelledAt   DateTime?
+  cancelReason  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([startDate, endDate])
+}
+
+// ─────────────────────────────────────────
+// 스케줄러 실행 이력
+// ─────────────────────────────────────────
+model SchedulerLog {
+  id          String   @id @default(cuid())
+  jobName     String   // monthly_accrual / tenure_check
+  targetParam String?  // 대상 월 또는 날짜
+  isDryRun    Boolean  @default(false)
+  status      String   @default("SUCCESS") // SUCCESS / PARTIAL / FAILED
+  grantedCount Int     @default(0)
+  skippedCount Int     @default(0)
+  errorCount   Int     @default(0)
+  detail       String? // JSON 상세 결과
+  triggeredBy  String  @default("SYSTEM") // SYSTEM / ADMIN / MANUAL
+  actorId      String?
+  createdAt    DateTime @default(now())
+
+  @@index([jobName, createdAt])
+}

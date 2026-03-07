@@ -1,0 +1,38 @@
+# 개발: docker compose up → MySQL + Next.js dev (소스 마운트로 자동 반영)
+services:
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-hrm_secret}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-hrm_web}
+      MYSQL_CHARSET: utf8mb4
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql-init.d:/docker-entrypoint-initdb.d:ro
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "sh", "-c", "mysqladmin ping -h localhost -u root -p\"$$MYSQL_ROOT_PASSWORD\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      DATABASE_URL: mysql://root:${MYSQL_ROOT_PASSWORD:-hrm_secret}@mysql:3306/${MYSQL_DATABASE:-hrm_web}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+
+volumes:
+  mysql_data:
