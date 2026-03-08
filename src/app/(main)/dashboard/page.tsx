@@ -150,12 +150,15 @@ export default async function DashboardPage() {
       const dates = getMonthDates(year, month);
       const first = dates[0];
       const last = dates[dates.length - 1];
+      // Prisma DateTime은 ISO-8601 전체 형식 필요 (날짜만 넣으면 클라우드에서 에러)
+      const firstDt = new Date(`${first}T00:00:00.000Z`);
+      const lastDt = new Date(`${last}T23:59:59.999Z`);
       const leaves: LeaveRow[] = await prisma.leaveRequest.findMany({
         where: {
           status: "APPROVED",
           employee: { teamId: employee.teamId },
-          startDate: { lte: last },
-          endDate: { gte: first },
+          startDate: { lte: lastDt },
+          endDate: { gte: firstDt },
         },
         include: { employee: true, items: { include: { leaveType: true } } },
       });
