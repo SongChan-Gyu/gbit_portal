@@ -155,15 +155,18 @@ export default function TeamScheduleClient({
                     {isToday && <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />}
                   </div>
                   <div className="space-y-0.5">
-                    {list.slice(0, 3).map((x, j) => (
-                      <div
-                        key={j}
-                        className={`text-[10px] px-1 py-0.5 rounded truncate border ${STATUS_CONFIG[x.status]?.bg ?? ""} ${STATUS_CONFIG[x.status]?.text ?? ""} ${STATUS_CONFIG[x.status]?.border ?? ""}`}
-                        title={`${x.name} ${STATUS_CONFIG[x.status]?.label ?? ""}`}
-                      >
-                        {x.name.slice(0, 2)} {STATUS_CONFIG[x.status]?.label?.slice(0, 2) ?? ""}
-                      </div>
-                    ))}
+                    {list.slice(0, 3).map((x, j) => {
+                      const cfg = x.status != null ? STATUS_CONFIG[x.status] : null;
+                      return (
+                        <div
+                          key={j}
+                          className={`text-[10px] px-1 py-0.5 rounded truncate border ${cfg?.bg ?? ""} ${cfg?.text ?? ""} ${cfg?.border ?? ""}`}
+                          title={`${x.name} ${cfg?.label ?? ""}`}
+                        >
+                          {x.name.slice(0, 2)} {cfg?.label?.slice(0, 2) ?? ""}
+                        </div>
+                      );
+                    })}
                     {list.length > 3 && (
                       <div className="text-[10px] text-gray-500">+{list.length - 3}</div>
                     )}
