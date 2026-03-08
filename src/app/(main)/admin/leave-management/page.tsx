@@ -4,9 +4,7 @@ import prisma from "@/lib/db";
 import FiscalYearManager from "@/app/(main)/admin/fiscal-year/FiscalYearManager";
 import SchedulerPanel from "@/app/(main)/admin/scheduler/SchedulerPanel";
 import LeaveApprovalsTab from "@/app/(main)/admin/leave-management/LeaveApprovalsTab";
-import JejuSettingsTab from "@/app/(main)/admin/leave-management/JejuSettingsTab";
 import { getFiscalYear } from "@/lib/workdays";
-import { isWelfareDept } from "@/lib/jeju";
 import { serializeDates } from "@/lib/serialize";
 
 export const metadata = { title: "휴가 관리 | HRM" };
@@ -40,18 +38,11 @@ export default async function LeaveManagementPage({
     select: { id: true, code: true, name: true },
   });
 
-  const currentUser = await prisma.employee.findUnique({
-    where: { id: user.employeeId },
-    select: { dutyDept: true },
-  });
-  const showJejuTab = user.role === "PM" || user.role === "ADMIN" || isWelfareDept(currentUser);
-
   const TABS = [
     { id: "overview", label: "휴가 현황" },
     { id: "allocations", label: "휴가 할당" },
     { id: "approvals", label: "전체 결재 내역" },
     { id: "scheduler", label: "자동 스케줄러" },
-    ...(showJejuTab ? [{ id: "jeju", label: "제주 숙소" }] : []),
   ];
 
   return (
@@ -69,8 +60,6 @@ export default async function LeaveManagementPage({
             href={
               t.id === "overview" || t.id === "allocations" || t.id === "approvals"
                 ? `?tab=${t.id}&fy=${fy}`
-                : t.id === "jeju"
-                ? "?tab=jeju"
                 : `?tab=${t.id}`
             }
             className={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
@@ -178,12 +167,6 @@ export default async function LeaveManagementPage({
         </div>
       )}
 
-      {/* ── 제주 숙소 (복지부·PM·ADMIN) ───────────────────── */}
-      {tab === "jeju" && showJejuTab && (
-        <div>
-          <JejuSettingsTab />
-        </div>
-      )}
     </div>
   );
 }

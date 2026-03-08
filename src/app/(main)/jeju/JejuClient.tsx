@@ -291,13 +291,41 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
                 : (occupied.occupiedDates ?? []).includes(dateStr);
               const isUnavailable = isOccupied || isBlocked;
               const detail = occupied.welfare && occupied.byDate?.[dateStr];
+              const isPast = dateStr < new Date().toISOString().slice(0, 10);
+              const canApply = !isUnavailable && !isPast;
+              function handleDayClick() {
+                if (!canApply) return;
+                const nextDay = new Date(dateStr);
+                nextDay.setDate(nextDay.getDate() + 1);
+                const endStr = nextDay.toISOString().slice(0, 10);
+                setApplyStartDate(dateStr);
+                setApplyEndDate(endStr);
+                setApplyOpen(true);
+              }
               return (
-                <div
+                <button
+                  type="button"
                   key={dateStr}
-                  className={`min-h-[44px] rounded-lg flex flex-col items-center justify-center p-1 ${
-                    isUnavailable ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-gray-50 text-gray-700"
+                  onClick={handleDayClick}
+                  disabled={!canApply}
+                  className={`min-h-[44px] rounded-lg flex flex-col items-center justify-center p-1 w-full text-left transition-colors ${
+                    !canApply
+                      ? isUnavailable
+                        ? "bg-rose-50 text-rose-700 border border-rose-200 cursor-default"
+                        : "bg-gray-100 text-gray-400 cursor-default"
+                      : "bg-gray-50 text-gray-700 hover:bg-blue-50 hover:border-blue-200 border border-transparent cursor-pointer"
                   }`}
-                  title={detail ? detail.map((x) => `${x.name}(${x.empNo})`).join(", ") : isBlocked ? "예약 불가" : isOccupied ? "예약됨" : ""}
+                  title={
+                    canApply
+                      ? "클릭하면 이 날을 입실일로 신청하기"
+                      : detail
+                        ? detail.map((x) => `${x.name}(${x.empNo})`).join(", ")
+                        : isBlocked
+                          ? "예약 불가일"
+                          : isOccupied
+                            ? "예약됨"
+                            : "지난 날짜"
+                  }
                 >
                   <span className="font-medium">{parseInt(dateStr.slice(8, 10), 10)}</span>
                   {isUnavailable && (
@@ -305,13 +333,15 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
                       {isBlocked ? "예약불가" : welfare && detail ? (detail.length > 1 ? `${detail[0].name} 외 ${detail.length - 1}` : detail[0].name) : "예약됨"}
                     </span>
                   )}
-                </div>
+                  {canApply && <span className="text-[10px] text-gray-500">예약가능</span>}
+                </button>
               );
             })}
           </div>
         )}
         <p className="text-xs text-gray-500 mt-2">
           {welfare ? "복지부: 빨간 칸에 예약자 이름이 표시됩니다." : "빨간 칸은 이미 예약된 날짜입니다."}
+          <span className="block mt-0.5">예약 가능한 날짜를 클릭하면 입실일로 설정된 상태로 신청 화면이 열립니다.</span>
         </p>
       </div>
 

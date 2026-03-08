@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import Link from "next/link";
 import { formatYMD } from "@/lib/dateUtils";
 import InviteButton from "@/app/(main)/admin/employees/InviteButton";
+import ExcelImportBlock from "@/app/(main)/admin/employees/ExcelImportBlock";
 import TeamsEditor from "@/app/(main)/admin/teams/TeamsEditor";
 
 const STATUS_BADGE: Record<string,string> = {
@@ -93,6 +94,12 @@ export default async function OrganizationPage({
             <p className="text-sm text-gray-500">재직 중인 사원을 조회하고 관리합니다.</p>
             <Link href="/admin/employees/new" className="btn-primary text-sm py-2 px-4">+ 사원 등록</Link>
           </div>
+
+          {/* 엑셀 일괄 등록: 파일 선택 → 미리보기 → 일괄 등록 */}
+          <div className="mb-8">
+            <ExcelImportBlock />
+          </div>
+
           <form className="mb-4">
             <input type="hidden" name="tab" value="employees" />
             <div className="flex gap-2">

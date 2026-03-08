@@ -6,6 +6,7 @@ import Header from "@/components/layout/Header";
 import ImpersonationBanner from "@/components/layout/ImpersonationBanner";
 import prisma from "@/lib/db";
 import { DEFAULT_PERMISSIONS } from "@/lib/menuConfig";
+import { isWelfareDept } from "@/lib/jeju";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -18,7 +19,16 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const allPerms: Record<string, string[]> = config
     ? JSON.parse(config.value)
     : DEFAULT_PERMISSIONS;
-  const allowedMenuKeys: string[] = allPerms[user.role] ?? DEFAULT_PERMISSIONS[user.role] ?? [];
+  let allowedMenuKeys: string[] = allPerms[user.role] ?? DEFAULT_PERMISSIONS[user.role] ?? [];
+
+  // 제주 숙소 관리: 복지부(dutyDept)도 노출 (역할이 STAFF/TEAM_LEAD여도)
+  const employee = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { dutyDept: true },
+  });
+  if (isWelfareDept(employee) && !allowedMenuKeys.includes("jeju_admin")) {
+    allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
+  }
 
   return (
     <SessionProvider session={session}>

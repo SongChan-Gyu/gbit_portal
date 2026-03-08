@@ -25,64 +25,30 @@ function getBaseDate(weekOffset: number) {
   return today;
 }
 
-export default async function TeamSchedulePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ w?: string }>;
-}) {
-  const { w } = await searchParams;
-  const weekOffset = parseInt(w ?? "0", 10) || 0;
-
-  const session = await auth();
-  const user = session!.user as any;
-
-  // 자신의 팀 조회
-  const me = await prisma.employee.findUnique({
-    where: { id: user.employeeId },
-    include: { team: { include: { employees: { where: { status: "ACTIVE" }, orderBy: { name: "asc" } } } } },
-  });
-
-  if (!me?.team) {
-    return (
-      <div className="max-w-4xl mx-auto">
-        <h1 className="page-title mb-6">팀 주간 일정</h1>
-        <div className="card text-center py-12 text-gray-400">소속 팀이 없습니다.</div>
-      </div>
-    );
+/** 해당 연월의 모든 날짜 (YYYY-MM-DD) */
+function getMonthDates(year: number, month: number): string[] {
+  const last = new Date(year, month, 0).getDate();
+  const list: string[] = [];
+  const m = String(month).padStart(2, "0");
+  for (let d = 1; d <= last; d++) {
+    list.push(`${year}-${m}-${String(d).padStart(2, "0")}`);
   }
+  return list;
+}
 
-  const weekDates = getWeekDates(getBaseDate(weekOffset));
-  const startDate = new Date(weekDates[0]);
-  const endDate   = new Date(weekDates[6]);
-  endDate.setHours(23, 59, 59, 999);
+type DayStatus = "AM" | "PM" | "FULL" | null;
 
-  const memberIds = me.team.employees.map((m: { id: string }) => m.id);
-
-  // 이번 주 승인된 휴가 신청 조회 (휴가 유형은 가져오지 않음 - 개인정보)
-  const leaveRequests = await prisma.leaveRequest.findMany({
-    where: {
-      employeeId: { in: memberIds },
-      status: "APPROVED",
-      startDate: { lte: endDate },
-      endDate:   { gte: startDate },
-    },
-    include: {
-      items: {
-        include: {
-          leaveType: { select: { isHalf: true, isAmOnly: true, isPmOnly: true } },
-        },
-      },
-    },
-  });
-
-  // 직원별 날짜별 휴가 상태 계산
-  // 상태: "AM" | "PM" | "FULL" | null
-  type DayStatus = "AM" | "PM" | "FULL" | null;
+function buildSchedule(
+  leaveRequests: any[],
+  dateList: string[],
+): { schedule: Record<string, Record<string, DayStatus>>; byDay: Record<string, { name: string; status: DayStatus }[]> } {
   const schedule: Record<string, Record<string, DayStatus>> = {};
-  // empId → dateStr → status
+  const byDay: Record<string, { name: string; status: DayStatus }[]> = {};
+  const dateSet = new Set(dateList);
 
   for (const req of leaveRequests) {
     const empId = req.employeeId;
+    const empName = (req as any).employee?.name ?? "";
     if (!schedule[empId]) schedule[empId] = {};
 
     for (const item of req.items) {
@@ -91,7 +57,7 @@ export default async function TeamSchedulePage({
       const cur = new Date(s);
       while (cur <= e) {
         const dateStr = cur.toISOString().slice(0, 10);
-        if (weekDates.includes(dateStr)) {
+        if (dateSet.has(dateStr)) {
           const lt = item.leaveType;
           let status: DayStatus;
           if (lt.isHalf && lt.isAmOnly) status = "AM";
@@ -99,16 +65,82 @@ export default async function TeamSchedulePage({
           else status = "FULL";
 
           const prev = schedule[empId][dateStr];
-          // 오전+오후 = 종일
           if (prev === "AM" && status === "PM") schedule[empId][dateStr] = "FULL";
           else if (prev === "PM" && status === "AM") schedule[empId][dateStr] = "FULL";
           else if (!prev) schedule[empId][dateStr] = status;
-          else schedule[empId][dateStr] = "FULL"; // 중복이면 종일 처리
+          else schedule[empId][dateStr] = "FULL";
+
+          if (!byDay[dateStr]) byDay[dateStr] = [];
+          const existing = byDay[dateStr].find((x) => x.name === empName);
+          if (!existing) byDay[dateStr].push({ name: empName, status: schedule[empId][dateStr]! });
+          else existing.status = schedule[empId][dateStr]!;
         }
         cur.setDate(cur.getDate() + 1);
       }
     }
   }
+  return { schedule, byDay };
+}
+
+export default async function TeamSchedulePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ w?: string; view?: string; y?: string; m?: string }>;
+}) {
+  const { w, view: viewRaw, y: yRaw, m: mRaw } = await searchParams;
+  const weekOffset = parseInt(w ?? "0", 10) || 0;
+  const view = viewRaw === "month" ? "month" : "week";
+  const now = new Date();
+  const year = parseInt(yRaw ?? String(now.getFullYear()), 10) || now.getFullYear();
+  const month = parseInt(mRaw ?? String(now.getMonth() + 1), 10) || now.getMonth() + 1;
+  const safeMonth = Math.min(12, Math.max(1, month));
+
+  const session = await auth();
+  const user = session!.user as any;
+
+  const me = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    include: { team: { include: { employees: { where: { status: "ACTIVE" }, orderBy: { name: "asc" } } } } },
+  });
+
+  if (!me?.team) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <h1 className="page-title mb-6">팀 일정</h1>
+        <div className="card text-center py-12 text-gray-400">소속 팀이 없습니다.</div>
+      </div>
+    );
+  }
+
+  const memberIds = me.team.employees.map((m: { id: string }) => m.id);
+  const weekDates = getWeekDates(getBaseDate(weekOffset));
+  const monthDates = getMonthDates(year, safeMonth);
+  const startDate = view === "week"
+    ? new Date(weekDates[0])
+    : new Date(year, safeMonth - 1, 1);
+  const endDate = view === "week"
+    ? (() => { const e = new Date(weekDates[6]); e.setHours(23, 59, 59, 999); return e; })()
+    : new Date(year, safeMonth, 0, 23, 59, 59, 999);
+
+  const leaveRequests = await prisma.leaveRequest.findMany({
+    where: {
+      employeeId: { in: memberIds },
+      status: "APPROVED",
+      startDate: { lte: endDate },
+      endDate:   { gte: startDate },
+    },
+    include: {
+      employee: { select: { name: true } },
+      items: {
+        include: {
+          leaveType: { select: { isHalf: true, isAmOnly: true, isPmOnly: true } },
+        },
+      },
+    },
+  });
+
+  const dateList = view === "week" ? weekDates : monthDates;
+  const { schedule, byDay } = buildSchedule(leaveRequests, dateList);
 
   const members = me.team.employees.map((m: { id: string; name: string; position: string }) => ({
     id: m.id,
@@ -121,14 +153,18 @@ export default async function TeamSchedulePage({
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="page-title">팀 주간 일정</h1>
+          <h1 className="page-title">팀 일정</h1>
           <p className="text-sm text-gray-500 mt-1">{me.team.name} · 휴가 여부만 표시됩니다</p>
         </div>
       </div>
       <TeamScheduleClient
+        view={view}
         members={members}
         weekDates={weekDates}
+        monthYear={{ year, month: safeMonth }}
+        monthDates={monthDates}
         schedule={schedule}
+        byDay={byDay}
         todayStr={new Date().toISOString().slice(0, 10)}
         weekOffset={weekOffset}
       />
