@@ -25,6 +25,17 @@ export async function GET(req: Request) {
   from.setHours(0, 0, 0, 0);
   to.setHours(23, 59, 59, 999);
 
+  let blockedDates: string[] = [];
+  try {
+    const c = await prisma.systemConfig.findUnique({ where: { key: "jejuBlockedDates" } });
+    if (c?.value) {
+      const arr = JSON.parse(c.value);
+      if (Array.isArray(arr)) blockedDates = arr.filter((x: unknown) => typeof x === "string");
+    }
+  } catch {
+    // ignore
+  }
+
   const emp = await prisma.employee.findUnique({
     where: { id: user.employeeId },
     include: { team: true },
@@ -58,11 +69,18 @@ export async function GET(req: Request) {
         });
       }
     }
-    return NextResponse.json({ welfare: true, byDate });
+    const inRangeBlocked = blockedDates.filter((d) => d >= fromStr && d <= toStr);
+    return NextResponse.json({ welfare: true, byDate, blockedDates: inRangeBlocked });
   }
 
   const occupiedDates: string[] = [];
   const set = new Set<string>();
+  for (const d of blockedDates) {
+    if (d >= fromStr && d <= toStr) {
+      set.add(d);
+      occupiedDates.push(d);
+    }
+  }
   for (const r of approved) {
     const start = new Date(r.startDate);
     const end = new Date(r.endDate);
@@ -77,5 +95,6 @@ export async function GET(req: Request) {
     }
   }
   occupiedDates.sort();
-  return NextResponse.json({ welfare: false, occupiedDates });
+  const inRangeBlocked = blockedDates.filter((d) => d >= fromStr && d <= toStr);
+  return NextResponse.json({ welfare: false, occupiedDates, blockedDates: inRangeBlocked });
 }

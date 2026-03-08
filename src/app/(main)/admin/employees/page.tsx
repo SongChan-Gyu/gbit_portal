@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import Link from "next/link";
 import { formatYMD } from "@/lib/dateUtils";
 import InviteButton from "./InviteButton";
+import ExcelImportBlock from "./ExcelImportBlock";
 
 const STATUS_BADGE: Record<string,string> = {
   PENDING:"bg-gray-100 text-gray-500",
@@ -49,6 +50,11 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
         <Link href="/admin/employees/new" className="btn-primary text-sm py-2.5 px-4 rounded-lg font-medium inline-flex items-center justify-center shrink-0">
           + 사원 등록
         </Link>
+      </div>
+
+      {/* 엑셀 일괄 등록 */}
+      <div className="mb-8">
+        <ExcelImportBlock />
       </div>
 
       {/* 검색 */}

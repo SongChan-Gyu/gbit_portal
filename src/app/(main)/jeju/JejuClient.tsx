@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar as CalIcon, PlusCircle, Check, X, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
+import { formatJejuAccountNumber } from "@/lib/jeju";
 
 const STATUS_KO: Record<string, string> = {
   PENDING: "승인 대기",
@@ -18,12 +19,25 @@ const STATUS_CLS: Record<string, string> = {
   CANCELLED: "badge-default",
 };
 
+type JejuConfig = {
+  maxNights: number;
+  checkIn: string;
+  checkOut: string;
+  bookingWindowEnd: string;
+  depositAmount?: number;
+  depositAccount?: { bankName: string; accountHolder: string; accountNumber: string };
+  blockedDates?: string[];
+};
+
 type MyRequest = {
   id: string;
   startDate: string;
   endDate: string;
-  nights: number;  // DB 필드 유지, 표시는 "1일" 등 일 단위로
+  nights: number;
   reason: string | null;
+  guestName?: string;
+  guestPhone?: string;
+  guestCount?: number;
   status: string;
   rejectComment: string | null;
   createdAt: string;
@@ -53,8 +67,14 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
   const [myList, setMyList] = useState<MyRequest[]>([]);
   const [allList, setAllList] = useState<ListRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<JejuConfig | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
-  const [applyDate, setApplyDate] = useState("");  // 이용일 1일만 선택 (일 단위)
+  const [applyStartDate, setApplyStartDate] = useState("");
+  const [applyEndDate, setApplyEndDate] = useState("");
+  const [applyGuestName, setApplyGuestName] = useState("");
+  const [applyGuestPhone, setApplyGuestPhone] = useState("");
+  const [applyGuestCount, setApplyGuestCount] = useState(1);
+  const [applyDepositorName, setApplyDepositorName] = useState("");
   const [applyReason, setApplyReason] = useState("");
   const [applySubmitting, setApplySubmitting] = useState(false);
   const [applyError, setApplyError] = useState("");
@@ -80,6 +100,10 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
     const res = await fetch("/api/jeju/requests");
     if (res.ok) setAllList(await res.json());
   }, [welfare]);
+
+  useEffect(() => {
+    fetch("/api/jeju/config").then((r) => { if (r.ok) r.json().then(setConfig); });
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -111,15 +135,42 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
   async function submitApply(e: React.FormEvent) {
     e.preventDefault();
     setApplyError("");
-    if (!applyDate) {
-      setApplyError("이용일을 선택해 주세요.");
+    const start = applyStartDate || applyEndDate;
+    const end = applyEndDate || applyStartDate;
+    if (!start || !end) {
+      setApplyError("입실일·퇴실일을 선택해 주세요.");
+      return;
+    }
+    if (!applyGuestName.trim()) {
+      setApplyError("이름을 입력해 주세요.");
+      return;
+    }
+    if (!applyGuestPhone.trim()) {
+      setApplyError("연락처를 입력해 주세요.");
+      return;
+    }
+    if (!applyDepositorName.trim()) {
+      setApplyError("입금자명을 입력해 주세요. (예약금 이체 시 사용)");
+      return;
+    }
+    const count = Number(applyGuestCount);
+    if (!Number.isInteger(count) || count < 1) {
+      setApplyError("입실 인원을 1명 이상 입력해 주세요.");
       return;
     }
     setApplySubmitting(true);
     const res = await fetch("/api/jeju/apply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ startDate: applyDate, endDate: applyDate, reason: applyReason || undefined }),
+      body: JSON.stringify({
+        startDate: start,
+        endDate: end,
+        reason: applyReason || undefined,
+        guestName: applyGuestName.trim(),
+        guestPhone: applyGuestPhone.trim(),
+        guestCount: count,
+        depositorName: applyDepositorName.trim(),
+      }),
     });
     const data = await res.json();
     setApplySubmitting(false);
@@ -128,7 +179,12 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
       return;
     }
     setApplyOpen(false);
-    setApplyDate("");
+    setApplyStartDate("");
+    setApplyEndDate("");
+    setApplyGuestName("");
+    setApplyGuestPhone("");
+    setApplyGuestCount(1);
+    setApplyDepositorName("");
     setApplyReason("");
     loadMy();
     loadOccupied(year, month);
@@ -181,6 +237,7 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
 
   const pendingList = allList.filter((r) => r.status === "PENDING");
   const DAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
+  const blockedSet = new Set((occupied as { blockedDates?: string[] }).blockedDates ?? []);
 
   // 선택된 연/월 기준으로 전체 사용 내역 필터링 (이용 기간이 해당 월과 한 번이라도 겹치는 건만)
   const monthStart = new Date(year, month - 1, 1);
@@ -228,22 +285,24 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
             ))}
             {calendarDays.map((dateStr, i) => {
               if (!dateStr) return <div key={`e-${i}`} />;
+              const isBlocked = blockedSet.has(dateStr);
               const isOccupied = occupied.welfare
                 ? (occupied.byDate && (occupied.byDate[dateStr]?.length ?? 0) > 0)
                 : (occupied.occupiedDates ?? []).includes(dateStr);
+              const isUnavailable = isOccupied || isBlocked;
               const detail = occupied.welfare && occupied.byDate?.[dateStr];
               return (
                 <div
                   key={dateStr}
                   className={`min-h-[44px] rounded-lg flex flex-col items-center justify-center p-1 ${
-                    isOccupied ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-gray-50 text-gray-700"
+                    isUnavailable ? "bg-rose-50 text-rose-700 border border-rose-200" : "bg-gray-50 text-gray-700"
                   }`}
-                  title={detail ? detail.map((x) => `${x.name}(${x.empNo})`).join(", ") : isOccupied ? "예약됨" : ""}
+                  title={detail ? detail.map((x) => `${x.name}(${x.empNo})`).join(", ") : isBlocked ? "예약 불가" : isOccupied ? "예약됨" : ""}
                 >
                   <span className="font-medium">{parseInt(dateStr.slice(8, 10), 10)}</span>
-                  {isOccupied && (
+                  {isUnavailable && (
                     <span className="text-[10px] truncate w-full text-center">
-                      {welfare && detail ? (detail.length > 1 ? `${detail[0].name} 외 ${detail.length - 1}` : detail[0].name) : "예약됨"}
+                      {isBlocked ? "예약불가" : welfare && detail ? (detail.length > 1 ? `${detail[0].name} 외 ${detail.length - 1}` : detail[0].name) : "예약됨"}
                     </span>
                   )}
                 </div>
@@ -288,7 +347,7 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
                       <p className="text-sm text-rose-600">반려 사유: {r.rejectComment}</p>
                     )}
                   </div>
-                  {(r.status === "PENDING" || r.status === "APPROVED") && (
+                  {(r.status === "PENDING" || (r.status === "APPROVED" && welfare)) && (
                     <div className="shrink-0 pt-2 sm:pt-0 sm:pl-4 sm:border-l sm:border-gray-200">
                       <button
                         type="button"
@@ -449,21 +508,99 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
 
       {/* 신청 모달 */}
       {applyOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">제주도 숙소 신청</h2>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 my-4">
+            <h2 className="text-lg font-bold text-gray-800 mb-2">제주도 숙소 신청</h2>
+            {config && (
+              <p className="text-xs text-gray-600 mb-4">
+                입실 15:00 · 퇴실 11:00 (박 단위) · 최대 {config.maxNights}박 · 예약 가능 ~{config.bookingWindowEnd}
+              </p>
+            )}
             <form onSubmit={submitApply} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">입실일 *</label>
+                  <input
+                    type="date"
+                    className="input w-full"
+                    value={applyStartDate}
+                    min={new Date().toISOString().slice(0, 10)}
+                    max={config?.bookingWindowEnd ?? undefined}
+                    onChange={(e) => setApplyStartDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="label">퇴실일 *</label>
+                  <input
+                    type="date"
+                    className="input w-full"
+                    value={applyEndDate}
+                    min={applyStartDate || new Date().toISOString().slice(0, 10)}
+                    max={config?.bookingWindowEnd ?? undefined}
+                    onChange={(e) => setApplyEndDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
               <div>
-                <label className="label">이용일 * (해당 날짜 1일 이용)</label>
+                <label className="label">이름 *</label>
                 <input
-                  type="date"
+                  type="text"
                   className="input w-full"
-                  value={applyDate}
-                  min={new Date().toISOString().slice(0, 10)}
-                  onChange={(e) => setApplyDate(e.target.value)}
+                  value={applyGuestName}
+                  onChange={(e) => setApplyGuestName(e.target.value)}
+                  placeholder="입실자 이름"
                   required
                 />
-                <p className="text-xs text-gray-500 mt-1">선택한 날짜에 1박 이용(당일 입실, 다음 날 퇴실)입니다.</p>
+              </div>
+              <div>
+                <label className="label">연락처 *</label>
+                <input
+                  type="tel"
+                  className="input w-full"
+                  value={applyGuestPhone}
+                  onChange={(e) => setApplyGuestPhone(e.target.value)}
+                  placeholder="010-0000-0000"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">입실 인원 *</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  className="input w-full"
+                  value={applyGuestCount}
+                  onChange={(e) => setApplyGuestCount(parseInt(e.target.value, 10) || 1)}
+                  required
+                />
+              </div>
+              {/* 예약금 10만원 · 이사님 계좌 이체 */}
+              <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 space-y-2">
+                <p className="text-sm font-semibold text-amber-800">예약금 이체</p>
+                <p className="text-base font-bold text-amber-900">
+                  {(config?.depositAmount ?? 100000).toLocaleString()}원
+                </p>
+                {config?.depositAccount && (
+                  <p className="text-sm text-amber-800">
+                    {config.depositAccount.bankName} {config.depositAccount.accountHolder}{" "}
+                    {formatJejuAccountNumber(config.depositAccount.accountNumber)}
+                  </p>
+                )}
+                <p className="text-xs text-amber-700">신청 후 24시간 내 미이체 시 자동 취소될 수 있습니다.</p>
+              </div>
+              <div>
+                <label className="label">입금자명 *</label>
+                <input
+                  type="text"
+                  className="input w-full"
+                  value={applyDepositorName}
+                  onChange={(e) => setApplyDepositorName(e.target.value)}
+                  placeholder="이체 시 사용할 이름 (예약자가 직접 입력)"
+                  required
+                />
               </div>
               <div>
                 <label className="label">사유 (선택)</label>
@@ -477,7 +614,21 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
               </div>
               {applyError && <p className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{applyError}</p>}
               <div className="flex gap-3 pt-2">
-                <button type="button" onClick={() => { setApplyOpen(false); setApplyError(""); }} className="btn-secondary flex-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setApplyOpen(false);
+                    setApplyError("");
+                    setApplyStartDate("");
+                    setApplyEndDate("");
+                    setApplyGuestName("");
+                    setApplyGuestPhone("");
+                    setApplyGuestCount(1);
+                    setApplyDepositorName("");
+                    setApplyReason("");
+                  }}
+                  className="btn-secondary flex-1"
+                >
                   취소
                 </button>
                 <button type="submit" disabled={applySubmitting} className="btn-primary flex-1">

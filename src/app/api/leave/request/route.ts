@@ -328,7 +328,7 @@ export async function POST(req: Request) {
   const createdIds: string[] = [];
 
   const leaveReqs = await prisma.$transaction(async (tx) => {
-    const results: { id: string; totalSteps: number; isAutoApprove: boolean; approver: typeof approver; groupItems: ResolvedItem[] }[] = [];
+    const results: { id: string; totalSteps: number; isAutoApprove: boolean; approver: typeof pm | null; groupItems: ResolvedItem[] }[] = [];
 
     for (const [approvalSteps, groupItems] of groupByApprovalLine) {
       const groupStart = new Date(Math.min(...groupItems.flatMap((i) => [new Date(i.startDate).getTime(), new Date(i.endDate).getTime()])));
@@ -357,7 +357,7 @@ export async function POST(req: Request) {
         },
       });
       createdIds.push(req.id);
-      results.push({ id: req.id, totalSteps, isAutoApprove: isGroupAutoApprove, approver: groupApprover, groupItems });
+      results.push({ id: req.id, totalSteps, isAutoApprove: isGroupAutoApprove, approver: groupApprover ?? null, groupItems });
 
       for (const it of groupItems) {
         await tx.leaveRequestItem.create({

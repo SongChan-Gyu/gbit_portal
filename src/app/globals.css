@@ -10,12 +10,21 @@
   }
   * { @apply box-border; }
   body { @apply bg-slate-50 text-gray-900 text-[13px] leading-relaxed; }
+  /* 노트북·데스크톱: 전체 크기 약 1.5배 가독성 확대 */
+  @media (min-width: 769px) {
+    html { font-size: 125%; }
+    body { font-size: 1rem; line-height: 1.6; }
+  }
   @media (max-width: 768px) {
     html { font-size: 18px; }
     body { @apply text-base leading-snug; }
   }
   h1 { @apply text-lg font-bold; }
   h2 { @apply text-base font-semibold; }
+  @media (min-width: 769px) {
+    h1 { font-size: 1.35rem; }
+    h2 { font-size: 1.15rem; }
+  }
   @media (max-width: 768px) {
     h1 { @apply text-xl; }
     h2 { @apply text-lg; }
@@ -50,6 +59,13 @@
   }
   .btn-sm { @apply px-3 py-1.5 text-xs; }
   .btn-lg { @apply px-5 py-2.5 text-sm; }
+  @media (min-width: 769px) {
+    .btn-primary, .btn-secondary, .btn-danger, .btn-ghost { font-size: 1rem; }
+    .input { font-size: 1rem; padding: 0.5rem 0.75rem; }
+    .panel-title { font-size: 1rem; }
+    .data-table th, .data-table td { font-size: 0.9375rem; }
+    .label { font-size: 0.875rem; }
+  }
   @media (max-width: 768px) {
     .btn-primary, .btn-secondary, .btn-danger { @apply text-[15px] py-2.5 px-4; }
     .btn-sm { @apply text-sm py-2 px-3; }
@@ -75,6 +91,10 @@
   /* ─── 페이지 헤더 */
   .page-title { @apply text-base font-bold text-gray-900; }
   .page-subtitle { @apply text-xs text-gray-500 mt-0.5; }
+  @media (min-width: 769px) {
+    .page-title { font-size: 1.35rem; }
+    .page-subtitle { font-size: 0.9rem; }
+  }
   @media (max-width: 768px) {
     .page-title { @apply text-xl; }
     .page-subtitle { @apply text-sm; }

@@ -385,8 +385,13 @@ model JejuAccommodation {
   employee      Employee  @relation(fields: [employeeId], references: [id])
   startDate     DateTime
   endDate       DateTime
-  nights        Int       // 1 이상 (1박 이상 필수)
+  nights        Int       // 1 이상 (입실일 15시 ~ 퇴실일 11시, 박 단위)
   reason        String?
+  // 필수 입력: 이름·연락처·입실인원 (결제/승인 후 정정 불가)
+  guestName     String
+  guestPhone    String
+  guestCount    Int       // 입실 인원
+  depositorName String    // 입금자명 (예약금 무통장입금 시 예약자가 입력)
   status        String    @default("PENDING")  // PENDING / APPROVED / REJECTED / CANCELLED
   approvedById  String?
   approvedBy    Employee? @relation("JejuApprover", fields: [approvedById], references: [id])

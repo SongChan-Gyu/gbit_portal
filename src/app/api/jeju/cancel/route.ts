@@ -30,6 +30,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "본인 신청만 취소할 수 있습니다." }, { status: 403 });
   }
 
+  if (row.status === "APPROVED" && isOwn && !welfare) {
+    return NextResponse.json({ error: "승인된 예약은 취소할 수 없습니다. 복지부에 문의하세요." }, { status: 403 });
+  }
+
   if (row.status === "CANCELLED") {
     return NextResponse.json({ error: "이미 취소된 신청입니다." }, { status: 400 });
   }

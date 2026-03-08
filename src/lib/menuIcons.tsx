@@ -24,6 +24,7 @@ export const DEFAULT_MENU_ICON = LayoutDashboard;
 
 export const ICON_MAP: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
+  leave: CalendarPlus,
   leave_apply: CalendarPlus,
   leave_my: CalendarCheck,
   leave_approve: CheckSquare,
@@ -31,10 +32,12 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   attendance: ClipboardList,
   stamp: Star,
   jeju: Home,
+  admin: Settings2,
   admin_organization: Users,
   admin_leave_settings: CalendarRange,
   admin_leave_mgmt: CalendarClock,
   admin_system: Settings2,
+  dev: Wrench,
   test_impersonate: Wrench,
   test_user_switch: UserRoundCog,
 };
