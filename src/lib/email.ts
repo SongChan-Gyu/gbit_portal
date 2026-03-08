@@ -32,7 +32,7 @@ export async function sendMail(options: SendMailOptions): Promise<void> {
   });
 
   await transporter.sendMail({
-    from: typeof from === "string" && from.includes("<") ? from : `"HRM" <${from}>`,
+    from: typeof from === "string" && from.includes("<") ? from : `"GBIT Portal" <${from}>`,
     to: options.to,
     subject: options.subject,
     text: options.text,

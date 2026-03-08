@@ -5,7 +5,7 @@ import { isWelfareDept } from "@/lib/jeju";
 import JejuSettingsTab from "@/app/(main)/admin/leave-management/JejuSettingsTab";
 import Link from "next/link";
 
-export const metadata = { title: "숙소 관리 | 제주도 숙소 | HRM" };
+export const metadata = { title: "숙소 관리 | 제주도 숙소 | GBIT Portal" };
 
 /** 복지부 또는 PM/ADMIN만 접근 */
 async function canManageJeju(user: { employeeId?: string; role?: string }) {

@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
 import JejuClient from "./JejuClient";
 
-export const metadata = { title: "제주도 숙소 | HRM" };
+export const metadata = { title: "제주도 숙소 | GBIT Portal" };
 
 export default async function JejuPage() {
   const session = await auth();

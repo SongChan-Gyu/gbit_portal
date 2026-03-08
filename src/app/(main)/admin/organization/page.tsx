@@ -25,7 +25,7 @@ function dutyDeptDisplay(dutyDept: string | null): string {
   return DUTY_DEPT_LABEL[dutyDept] ?? dutyDept;
 }
 
-export const metadata = { title: "인사 관리 | HRM" };
+export const metadata = { title: "인사 관리 | GBIT Portal" };
 
 export default async function OrganizationPage({
   searchParams,

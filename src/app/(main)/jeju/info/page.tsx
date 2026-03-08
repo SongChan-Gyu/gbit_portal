@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MapPin, Car, Clock, AlertTriangle } from "lucide-react";
 
-export const metadata = { title: "숙소 정보 | 제주도 숙소 | HRM" };
+export const metadata = { title: "숙소 정보 | 제주도 숙소 | GBIT Portal" };
 
 const NOTICE_ITEMS = [
   "기준 인원 4명, 최대 숙박 인원 6명(어린이·영유아 포함)입니다.",

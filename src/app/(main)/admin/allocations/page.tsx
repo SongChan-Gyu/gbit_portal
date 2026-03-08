@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-export const metadata = { title: "할당 관리 | HRM" };
+export const metadata = { title: "할당 관리 | GBIT Portal" };
 
 export default async function AllocationsPage({
   searchParams,

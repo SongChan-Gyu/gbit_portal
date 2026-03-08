@@ -5,15 +5,14 @@ import { fiscalPeriod } from "@/lib/leaveCalc";
 
 /**
  * POST /api/admin/fiscal-year/init
- * body: { fy: number }  e.g. { fy: 2025 }
+ * body: { fy: number, dryRun?: boolean }
+ *
+ * dryRun: true → DB 변경 없이 추가될 할당 목록만 반환 (미리보기)
  *
  * 귀속연도 일괄 초기화 (귀속연도 단위로 부여되는 휴가만):
  *  1. 기본연차(BASE_ANNUAL) + 근속가산(TENURE_BONUS)
  *  2. 돌봄(CARE), 연휴연장(HOLIDAY_EXT), 직무부서(DUTY_DEPT)
  *  3. 이미 존재하는 할당은 건드리지 않음 (skip)
- *
- * ※ 1/5/10년 근속휴가(TENURE_1Y, TENURE_5Y, TENURE_10Y)는 입사일 기준이라 귀속연도와 무관.
- *    스케줄러(근속 기념일 체크)로만 부여합니다.
  */
 export async function POST(req: Request) {
   const session = await auth();
@@ -21,7 +20,8 @@ export async function POST(req: Request) {
   if (!["PM","ADMIN"].includes(user?.role ?? ""))
     return NextResponse.json({ error:"권한 없음" }, { status:403 });
 
-  const { fy } = await req.json();
+  const body = await req.json().catch(() => ({}));
+  const { fy, dryRun } = body;
   if (!fy || isNaN(fy)) return NextResponse.json({ error:"귀속연도(fy) 필요" }, { status:400 });
 
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
@@ -30,13 +30,11 @@ export async function POST(req: Request) {
     include: { team: true },
   });
 
-  /** 직급부서(사원관리 dutyDept)가 운영부·교육부·복지부일 때 2일 부여. 팀명이 아닌 직급부서 필드 기준 */
   const DUTY_DEPT_VALUES = ["OPERATIONS", "EDUCATION", "WELFARE"];
   const DUTY_DEPT_DAYS = 2;
   const DUTY_SOURCE = "DUTY_DEPT";
   const DUTY_LABEL: Record<string, string> = { OPERATIONS: "운영부", EDUCATION: "교육부", WELFARE: "복지부" };
 
-  /** 이미 해당 employee+sourceCode+fiscalYear 조합이 있으면 생성하지 않음 (중복 방지, isActive 무관) */
   async function allocExists(
     tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
     employeeId: string,
@@ -48,8 +46,48 @@ export async function POST(req: Request) {
     });
   }
 
-  /** 기본연차 15일(1년 이상), 근속가산은 별도 TENURE_BONUS로 부여 */
   const BASE_ANNUAL_DAYS = 15;
+
+  /** dryRun: 미리보기만 반환 (DB 변경 없음) */
+  if (dryRun === true) {
+    const preview: { name: string; items: { label: string; totalDays: number }[] }[] = [];
+    for (const emp of employees) {
+      if (!emp.hireDate) continue;
+      const hire = new Date(emp.hireDate);
+      const yearsOfService = Math.floor((fyStart.getTime() - hire.getTime()) / (365.25 * 24 * 3600 * 1000));
+      const items: { label: string; totalDays: number }[] = [];
+
+      const exists = (empId: string, code: string) =>
+        prisma.leaveAllocation.findFirst({ where: { employeeId: empId, sourceCode: code, fiscalYear: fy } });
+
+      if (yearsOfService >= 1) {
+        if (!(await exists(emp.id, "BASE_ANNUAL")))
+          items.push({ label: "기본연차", totalDays: BASE_ANNUAL_DAYS });
+        const bonus = Math.min(Math.floor(yearsOfService / 2), 10);
+        if (bonus > 0 && !(await exists(emp.id, "TENURE_BONUS")))
+          items.push({ label: `근속가산(+${bonus}일)`, totalDays: bonus });
+      } else {
+        const months = Math.floor((fyEnd.getTime() - hire.getTime()) / (30 * 24 * 3600 * 1000));
+        if (months > 0 && !(await exists(emp.id, "BASE_ANNUAL")))
+          items.push({ label: `기본연차(월발생 ${Math.min(months, 12)}일)`, totalDays: Math.min(months, 12) });
+      }
+      if (!(await exists(emp.id, "CARE"))) items.push({ label: "돌봄휴가", totalDays: 2 });
+      const dutyDept = (emp as { dutyDept?: string | null }).dutyDept ?? null;
+      if (dutyDept && DUTY_DEPT_VALUES.includes(dutyDept) && !(await exists(emp.id, DUTY_SOURCE)))
+        items.push({ label: "직무부서휴가", totalDays: DUTY_DEPT_DAYS });
+      if (!(await exists(emp.id, "HOLIDAY_EXT"))) items.push({ label: "연휴연장휴가", totalDays: 1 });
+
+      if (items.length > 0) preview.push({ name: emp.name, items });
+    }
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      fy,
+      preview,
+      totalEmployees: employees.length,
+      totalToCreate: preview.reduce((s, p) => s + p.items.length, 0),
+    });
+  }
 
   const results = await prisma.$transaction(async (tx) => {
     const out: { name: string; allocsCreated: number; skipped: number }[] = [];

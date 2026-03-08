@@ -7,7 +7,7 @@ import LeaveApprovalsTab from "@/app/(main)/admin/leave-management/LeaveApproval
 import { getFiscalYear } from "@/lib/workdays";
 import { serializeDates } from "@/lib/serialize";
 
-export const metadata = { title: "휴가 관리 | HRM" };
+export const metadata = { title: "휴가 관리 | GBIT Portal" };
 
 export default async function LeaveManagementPage({
   searchParams,

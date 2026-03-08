@@ -25,8 +25,8 @@ export default function LoginPage() {
       {/* 좌측 브랜딩 패널 — 데스크톱만 */}
       <div className="hidden lg:flex flex-col justify-between w-96 bg-blue-700 px-10 py-12 text-white">
         <div>
-          <div className="text-2xl font-black tracking-tight mb-1">HRM</div>
-          <p className="text-blue-200 text-sm">인사관리 시스템</p>
+          <div className="text-2xl font-black tracking-tight mb-1">GBIT Portal</div>
+          <p className="text-blue-200 text-sm">지비아이티 포털</p>
         </div>
         <div className="space-y-4 text-sm text-blue-100">
           <p className="font-semibold text-white text-base">주요 기능</p>
@@ -37,7 +37,7 @@ export default function LoginPage() {
             </p>
           ))}
         </div>
-        <p className="text-xs text-blue-300">© 2025 HRM System</p>
+        <p className="text-xs text-blue-300">© 2025 GBIT Portal</p>
       </div>
 
       {/* 우측 로그인 폼 */}

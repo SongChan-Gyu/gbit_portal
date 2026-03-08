@@ -56,10 +56,10 @@ export default function Sidebar({
       <div className="px-4 py-3.5 border-b border-gray-200">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-blue-700 rounded flex items-center justify-center text-white font-black text-xs tracking-tight">
-            HRM
+            GBIT
           </div>
           <div>
-            <p className="font-bold text-gray-900 text-[13px] leading-tight">인사관리 시스템</p>
+            <p className="font-bold text-gray-900 text-[13px] leading-tight">GBIT Portal</p>
             <p className="text-[11px] text-gray-400 leading-tight">{user?.name}</p>
           </div>
         </div>

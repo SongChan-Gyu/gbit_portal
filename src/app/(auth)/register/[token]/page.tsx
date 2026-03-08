@@ -51,7 +51,7 @@ export default async function RegisterPage({ params }: { params: Promise<{ token
         {/* 로고 */}
         <div className="text-center mb-6">
           <div className="inline-flex w-14 h-14 bg-blue-600 rounded-2xl items-center justify-center text-white font-black text-xl mb-3 shadow-lg shadow-blue-200">
-            HRM
+            GBIT
           </div>
           <h1 className="text-2xl font-bold text-gray-900">계정 등록</h1>
           <p className="text-sm text-gray-500 mt-1">사용할 아이디와 비밀번호를 직접 설정하세요</p>

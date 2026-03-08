@@ -1,6 +1,6 @@
 import { BookOpen, Info, AlertCircle, Calendar, Clock, Award, Heart, Stethoscope, Baby, Star } from "lucide-react";
 
-export const metadata = { title:"휴가 규정 안내 | HRM" };
+export const metadata = { title: "휴가 규정 안내 | GBIT Portal" };
 
 // ─────────────────── 규정 데이터 ───────────────────
 const FISCAL_NOTE = "귀속기간: 매년 5월 1일 ~ 다음해 4월 30일";

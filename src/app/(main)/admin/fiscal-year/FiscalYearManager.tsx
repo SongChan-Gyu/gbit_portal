@@ -24,6 +24,7 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
   const router = useRouter();
   const [grantModal, setGrantModal] = useState<{ emp:Emp; alloc?:Alloc } | null>(null);
   const [form, setForm] = useState<Partial<Alloc & { isNew:boolean }>>({});
+  const [initialForm, setInitialForm] = useState<Partial<Alloc & { isNew:boolean }>>({});
   const [saving, setSaving]   = useState(false);
   const [err, setErr]         = useState("");
   const [initializing, setInitializing] = useState(false);
@@ -36,29 +37,66 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
   });
   const [carryoverSaving, setCarryoverSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [initPreview, setInitPreview] = useState<{ name: string; items: { label: string; totalDays: number }[] }[] | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
   const fyD = fyDates(fiscalYear);
 
-  async function runInit() {
-    if (!confirm(`${fiscalYear}년도 귀속연도를 일괄 초기화하시겠습니까?\n이미 존재하는 할당은 건드리지 않습니다.`)) return;
-    setInitializing(true); setInitResult("");
+  async function loadInitPreview() {
+    setLoadingPreview(true);
+    setInitPreview(null);
+    setInitResult("");
     const res = await fetch("/api/admin/fiscal-year/init", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({ fy:fiscalYear }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fy: fiscalYear, dryRun: true }),
+    });
+    const data = await res.json();
+    setLoadingPreview(false);
+    if (!res.ok) { setInitResult("❌ 미리보기 실패: " + (data.error ?? "")); return; }
+    setInitPreview(data.preview ?? []);
+    if ((data.preview ?? []).length === 0) setInitResult("추가될 할당이 없습니다. (이미 모두 존재)");
+  }
+
+  async function runInit() {
+    if (!initPreview?.length && !confirm(`${fiscalYear}년도 귀속연도를 일괄 초기화하시겠습니까?`)) return;
+    if (initPreview?.length && !confirm(`미리보기대로 ${initPreview.reduce((s, p) => s + p.items.length, 0)}건 할당을 생성하시겠습니까?`)) return;
+    setInitializing(true);
+    setInitResult("");
+    const res = await fetch("/api/admin/fiscal-year/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fy: fiscalYear }),
     });
     const data = await res.json();
     setInitializing(false);
     if (!res.ok) { setInitResult("❌ " + (data.error ?? "실패")); return; }
     setInitResult(`✅ 완료: ${data.summary.created}건 생성, ${data.summary.skipped}건 이미 존재 (총 ${data.total}명)`);
+    setInitPreview(null);
     router.refresh();
   }
 
   function openGrant(emp: Emp, alloc?: Alloc) {
     setGrantModal({ emp, alloc });
-    setForm(alloc ? { ...alloc, isNew:false } : {
-      sourceCode:"BASE_ANNUAL", label:"기본연차", totalDays:15, usedDays:0,
-      validFrom:fyD.from, validUntil:fyD.until, note:null, isNew:true,
-    });
+    const initial = alloc ? { ...alloc, isNew: false as boolean } : {
+      sourceCode: "BASE_ANNUAL", label: "기본연차", totalDays: 15, usedDays: 0,
+      validFrom: fyD.from, validUntil: fyD.until, note: null, isNew: true as boolean,
+    };
+    setForm(initial);
+    setInitialForm(JSON.parse(JSON.stringify(initial)));
     setErr("");
+  }
+
+  function isFieldChanged(key: keyof Alloc): boolean {
+    let a = initialForm[key];
+    let b = form[key];
+    if (key === "validFrom" || key === "validUntil") {
+      a = typeof a === "string" ? a.slice(0, 10) : a;
+      b = typeof b === "string" ? (b as string).slice(0, 10) : b;
+    }
+    if (a === undefined && b === undefined) return false;
+    if (a === b) return false;
+    if (typeof a === "number" && typeof b === "number") return a !== b;
+    return String(a ?? "") !== String(b ?? "");
   }
 
   async function saveGrant() {
@@ -151,15 +189,42 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
 
   return (
     <div className="space-y-4">
-      {/* 상단 정보 + 초기화 버튼 */}
+      {/* 상단 정보 + 미리보기 / 저장 버튼 */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
         <span>귀속연도 <strong>{fiscalYear}년도</strong> ({fyD.from} ~ {fyD.until}) — 재직자 {employees.length}명</span>
-        <button onClick={runInit} disabled={initializing}
-          className="flex items-center gap-1.5 bg-blue-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition">
-          <Zap size={13}/>
-          {initializing ? "초기화 중..." : "귀속연도 자동 초기화"}
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={loadInitPreview} disabled={loadingPreview}
+            className="flex items-center gap-1.5 bg-white border border-blue-300 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition">
+            {loadingPreview ? "조회 중..." : "미리보기"}
+          </button>
+          <button onClick={runInit} disabled={initializing}
+            className="flex items-center gap-1.5 bg-blue-600 text-white text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-60 transition">
+            <Zap size={13}/>
+            {initializing ? "저장 중..." : "저장(적용)"}
+          </button>
+        </div>
       </div>
+      {/* 미리보기: 변경될 데이터 빨간색 표시 */}
+      {initPreview && initPreview.length > 0 && (
+        <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-4">
+          <p className="text-sm font-semibold text-red-800 mb-2">아래 내용으로 저장 시 추가될 할당 (빨간색 표시)</p>
+          <div className="max-h-64 overflow-y-auto space-y-2">
+            {initPreview.map((p, i) => (
+              <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="font-medium text-red-700">{p.name}</span>
+                <span className="text-red-600">
+                  {p.items.map((it, j) => (
+                    <span key={j} className="inline-block mr-2 px-2 py-0.5 rounded bg-red-100 text-red-800 font-medium">
+                      {it.label} {it.totalDays}일
+                    </span>
+                  ))}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-red-600 mt-2">총 {initPreview.reduce((s, p) => s + p.items.length, 0)}건 생성 예정 · 저장(적용) 버튼을 눌러 반영하세요.</p>
+        </div>
+      )}
       {initResult && (
         <div className={`text-sm px-4 py-2 rounded-lg ${initResult.startsWith("✅")?"bg-green-50 text-green-700":"bg-red-50 text-red-600"}`}>
           {initResult}
@@ -249,41 +314,41 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
             <div className="space-y-3">
               <div>
                 <label className="label">분류</label>
-                <select className="input" value={form.sourceCode??""} onChange={(e)=>setForm((p)=>({...p,sourceCode:e.target.value}))}>
+                <select className={`input ${isFieldChanged("sourceCode") ? "border-red-500 bg-red-50" : ""}`} value={form.sourceCode??""} onChange={(e)=>setForm((p)=>({...p,sourceCode:e.target.value}))}>
                   {SOURCE_OPTIONS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
                 </select>
               </div>
               <div>
                 <label className="label">표시명 *</label>
-                <input className="input" value={form.label??""} onChange={(e)=>setForm((p)=>({...p,label:e.target.value}))} />
+                <input className={`input ${isFieldChanged("label") ? "border-red-500 bg-red-50" : ""}`} value={form.label??""} onChange={(e)=>setForm((p)=>({...p,label:e.target.value}))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">부여일수 *</label>
-                  <input type="number" step="0.5" className="input" value={form.totalDays??0}
+                  <input type="number" step="0.5" className={`input ${isFieldChanged("totalDays") ? "border-red-500 bg-red-50" : ""}`} value={form.totalDays??0}
                     onChange={(e)=>setForm((p)=>({...p,totalDays:parseFloat(e.target.value)}))} />
                 </div>
                 <div>
                   <label className="label">사용일수</label>
-                  <input type="number" step="0.5" className="input" value={form.usedDays??0}
+                  <input type="number" step="0.5" className={`input ${isFieldChanged("usedDays") ? "border-red-500 bg-red-50" : ""}`} value={form.usedDays??0}
                     onChange={(e)=>setForm((p)=>({...p,usedDays:parseFloat(e.target.value)}))} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">유효 시작일</label>
-                  <input type="date" className="input" value={form.validFrom?.slice(0,10)??fyD.from}
+                  <input type="date" className={`input ${isFieldChanged("validFrom") ? "border-red-500 bg-red-50" : ""}`} value={form.validFrom?.slice(0,10)??fyD.from}
                     onChange={(e)=>setForm((p)=>({...p,validFrom:e.target.value}))} />
                 </div>
                 <div>
                   <label className="label">유효 종료일</label>
-                  <input type="date" className="input" value={form.validUntil?.slice(0,10)??fyD.until}
+                  <input type="date" className={`input ${isFieldChanged("validUntil") ? "border-red-500 bg-red-50" : ""}`} value={form.validUntil?.slice(0,10)??fyD.until}
                     onChange={(e)=>setForm((p)=>({...p,validUntil:e.target.value}))} />
                 </div>
               </div>
               <div>
                 <label className="label">비고</label>
-                <input className="input" value={form.note??""} onChange={(e)=>setForm((p)=>({...p,note:e.target.value||null}))} />
+                <input className={`input ${isFieldChanged("note") ? "border-red-500 bg-red-50" : ""}`} value={form.note??""} onChange={(e)=>setForm((p)=>({...p,note:e.target.value||null}))} />
               </div>
             </div>
 

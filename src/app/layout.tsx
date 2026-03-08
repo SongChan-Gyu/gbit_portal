@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "HRM 시스템",
-  description: "인사관리 시스템",
+  title: "GBIT Portal",
+  description: "지비아이티 포털",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
 };
 

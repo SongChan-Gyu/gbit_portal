@@ -6,7 +6,7 @@ import MenuPermEditor from "@/app/(main)/admin/menu-permissions/MenuPermEditor";
 import DataEditorTab from "@/app/(main)/admin/system/DataEditorTab";
 import { ALL_MENUS, DEFAULT_PERMISSIONS } from "@/lib/menuConfig";
 
-export const metadata = { title: "시스템 설정 | HRM" };
+export const metadata = { title: "시스템 설정 | GBIT Portal" };
 
 const ROLES = ["STAFF","TEAM_LEAD","PM","ADMIN"] as const;
 

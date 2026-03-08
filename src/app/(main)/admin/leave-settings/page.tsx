@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import LeaveTypeEditor from "@/app/(main)/admin/leave-types/LeaveTypeEditor";
 import Link from "next/link";
 
-export const metadata = { title: "휴가 설정 | HRM" };
+export const metadata = { title: "휴가 설정 | GBIT Portal" };
 
 export default async function LeaveSettingsPage() {
   const session = await auth();

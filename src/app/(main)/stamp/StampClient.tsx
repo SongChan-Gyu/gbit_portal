@@ -25,6 +25,9 @@ export default function StampClient({
   const router = useRouter();
   const avail  = stamps.filter((s) => !s.isUsed);
   const count  = avail.length;
+  const healingUsable = Math.floor(count / 5);   // 힐링데이 5개당 1회
+  const afternoonUsable = Math.floor(count / 10); // 오후 인정 10개당 1회
+  const MAX_SLOTS = 30; // UI에 표시할 최대 칸 수 (그 이상은 "외 N개"로)
 
   // 스탬프 요청 폼
   const [reqForm, setReqForm] = useState({ stampDate: todayStr(), description: "" });
@@ -75,52 +78,58 @@ export default function StampClient({
         </div>
       </div>
 
-      {/* 스탬프 현황 패널 */}
+      {/* 스탬프 현황 패널 — 누적 개수, 사용 가능 횟수 */}
       <div className="panel">
         <div className="panel-header">
           <span className="panel-title">스탬프 현황</span>
-          <span className="text-xs text-gray-500">
-            유효 스탬프 <span className="font-bold text-amber-600">{count}</span>개
+          <span className="text-sm font-bold text-amber-600">
+            보유 <span className="text-lg">{count}</span>개
           </span>
         </div>
         <div className="panel-body">
-          {/* 스탬프 슬롯 10개 */}
+          <p className="text-xs text-gray-500 mb-3">
+            스탬프는 계속 누적됩니다. 5개당 힐링데이 1회, 10개당 오후 인정휴가 1회 사용 가능합니다. 예: 20개 보유 시 힐링데이 2회 + 오후 인정 2회 사용 가능.
+          </p>
+          {/* 스탬프 슬롯 (최대 30칸, 그 이상은 "외 N개") */}
           <div className="flex items-center gap-1 flex-wrap mb-4">
-            {Array.from({ length: 10 }).map((_, i) => {
+            {Array.from({ length: Math.min(count, MAX_SLOTS) }).map((_, i) => {
               const s = avail[i];
-              const filled = i < count;
               return (
-                <div key={i} title={filled && s ? formatYMD(s.stampDate) : ""}
-                  className={`w-9 h-9 rounded border-2 flex items-center justify-center text-xs font-bold transition-all ${
-                    filled ? "bg-amber-400 border-amber-500 text-white" : "bg-gray-50 border-gray-200 text-gray-300"
-                  }`}>
-                  {filled ? i + 1 : "·"}
+                <div key={i} title={s ? formatYMD(s.stampDate) : ""}
+                  className="w-8 h-8 rounded border-2 flex items-center justify-center text-[10px] font-bold bg-amber-400 border-amber-500 text-white">
+                  {i + 1}
                 </div>
               );
             })}
+            {count > MAX_SLOTS && (
+              <span className="text-xs text-gray-500 ml-1">외 {count - MAX_SLOTS}개</span>
+            )}
+            {count === 0 && (
+              <span className="text-xs text-gray-400">보유 스탬프 없음</span>
+            )}
           </div>
 
-          {/* 마일스톤 */}
+          {/* 사용 가능 횟수: 힐링데이 5개당 1회, 오후 인정 10개당 1회 */}
           <div className="grid grid-cols-2 gap-3">
-            <div className={`border rounded p-3 ${count >= 5 ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
+            <div className={`border rounded p-3 ${healingUsable > 0 ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
               <p className="text-xs font-semibold text-gray-600 mb-0.5">힐링데이 (오후 4시 퇴근)</p>
-              <p className="text-xs text-gray-500">스탬프 5개 · 이력만 등록 · 승인 불필요</p>
+              <p className="text-xs text-gray-500">5개당 1회 · 이력만 등록 · 승인 불필요</p>
               <div className="mt-2">
-                {count >= 5 ? (
-                  <span className="badge badge-success">사용 가능</span>
+                {healingUsable > 0 ? (
+                  <span className="badge badge-success">최대 {healingUsable}회 사용 가능</span>
                 ) : (
-                  <span className="text-xs text-gray-400">{5 - count}개 부족</span>
+                  <span className="text-xs text-gray-400">{5 - count}개 더 모으면 1회</span>
                 )}
               </div>
             </div>
-            <div className={`border rounded p-3 ${count >= 10 ? "border-purple-300 bg-purple-50" : "border-gray-200 bg-gray-50"}`}>
-              <p className="text-xs font-semibold text-gray-600 mb-0.5">오후인정(스탬프)</p>
-              <p className="text-xs text-gray-500">스탬프 10개 · 휴가신청으로 처리</p>
+            <div className={`border rounded p-3 ${afternoonUsable > 0 ? "border-purple-300 bg-purple-50" : "border-gray-200 bg-gray-50"}`}>
+              <p className="text-xs font-semibold text-gray-600 mb-0.5">오후 인정휴가(스탬프)</p>
+              <p className="text-xs text-gray-500">10개당 1회 · 휴가 신청으로 처리</p>
               <div className="mt-2">
-                {count >= 10 ? (
-                  <span className="badge badge-purple">사용 가능</span>
+                {afternoonUsable > 0 ? (
+                  <span className="badge badge-purple">최대 {afternoonUsable}회 사용 가능</span>
                 ) : (
-                  <span className="text-xs text-gray-400">{10 - count}개 부족</span>
+                  <span className="text-xs text-gray-400">{10 - count}개 더 모으면 1회</span>
                 )}
               </div>
             </div>
@@ -133,12 +142,12 @@ export default function StampClient({
         <div className="panel">
           <div className="panel-header">
             <span className="panel-title">힐링데이 신청</span>
-            <span className="badge badge-default">스탬프 5개 소진 · 이력 등록만</span>
+            <span className="badge badge-default">1회당 스탬프 5개 소진 · 보유분으로 여러 번 신청 가능</span>
           </div>
           <div className="panel-body space-y-3">
             <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded px-3 py-2">
               <AlertCircle size={13} className="text-blue-500 shrink-0" />
-              힐링데이는 연차 사용일수에 포함되지 않습니다. 스탬프 5개를 소진하고 이력만 등록합니다.
+              힐링데이는 연차 사용일수에 포함되지 않습니다. 1회 신청 시 스탬프 5개를 소진하며, 보유 스탬프가 10개 이상이면 다른 날짜로 추가 신청할 수 있습니다.
             </div>
             <div className="flex gap-2 items-end">
               <div className="flex-1">
