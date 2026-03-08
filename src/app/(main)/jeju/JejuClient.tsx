@@ -285,27 +285,28 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
             ))}
             {calendarDays.map((dateStr, i) => {
               if (!dateStr) return <div key={`e-${i}`} />;
-              const isBlocked = blockedSet.has(dateStr);
+              const d = dateStr;
+              const isBlocked = blockedSet.has(d);
               const isOccupied = occupied.welfare
-                ? (occupied.byDate && (occupied.byDate[dateStr]?.length ?? 0) > 0)
-                : (occupied.occupiedDates ?? []).includes(dateStr);
+                ? (occupied.byDate && (occupied.byDate[d]?.length ?? 0) > 0)
+                : (occupied.occupiedDates ?? []).includes(d);
               const isUnavailable = isOccupied || isBlocked;
-              const detail = occupied.welfare && occupied.byDate?.[dateStr];
-              const isPast = dateStr < new Date().toISOString().slice(0, 10);
+              const detail = occupied.welfare && occupied.byDate?.[d];
+              const isPast = d < new Date().toISOString().slice(0, 10);
               const canApply = !isUnavailable && !isPast;
               function handleDayClick() {
                 if (!canApply) return;
-                const nextDay = new Date(dateStr);
+                const nextDay = new Date(d);
                 nextDay.setDate(nextDay.getDate() + 1);
                 const endStr = nextDay.toISOString().slice(0, 10);
-                setApplyStartDate(dateStr);
+                setApplyStartDate(d);
                 setApplyEndDate(endStr);
                 setApplyOpen(true);
               }
               return (
                 <button
                   type="button"
-                  key={dateStr}
+                  key={d}
                   onClick={handleDayClick}
                   disabled={!canApply}
                   className={`min-h-[44px] rounded-lg flex flex-col items-center justify-center p-1 w-full text-left transition-colors ${
@@ -327,7 +328,7 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
                             : "지난 날짜"
                   }
                 >
-                  <span className="font-medium">{parseInt(dateStr.slice(8, 10), 10)}</span>
+                  <span className="font-medium">{parseInt(d.slice(8, 10), 10)}</span>
                   {isUnavailable && (
                     <span className="text-[10px] truncate w-full text-center">
                       {isBlocked ? "예약불가" : welfare && detail ? (detail.length > 1 ? `${detail[0].name} 외 ${detail.length - 1}` : detail[0].name) : "예약됨"}
