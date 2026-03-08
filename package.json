@@ -18,6 +18,7 @@
     "db:seed": "npx tsx prisma/seed.ts",
     "db:seed:base": "npx tsx prisma/seed-base.ts",
     "verify:leave": "npx tsx scripts/verify-leave-policy.ts",
+    "verify:data": "npx tsx scripts/verify-data-integrity.ts",
     "db:studio": "prisma studio",
     "db:mysql:up": "bash scripts/mysql-up-and-migrate.sh",
     "db:migrate": "prisma migrate dev",

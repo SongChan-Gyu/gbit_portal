@@ -3,7 +3,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
 import { formatYMD } from "@/lib/dateUtils";
-import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink } from "lucide-react";
+import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
 
 // ── 타입 ──────────────────────────────────────────────────────
 interface LT {
@@ -25,10 +25,11 @@ interface LeaveItem {
   days: number;
   reason: string;
   _groupKey: string;
+  _healingSelected?: boolean;
 }
 
 function initItem(startDate = todayStr()): LeaveItem {
-  return { leaveTypeId: "", startDate, endDate: startDate, days: 0, reason: "", _groupKey: "" };
+  return { leaveTypeId: "", startDate, endDate: startDate, days: 0, reason: "", _groupKey: "", _healingSelected: false };
 }
 
 // ── 연차 = 기본연차 + 근속가산 + 이월연차만 (특별휴가·부서추가 제외) ──
@@ -58,7 +59,7 @@ const LEAVE_GROUPS: GroupDef[] = [
     ],
   },
   {
-    key: "recognition", label: "인정휴가", meta: "차감없음",
+    key: "recognition", label: "인정휴가", meta: "연차 미차감",
     color: "#475569", borderClass: "border-slate-500",
     subs: [
       { label: "종일",    code: "RECOGNITION" },
@@ -81,22 +82,22 @@ const LEAVE_GROUPS: GroupDef[] = [
     subs: [{ label: "1일", code: "HOLIDAY_EXT", desc: "연휴 3일 이상 시 앞뒤 연속일 사용 가능" }],
   },
   {
-    key: "healing", label: "힐링데이", meta: "스탬프 5개",
+    key: "stamp", label: "스탬프", meta: "힐링데이·오후인정",
     color: "#d97706", borderClass: "border-amber-500",
-    subs: [],   // 전용 페이지(스탬프 쿠폰)에서 신청
+    subs: [
+      { label: "힐링데이",   code: "HEALING", desc: "스탬프 5개" },
+      { label: "오후 인정", code: "PM_RECOG_STAMP", desc: "스탬프 10개" },
+    ],
+  },
+  {
+    key: "halfday", label: "하프데이", meta: "수요일 오후",
+    color: "#0284c7", borderClass: "border-sky-500",
+    subs: [{ label: "하프데이", code: "PM_HALF_MONTH", desc: "월 1회" }],
   },
   {
     key: "sick", label: "병가", meta: "미차감 (급여만 감액)",
     color: "#dc2626", borderClass: "border-red-500",
     subs: [{ label: "신청", code: "SICK" }],
-  },
-  {
-    key: "halfstamp", label: "하프데이·스탬프", meta: "오후 조기퇴근",
-    color: "#0284c7", borderClass: "border-sky-500",
-    subs: [
-      { label: "하프데이",     code: "PM_HALF_MONTH", desc: "월 1회" },
-      { label: "오후인정(스탬프)", code: "PM_RECOG_STAMP", desc: "스탬프 10개" },
-    ],
   },
   {
     key: "award", label: "포상휴가", meta: "별도 부여",
@@ -198,15 +199,14 @@ export default function LeaveApplyForm({
   function selectGroup(idx: number, groupKey: string) {
     const grp = LEAVE_GROUPS.find((g) => g.key === groupKey);
     if (!grp) return;
-    if (grp.key === "healing") {
+    if (grp.key === "stamp") {
       setItems((prev) => prev.map((it, i) =>
-        i === idx ? { ...it, leaveTypeId: "", _groupKey: groupKey, days: 0 } : it
+        i === idx ? { ...it, leaveTypeId: "", _groupKey: groupKey, days: 0, _healingSelected: false } : it
       ));
       return;
     }
-    // 서브옵션이 1개여도 먼저 _groupKey를 설정해 카드가 선택된 것처럼 보이게 함 (클릭 반응)
     setItems((prev) => prev.map((it, i) =>
-      i === idx ? { ...it, leaveTypeId: "", _groupKey: groupKey, days: 0 } : it
+      i === idx ? { ...it, leaveTypeId: "", _groupKey: groupKey, days: 0, _healingSelected: false } : it
     ));
     if (grp.subs.length === 1) {
       selectLeaveType(idx, grp.subs[0].code, groupKey);
@@ -214,6 +214,12 @@ export default function LeaveApplyForm({
   }
 
   function selectLeaveType(idx: number, code: string, groupKey?: string) {
+    if (code === "HEALING") {
+      setItems((prev) => prev.map((it, i) =>
+        i === idx ? { ...it, leaveTypeId: "", _groupKey: groupKey ?? "stamp", _healingSelected: true, days: 0 } : it
+      ));
+      return;
+    }
     const lt = ltByCode[code];
     if (!lt) return;
     setItems((prev) => prev.map((it, i) => {
@@ -224,6 +230,7 @@ export default function LeaveApplyForm({
         _groupKey: groupKey ?? CODE_TO_GROUP[code] ?? it._groupKey,
         days,
         endDate: lt.isHalf ? it.startDate : it.endDate,
+        _healingSelected: false,
       };
     }));
   }
@@ -247,6 +254,61 @@ export default function LeaveApplyForm({
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  // ── 달력 팝업 (시작일 클릭 → 종료일 클릭, 네이버 비행기 스타일) ──
+  const [calendarItemIdx, setCalendarItemIdx] = useState<number | null>(null);
+  const [calendarStep, setCalendarStep] = useState<"start" | "end">("start");
+  const [calendarPickedStart, setCalendarPickedStart] = useState<string | null>(null);
+  const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth() + 1);
+
+  function openCalendar(idx: number) {
+    const it = items[idx];
+    if (!it) return;
+    setCalendarItemIdx(idx);
+    setCalendarStep("start");
+    setCalendarPickedStart(null);
+    const [y, m] = it.startDate.split("-").map(Number);
+    setCalendarYear(y);
+    setCalendarMonth(m);
+  }
+  function closeCalendar() {
+    setCalendarItemIdx(null);
+    setCalendarStep("start");
+    setCalendarPickedStart(null);
+  }
+  function onCalendarDateClick(dateStr: string) {
+    if (calendarItemIdx == null) return;
+    const it = items[calendarItemIdx];
+    const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
+    const isHalf = lt?.isHalf ?? false;
+    const today = todayStr();
+
+    if (dateStr < today) return;
+
+    if (calendarStep === "start") {
+      setCalendarPickedStart(dateStr);
+      if (isHalf) {
+        changeDate(calendarItemIdx, "startDate", dateStr);
+        closeCalendar();
+        return;
+      }
+      setCalendarStep("end");
+      return;
+    }
+
+    // step === "end"
+    const start = calendarPickedStart ?? it.startDate;
+    let startFinal = start;
+    let endFinal = dateStr;
+    if (dateStr < start) {
+      startFinal = dateStr;
+      endFinal = start;
+    }
+    changeDate(calendarItemIdx, "startDate", startFinal);
+    changeDate(calendarItemIdx, "endDate", endFinal);
+    closeCalendar();
+  }
+
   const totalDays = items.reduce((s, it) => s + (it.days || 0), 0);
   const maxSteps  = items.reduce((m, it) => {
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
@@ -258,6 +320,7 @@ export default function LeaveApplyForm({
     e.preventDefault();
     setError("");
     for (const it of items) {
+      if (it._healingSelected) continue; // 힐링데이는 스탬프 쿠폰에서만 신청
       if (!it.leaveTypeId) { setError("모든 항목의 휴가 유형을 선택해 주세요."); return; }
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       const actualDays = lt?.isHalf ? 0.5 : it.days;
@@ -353,27 +416,27 @@ export default function LeaveApplyForm({
               <div className="panel-body space-y-5">
                 {/* STEP 1: 휴가 종류 */}
                 <section>
-                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                     01. 휴가 종류
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 sm:gap-1.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
                     {LEAVE_GROUPS.map((g) => {
                       const isSelected = item._groupKey === g.key;
                       return (
                         <button key={g.key} type="button"
                           onClick={() => selectGroup(idx, g.key)}
-                          className={`flex flex-col items-center justify-center p-3 md:p-2.5 rounded-lg border text-center transition-all ${
+                          className={`flex flex-col items-center justify-center p-3.5 rounded-lg border text-center transition-all ${
                             isSelected
                               ? "border-2 bg-white shadow-sm"
                               : "border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50"
                           }`}
                           style={isSelected ? { borderColor: g.color } : {}}>
-                          <span className={`text-[15px] md:text-[11px] font-semibold leading-tight ${
+                          <span className={`text-sm font-semibold leading-tight ${
                             isSelected ? "" : "text-gray-600"
                           }`} style={isSelected ? { color: g.color } : {}}>
                             {g.label}
                           </span>
-                          <span className="text-xs md:text-[10px] text-gray-500 mt-0.5 leading-tight">{g.meta}</span>
+                          <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span>
                         </button>
                       );
                     })}
@@ -381,7 +444,7 @@ export default function LeaveApplyForm({
                 </section>
 
                 {/* 그룹은 선택됐지만 휴가 유형 미등록 시 (연휴연장/생일반차 등) */}
-                {item._groupKey && item._groupKey !== "healing" && grp && grp.subs.length === 1 && !item.leaveTypeId && (
+                {item._groupKey && grp && grp.subs.length === 1 && !item.leaveTypeId && !(item._groupKey === "stamp" && item._healingSelected) && (
                   <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                     <p className="text-sm text-amber-800">
                       <strong>{grp.label}</strong> 휴가 유형이 시스템에 등록되지 않았습니다.
@@ -392,12 +455,12 @@ export default function LeaveApplyForm({
                   </section>
                 )}
 
-                {/* 힐링데이: 전용 경로 안내 */}
-                {item._groupKey === "healing" && (
+                {/* 스탬프 > 힐링데이: 전용 경로 안내 (일수 표기 없음, 1시간 40분 개념) */}
+                {item._groupKey === "stamp" && item._healingSelected && (
                   <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                     <p className="text-sm font-semibold text-amber-800 mb-1">힐링데이 — 스탬프 쿠폰 메뉴에서 신청</p>
                     <p className="text-xs text-amber-700 mb-3 leading-relaxed">
-                      힐링데이는 스탬프 5개 소진 후 오후 4시 조기퇴근으로 처리됩니다.
+                      스탬프 5개 소진 시 10:20 출근 또는 16:00 퇴근(1시간 40분 단축)으로 처리됩니다.
                       결재 없이 자동 등록되며, 연차 일수에 포함되지 않습니다.
                     </p>
                     <a href="/stamp" target="_blank"
@@ -409,19 +472,20 @@ export default function LeaveApplyForm({
                 )}
 
                 {/* STEP 2: 시간대 (서브 옵션이 여러 개인 경우) */}
-                {item._groupKey && item._groupKey !== "healing" && grp && grp.subs.length > 1 && (
+                {item._groupKey && grp && grp.subs.length > 1 && (
                   <section>
-                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       02. 시간대
                     </p>
                     <div className="flex gap-2">
                       {grp.subs.map((sub) => {
                         const subLt = ltByCode[sub.code];
-                        const isSelected = lt?.code === sub.code;
+                        const isHealing = sub.code === "HEALING";
+                        const isSelected = isHealing ? item._healingSelected : lt?.code === sub.code;
                         return (
                           <button key={sub.code} type="button"
-                            onClick={() => selectLeaveType(idx, sub.code)}
-                            disabled={!subLt}
+                            onClick={() => selectLeaveType(idx, sub.code, grp.key)}
+                            disabled={!isHealing && !subLt}
                             className={`flex-1 flex flex-col items-center py-3 rounded-lg border transition-all ${
                               isSelected
                                 ? "border-2 bg-white shadow-sm"
@@ -433,7 +497,7 @@ export default function LeaveApplyForm({
                               {sub.label}
                             </span>
                             {sub.desc && (
-                              <span className="text-[10px] text-gray-400 mt-0.5">{sub.desc}</span>
+                              <span className="text-xs text-gray-400 mt-0.5">{sub.desc}</span>
                             )}
                           </button>
                         );
@@ -445,12 +509,12 @@ export default function LeaveApplyForm({
                 {/* STEP 3: 신청 기간 */}
                 {item.leaveTypeId && (
                   <section>
-                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       {grp && grp.subs.length > 1 ? "03." : "02."} 신청 기간
                     </p>
                     <div className={`grid gap-3 ${lt?.isHalf ? "grid-cols-1" : "grid-cols-2"}`}>
                       <div>
-                        <label className="block text-xs text-gray-500 mb-1">
+                        <label className="block text-sm text-gray-500 mb-1">
                           {lt?.isHalf ? "날짜" : "시작일"}
                         </label>
                         <input type="date" className="input"
@@ -460,7 +524,7 @@ export default function LeaveApplyForm({
                       </div>
                       {!lt?.isHalf && (
                         <div>
-                          <label className="block text-xs text-gray-500 mb-1">종료일</label>
+                          <label className="block text-sm text-gray-500 mb-1">종료일</label>
                           <input type="date" className="input"
                             value={item.endDate} min={item.startDate}
                             onChange={(e) => changeDate(idx, "endDate", e.target.value)}
@@ -468,8 +532,21 @@ export default function LeaveApplyForm({
                         </div>
                       )}
                     </div>
+                    <div className="mt-2">
+                      <button type="button"
+                        onClick={() => openCalendar(idx)}
+                        className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium">
+                        <Calendar size={16} />
+                        달력에서 선택
+                      </button>
+                    </div>
 
-                    {/* 일수 카운터 */}
+                    {/* 일수 카운터 (힐링데이는 스탬프 페이지에서만 사용, 여기서는 연차/반차/하프데이 등) */}
+                    {lt?.code === "PM_HALF_MONTH" && (
+                      <p className="mt-2 text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
+                        하프데이는 <strong>수요일 오후</strong>에만 사용 가능합니다.
+                      </p>
+                    )}
                     <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 text-sm ${
                       actualDays > 0
                         ? "bg-blue-50 border border-blue-100 text-blue-700"
@@ -556,10 +633,10 @@ export default function LeaveApplyForm({
                 {/* STEP: 사유 */}
                 {item.leaveTypeId && (
                   <section>
-                    <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-widest mb-2">
+                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       사유
                       {!isAnnualDeduct && (
-                        <span className="ml-1 text-[10px] normal-case font-normal text-gray-400">(선택)</span>
+                        <span className="ml-1 text-xs normal-case font-normal text-gray-400">(선택)</span>
                       )}
                     </p>
                     <input className="input" type="text"
@@ -682,6 +759,98 @@ export default function LeaveApplyForm({
           </button>
         </div>
       )}
+
+      {/* 달력 팝업: 시작일 클릭 → 종료일 클릭 */}
+      {calendarItemIdx != null && (() => {
+        const it = items[calendarItemIdx];
+        const lt = leaveTypes.find((t) => t.id === it?.leaveTypeId);
+        const isHalf = lt?.isHalf ?? false;
+        const start = calendarPickedStart ?? it?.startDate ?? null;
+        const firstDay = new Date(calendarYear, calendarMonth - 1, 1);
+        const lastDay = new Date(calendarYear, calendarMonth, 0);
+        const startPad = firstDay.getDay();
+        const daysInMonth = lastDay.getDate();
+        const today = todayStr();
+        const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
+        const cells: (string | null)[] = [];
+        for (let i = 0; i < startPad; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) {
+          const y = calendarYear;
+          const m = String(calendarMonth).padStart(2, "0");
+          const day = String(d).padStart(2, "0");
+          cells.push(`${y}-${m}-${day}`);
+        }
+        const prevMonth = () => {
+          if (calendarMonth === 1) {
+            setCalendarMonth(12);
+            setCalendarYear((y) => y - 1);
+          } else setCalendarMonth((m) => m - 1);
+        };
+        const nextMonth = () => {
+          if (calendarMonth === 12) {
+            setCalendarMonth(1);
+            setCalendarYear((y) => y + 1);
+          } else setCalendarMonth((m) => m + 1);
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            onClick={closeCalendar}>
+            <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4"
+              onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-800">
+                  {calendarStep === "start"
+                    ? (isHalf ? "날짜 선택" : "시작일 선택")
+                    : "종료일 선택"}
+                </h3>
+                <button type="button" onClick={closeCalendar}
+                  className="text-gray-400 hover:text-gray-600 p-1">✕</button>
+              </div>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <button type="button" onClick={prevMonth}
+                  className="p-1.5 rounded hover:bg-gray-100 text-gray-600">‹</button>
+                <span className="text-sm font-semibold tabular-nums">
+                  {calendarYear}년 {calendarMonth}월
+                </span>
+                <button type="button" onClick={nextMonth}
+                  className="p-1.5 rounded hover:bg-gray-100 text-gray-600">›</button>
+              </div>
+              <div className="grid grid-cols-7 gap-0.5 text-center">
+                {weekDays.map((w) => (
+                  <div key={w} className="text-[10px] font-medium text-gray-400 py-1">{w}</div>
+                ))}
+                {cells.map((dateStr, i) => {
+                  if (!dateStr) return <div key={`e-${i}`} />;
+                  const isPast = dateStr < today;
+                  const isStart = dateStr === start;
+                  const isInRange = calendarStep === "end" && start && dateStr >= start && dateStr >= today;
+                  return (
+                    <button key={dateStr} type="button"
+                      disabled={isPast}
+                      onClick={() => onCalendarDateClick(dateStr)}
+                      className={`aspect-square rounded text-sm font-medium transition-colors ${
+                        isPast
+                          ? "text-gray-300 cursor-not-allowed"
+                          : isStart
+                            ? "bg-blue-600 text-white hover:bg-blue-700"
+                            : isInRange
+                              ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                              : "text-gray-700 hover:bg-gray-100"
+                      }`}>
+                      {dateStr.slice(8, 10)}
+                    </button>
+                  );
+                })}
+              </div>
+              {calendarStep === "end" && (
+                <p className="mt-3 text-xs text-gray-500 text-center">
+                  종료일을 클릭하세요 (같은 날 클릭 시 1일)
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </form>
   );
 }

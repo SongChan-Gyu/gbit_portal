@@ -52,15 +52,15 @@ export default function Sidebar({
   }
 
   return (
-    <div className="flex flex-col h-full bg-white text-[13px]">
+    <div className="flex flex-col h-full bg-white text-sm">
       <div className="px-4 py-3.5 border-b border-gray-200">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-blue-700 rounded flex items-center justify-center text-white font-black text-xs tracking-tight">
+          <div className="w-9 h-9 bg-blue-700 rounded flex items-center justify-center text-white font-black text-sm tracking-tight">
             GBIT
           </div>
           <div>
-            <p className="font-bold text-gray-900 text-[13px] leading-tight">GBIT Portal</p>
-            <p className="text-[11px] text-gray-400 leading-tight">{user?.name}</p>
+            <p className="font-bold text-gray-900 text-sm leading-tight">GBIT Portal</p>
+            <p className="text-xs text-gray-400 leading-tight">{user?.name}</p>
           </div>
         </div>
       </div>
@@ -80,12 +80,12 @@ export default function Sidebar({
                   const active = isActive(group.href);
                   return (
                     <Link key={group.key} href={group.href} onClick={onClose}
-                      className={`flex items-center gap-2.5 mx-2 px-3 py-2 rounded mb-0.5 transition-colors ${
+                      className={`flex items-center gap-2.5 mx-2 px-3 py-2.5 rounded mb-0.5 transition-colors text-sm ${
                         active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                       }`}>
-                      <Icon size={15} className={active ? "text-blue-600" : "text-gray-400"} />
+                      <Icon size={17} className={active ? "text-blue-600" : "text-gray-400"} />
                       <span className="flex-1">{group.label}</span>
-                      {active && <ChevronRight size={12} className="text-blue-400" />}
+                      {active && <ChevronRight size={14} className="text-blue-400" />}
                     </Link>
                   );
                 }
@@ -98,11 +98,11 @@ export default function Sidebar({
                     <button
                       type="button"
                       onClick={() => setExpanded((p) => (p === group.key ? null : group.key))}
-                      className="flex items-center gap-2.5 mx-2 px-3 py-2 rounded w-full text-left transition-colors text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      className="flex items-center gap-2.5 mx-2 px-3 py-2.5 rounded w-full text-left transition-colors text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                     >
-                      <Icon size={15} className="text-gray-400" />
+                      <Icon size={17} className="text-gray-400" />
                       <span className="flex-1">{group.label}</span>
-                      {open ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
+                      {open ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
                     </button>
                     {open && (
                       <div className="ml-4 pl-2 border-l border-gray-100 space-y-0.5">
@@ -110,11 +110,11 @@ export default function Sidebar({
                           const active = isActive(c.href);
                           return (
                             <Link key={c.key} href={c.href} onClick={onClose}
-                              className={`flex items-center gap-2 px-2 py-1.5 rounded text-[12px] transition-colors ${
+                              className={`flex items-center gap-2 px-2.5 py-2 rounded text-sm transition-colors ${
                                 active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
                               }`}>
                               <span className="flex-1">{c.label}</span>
-                              {active && <ChevronRight size={10} className="text-blue-400" />}
+                              {active && <ChevronRight size={12} className="text-blue-400" />}
                             </Link>
                           );
                         })}
@@ -129,7 +129,7 @@ export default function Sidebar({
       </nav>
 
       <div className="border-t border-gray-200 px-4 py-3">
-        <p className="text-[11px] text-gray-400">
+        <p className="text-xs text-gray-400">
           {user?.name} · {(user?.role === "STAFF" ? "팀원" : user?.role === "TEAM_LEAD" ? "팀장" : user?.role)}
         </p>
       </div>

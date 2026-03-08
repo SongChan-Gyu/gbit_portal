@@ -112,8 +112,8 @@ export default function StampClient({
           {/* 사용 가능 횟수: 힐링데이 5개당 1회, 오후 인정 10개당 1회 */}
           <div className="grid grid-cols-2 gap-3">
             <div className={`border rounded p-3 ${healingUsable > 0 ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
-              <p className="text-xs font-semibold text-gray-600 mb-0.5">힐링데이 (오후 4시 퇴근)</p>
-              <p className="text-xs text-gray-500">5개당 1회 · 이력만 등록 · 승인 불필요</p>
+              <p className="text-xs font-semibold text-gray-600 mb-0.5">힐링데이</p>
+              <p className="text-xs text-gray-500">5개당 1회 · 10:20 출근 또는 16:00 퇴근(1시간 40분) · 승인 불필요</p>
               <div className="mt-2">
                 {healingUsable > 0 ? (
                   <span className="badge badge-success">최대 {healingUsable}회 사용 가능</span>
@@ -124,7 +124,7 @@ export default function StampClient({
             </div>
             <div className={`border rounded p-3 ${afternoonUsable > 0 ? "border-purple-300 bg-purple-50" : "border-gray-200 bg-gray-50"}`}>
               <p className="text-xs font-semibold text-gray-600 mb-0.5">오후 인정휴가(스탬프)</p>
-              <p className="text-xs text-gray-500">10개당 1회 · 휴가 신청으로 처리</p>
+              <p className="text-xs text-gray-500">10개당 1회 · 연차 미차감 · 휴가 신청으로 처리</p>
               <div className="mt-2">
                 {afternoonUsable > 0 ? (
                   <span className="badge badge-purple">최대 {afternoonUsable}회 사용 가능</span>
@@ -147,7 +147,7 @@ export default function StampClient({
           <div className="panel-body space-y-3">
             <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded px-3 py-2">
               <AlertCircle size={13} className="text-blue-500 shrink-0" />
-              힐링데이는 연차 사용일수에 포함되지 않습니다. 1회 신청 시 스탬프 5개를 소진하며, 보유 스탬프가 10개 이상이면 다른 날짜로 추가 신청할 수 있습니다.
+              힐링데이는 10:20 출근 또는 16:00 퇴근(1시간 40분)으로 처리되며 연차에 포함되지 않습니다. 1회 신청 시 스탬프 5개를 소진합니다.
             </div>
             <div className="flex gap-2 items-end">
               <div className="flex-1">

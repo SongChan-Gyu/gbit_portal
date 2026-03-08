@@ -32,8 +32,20 @@ export default function ExcelImportBlock() {
   const [resultMessage, setResultMessage] = useState("");
   const [resultErrors, setResultErrors] = useState<{ row: number; message: string }[]>([]);
 
-  function downloadTemplate() {
-    window.open("/api/admin/employees/import-template", "_blank");
+  async function downloadTemplate() {
+    try {
+      const res = await fetch("/api/admin/employees/import-template", { credentials: "include" });
+      if (!res.ok) throw new Error("다운로드 실패");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "사원_일괄등록_양식.xlsx";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      window.open("/api/admin/employees/import-template", "_blank");
+    }
   }
 
   async function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {

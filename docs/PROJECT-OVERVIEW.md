@@ -79,4 +79,13 @@
 
 ---
 
+---
+
+## 관련 문서
+
+- **함께 유지보수하기** (Cursor·Git·클라우드 공유): [`docs/COLLABORATION-MANUAL.md`](COLLABORATION-MANUAL.md)
+- 배포: `docs/DEPLOYMENT.md` · 테스트: `docs/TESTING.md` · DB: `docs/DATABASE.md`
+
+---
+
 *이 문서는 코드베이스 인식 및 온보딩용입니다. 규정 상세는 앱 내 «휴가 규정» 메뉴를 참고하세요.*
