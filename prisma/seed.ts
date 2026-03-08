@@ -36,24 +36,17 @@ function fiscalPeriod(fy: number) {
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log("🌱 시드 데이터 생성 중...");
+  console.log("🌱 시드 데이터 생성 중... (없으면 추가, 있으면 유지)");
 
-  // ── 기존 휴가 데이터 초기화 (결재 내역 포함) ─────────────────────────
-  // 테스트/개발 환경에서 2025 귀속연도 기준으로 다시 맞추기 위해
-  // 휴가 관련 테이블을 정리한 뒤 아래 시드를 다시 쌓는다.
-  await prisma.leaveApproval.deleteMany({});
-  await prisma.leaveHistory.deleteMany({});
-  await prisma.leaveRequestItem.deleteMany({});
-  await prisma.leaveRequest.deleteMany({});
-  await prisma.leaveAllocation.deleteMany({});
+  // 재실행 시에도 기존 데이터 변경 없음: 없을 때만 insert, 있으면 스킵.
 
-  // ── 팀
-  const pmTeam = await upsertTeam("PM", 0);
-  const t1     = await upsertTeam("1팀", 1);
-  const t2     = await upsertTeam("2팀", 2);
-  const t3     = await upsertTeam("3팀", 3);
+  // ── 팀 (없을 때만 생성)
+  const pmTeam = await findOrCreateTeam("PM", 0);
+  const t1     = await findOrCreateTeam("1팀", 1);
+  const t2     = await findOrCreateTeam("2팀", 2);
+  const t3     = await findOrCreateTeam("3팀", 3);
 
-  // ── 사원 정의 (birthDate: 생일반차쿠폰 자동 부여용)
+  // ── 사원 정의 (birthDate: 생일반차쿠폰 자동 부여용) — 없을 때만 생성
   type EmpDef = {
     empNo:string; name:string; pos:string; role:string;
     team:any; phone:string; hire:string; type?:string; birth?:string;
@@ -72,24 +65,31 @@ async function main() {
 
   const empMap: Record<string, any> = {};
   for (const e of empDefs) {
-    const emp = await prisma.employee.upsert({
-      where: { empNo: e.empNo },
-      update: e.birth ? { birthDate: new Date(e.birth) } : {},
-      create: {
-        empNo:e.empNo, name:e.name, position:e.pos, role:e.role,
-        teamId:e.team.id, phone:e.phone, hireDate:new Date(e.hire),
-        status:"PENDING", employeeType: e.type ?? "FULL",
-        birthDate: e.birth ? new Date(e.birth) : null,
-      },
-    });
+    let emp = await prisma.employee.findUnique({ where: { empNo: e.empNo } });
+    if (!emp) {
+      emp = await prisma.employee.create({
+        data: {
+          empNo:e.empNo, name:e.name, position:e.pos, role:e.role,
+          teamId:e.team.id, phone:e.phone, hireDate:new Date(e.hire),
+          status:"PENDING", employeeType: e.type ?? "FULL",
+          birthDate: e.birth ? new Date(e.birth) : null,
+        },
+      });
+    }
     empMap[e.empNo] = emp;
   }
 
-  // 팀장 지정
-  await prisma.team.update({ where:{id:t1.id},     data:{leaderId:empMap["E002"].id} });
-  await prisma.team.update({ where:{id:t2.id},     data:{leaderId:empMap["E004"].id} });
-  await prisma.team.update({ where:{id:t3.id},     data:{leaderId:empMap["E007"].id} });
-  await prisma.team.update({ where:{id:pmTeam.id}, data:{leaderId:empMap["E001"].id} });
+  // 팀장 지정 (아직 leaderId가 null일 때만)
+  const teamsToLead = [
+    [t1, empMap["E002"]?.id], [t2, empMap["E004"]?.id], [t3, empMap["E007"]?.id], [pmTeam, empMap["E001"]?.id],
+  ] as const;
+  for (const [team, leaderId] of teamsToLead) {
+    if (!leaderId) continue;
+    const current = await prisma.team.findUnique({ where: { id: team.id }, select: { leaderId: true } });
+    if (current?.leaderId == null) {
+      await prisma.team.update({ where: { id: team.id }, data: { leaderId } });
+    }
+  }
 
   // ── 계정
   const accounts = [
@@ -126,36 +126,26 @@ async function main() {
     { sourceCode: "DUTY_DEPT", label: "직무부서휴가", sortOrder: 5, defaultDays: 2, note: "운영부/교육부/복지부 2일" },
   ];
   for (const s of initSources) {
-    await prisma.allocationSourceConfig.upsert({
-      where: { sourceCode: s.sourceCode },
-      update: { label: s.label, sortOrder: s.sortOrder, defaultDays: s.defaultDays, note: s.note },
-      create: { ...s },
-    });
+    if (await prisma.allocationSourceConfig.findUnique({ where: { sourceCode: s.sourceCode } })) continue;
+    await prisma.allocationSourceConfig.create({ data: s });
   }
 
-  // ── 스케줄러 유형 (유형별 조회·관리용)
+  // ── 스케줄러 유형 (없을 때만 생성)
   const jobTypes = [
     { jobKey: "monthly_accrual", name: "월별 연차 적립", description: "입사 1년 미만 직원 월 1일 적립", sortOrder: 1 },
     { jobKey: "tenure_check", name: "근속 기념일 휴가", description: "1·5·10년 근속일 도래 시 자동 부여", sortOrder: 2 },
     { jobKey: "birthday_half", name: "생일반차쿠폰", description: "생일 해당 월에 0.5일 부여", sortOrder: 3 },
   ];
   for (const j of jobTypes) {
-    await prisma.schedulerJobType.upsert({
-      where: { jobKey: j.jobKey },
-      update: { name: j.name, description: j.description ?? null, sortOrder: j.sortOrder },
-      create: { ...j, description: j.description ?? null },
-    });
+    if (await prisma.schedulerJobType.findUnique({ where: { jobKey: j.jobKey } })) continue;
+    await prisma.schedulerJobType.create({ data: { ...j, description: j.description ?? null } });
   }
 
-  // ── 귀속연도 2025 할당 + 샘플 신청 내역 (종류별 한 건씩만 유지)
+  // ── 귀속연도 2025 할당 + 샘플 신청 내역 (없을 때만 생성)
   const fy = 2025;
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
-  const seedEmpIds = empDefs.map((e) => empMap[e.empNo].id);
 
-  // 2025년 해당 사원들의 중복 할당 제거 (종류별 한 개만 남기기)
-  await dedupeFy2025Allocations(seedEmpIds, empDefs, empMap, fy);
-
-  // 각 사원별 자동 계산 + 할당 생성 (고정 id로 upsert → 종류별 1개)
+  // 각 사원별 자동 계산 + 할당 생성 (없을 때만 insert)
   for (const e of empDefs) {
     const emp = empMap[e.empNo];
     const hire = new Date(e.hire);
@@ -177,36 +167,30 @@ async function main() {
       }
     }
 
-    // 근속 마일스톤 (fiscalYear null → 동일 사원·동일 code 1개만)
+    // 근속 마일스톤 (없을 때만 생성)
     const milestones = getTenureMilestones(hire, fyStart, fyEnd);
     for (const m of milestones) {
-      const validUntil = new Date(m.grantDate);
-      validUntil.setFullYear(validUntil.getFullYear() + 1);
       const existing = await prisma.leaveAllocation.findFirst({
         where: { employeeId: emp.id, sourceCode: m.code },
       });
+      if (existing) continue;
+      const validUntil = new Date(m.grantDate);
+      validUntil.setFullYear(validUntil.getFullYear() + 1);
       const note = `${m.grantDate.toLocaleDateString("ko-KR")} 부여`;
-      if (existing) {
-        await prisma.leaveAllocation.update({
-          where: { id: existing.id },
-          data: { label: m.label, totalDays: m.days, validFrom: m.grantDate, validUntil, note },
-        });
-      } else {
-        await prisma.leaveAllocation.create({
-          data: {
-            id: `a-${e.empNo}-${m.code}`,
-            employeeId: emp.id,
-            sourceCode: m.code,
-            label: m.label,
-            totalDays: m.days,
-            usedDays: 0,
-            validFrom: m.grantDate,
-            validUntil,
-            fiscalYear: null,
-            note,
-          },
-        });
-      }
+      await prisma.leaveAllocation.create({
+        data: {
+          id: `a-${e.empNo}-${m.code}`,
+          employeeId: emp.id,
+          sourceCode: m.code,
+          label: m.label,
+          totalDays: m.days,
+          usedDays: 0,
+          validFrom: m.grantDate,
+          validUntil,
+          fiscalYear: null,
+          note,
+        },
+      });
     }
 
     // 돌봄휴가: 전원 2일 (유형별 1개)
@@ -240,13 +224,13 @@ async function main() {
   // ── 샘플 휴가 신청 내역 (정합성 있는 데이터)
   await seedLeaveRequests(empMap);
 
-  // ── 스탬프 (E003: 7개)
+  // ── 스탬프 (E003: 7개, 없을 때만 생성)
   for (let i = 0; i < 7; i++) {
+    const id = `seed-stamp-${i}`;
+    if (await prisma.stampCoupon.findUnique({ where: { id } })) continue;
     const d = new Date(2025, i, 6);
-    await prisma.stampCoupon.upsert({
-      where:  { id:`seed-stamp-${i}` },
-      update: {},
-      create: { id:`seed-stamp-${i}`, employeeId:empMap["E003"].id, stampDate:d },
+    await prisma.stampCoupon.create({
+      data: { id, employeeId: empMap["E003"].id, stampDate: d },
     });
   }
 
@@ -257,103 +241,21 @@ async function main() {
   if (hResult.failed) console.warn("  ⚠ 휴일 API 동기화 실패:", hResult.failed);
   else console.log("  ✅ 휴일 동기화:", hResult.synced, "건");
 
-  // ── 모든 ACTIVE 사원에 대해 2025 CARE/HOLIDAY_EXT 할당 보장 ─────────────────
+  // ── 모든 ACTIVE 사원에 대해 2025 CARE/HOLIDAY_EXT 할당 보장 (없을 때만) ─────
   await ensureFy2025CareAndHolidayForAll();
-
-  // ── usedDays 재계산 (중복 시드 실행 시 정합성 보정)
-  await recalcUsedDays();
 
   console.log("✅ 시드 완료!");
   console.log("  admin / admin1234! | pm / password1! | team1 / password1! | staff1 / password1!");
 }
 
-// ─── 유틸 ───────────────────────────────────────────────
-/** 2025년 귀속 할당 중복 제거: 시드 사원에 대해 (employeeId, sourceCode)별 1개만 남김 */
-async function dedupeFy2025Allocations(
-  seedEmpIds: string[],
-  empDefs: { empNo: string }[],
-  empMap: Record<string, { id: string }>,
-  fiscalYear: number
-) {
-  const idToEmpNo: Record<string, string> = Object.fromEntries(
-    empDefs.map((e) => [empMap[e.empNo].id, e.empNo])
-  );
-  const preferredId = (empId: string, sourceCode: string) => {
-    const empNo = idToEmpNo[empId];
-    if (!empNo) return null;
-    const suffix: Record<string, string> = {
-      BASE_ANNUAL: "base",
-      TENURE_BONUS: "bonus",
-      CARE: "care",
-      HOLIDAY_EXT: "holiday-ext",
-      TENURE_1Y: "TENURE_1Y",
-      TENURE_5Y: "TENURE_5Y",
-      TENURE_10Y: "TENURE_10Y",
-    };
-    const s = suffix[sourceCode] ?? sourceCode.toLowerCase();
-    return `a-${empNo}-${s}`;
-  };
-
-  const allocs = await prisma.leaveAllocation.findMany({
-    where: { employeeId: { in: seedEmpIds }, fiscalYear: fiscalYear },
-  });
-  const byKey = new Map<string, typeof allocs>();
-  for (const a of allocs) {
-    const key = `${a.employeeId}:${a.sourceCode}`;
-    if (!byKey.has(key)) byKey.set(key, []);
-    byKey.get(key)!.push(a);
-  }
-
-  for (const [, group] of byKey) {
-    if (group.length <= 1) continue;
-    const keepId = group.find((a) => a.id === preferredId(group[0].employeeId, group[0].sourceCode))?.id ?? group[0].id;
-    const toDelete = group.filter((a) => a.id !== keepId);
-    const toDeleteIds = toDelete.map((a) => a.id);
-    await prisma.leaveRequestItem.updateMany({
-      where: { allocationId: { in: toDeleteIds } },
-      data: { allocationId: keepId },
-    });
-    await prisma.leaveAllocation.deleteMany({
-      where: { id: { in: toDeleteIds } },
-    });
-  }
-
-  // 근속 마일스톤(TENURE_1Y/5Y/10Y) 동일 사원·동일 sourceCode 1개만 유지 (전체 사원 대상)
-  const milestoneAllocs = await prisma.leaveAllocation.findMany({
-    where: { sourceCode: { in: ["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"] } },
-  });
-  const byMilestone = new Map<string, typeof milestoneAllocs>();
-  for (const a of milestoneAllocs) {
-    const key = `${a.employeeId}:${a.sourceCode}`;
-    if (!byMilestone.has(key)) byMilestone.set(key, []);
-    byMilestone.get(key)!.push(a);
-  }
-  for (const [, group] of byMilestone) {
-    if (group.length <= 1) continue;
-    const empId = group[0].employeeId;
-    const code = group[0].sourceCode;
-    const preferred = preferredId(empId, code);
-    const keepId =
-      group.find((a) => a.fiscalYear === null && preferred && a.id === preferred)?.id
-      ?? group.find((a) => a.fiscalYear === null)?.id
-      ?? group.find((a) => preferred && a.id === preferred)?.id
-      ?? group[0].id;
-    const toDeleteIds = group.filter((a) => a.id !== keepId).map((a) => a.id);
-    await prisma.leaveRequestItem.updateMany({
-      where: { allocationId: { in: toDeleteIds } },
-      data: { allocationId: keepId },
-    });
-    await prisma.leaveAllocation.deleteMany({
-      where: { id: { in: toDeleteIds } },
-    });
-  }
+// ─── 유틸 (모두 없을 때만 insert, 기존 행은 수정/삭제 안 함) ─────────────────
+async function findOrCreateTeam(name: string, sortOrder: number) {
+  const t = await prisma.team.findFirst({ where: { name } });
+  if (t) return t;
+  return prisma.team.create({ data: { name, sortOrder } });
 }
 
-async function upsertTeam(name: string, sortOrder: number) {
-  return prisma.team.upsert({ where:{name}, update:{}, create:{name,sortOrder} });
-}
-
-/** 종류별 1개만 보장: 있으면 업데이트, 없으면 생성(지정 id 사용) */
+/** 없을 때만 생성(지정 id 사용). 있으면 아무 것도 안 함 */
 async function ensureOneAlloc(
   preferredId: string,
   employeeId: string,
@@ -368,28 +270,19 @@ async function ensureOneAlloc(
   const existing = await prisma.leaveAllocation.findFirst({
     where: { employeeId, sourceCode, fiscalYear },
   });
-  const data = {
-    label,
-    totalDays,
-    validFrom,
-    validUntil,
-    note: note ?? null,
-  };
-  if (existing) {
-    await prisma.leaveAllocation.update({
-      where: { id: existing.id },
-      data,
-    });
-    return;
-  }
+  if (existing) return;
   await prisma.leaveAllocation.create({
     data: {
       id: preferredId,
       employeeId,
       sourceCode,
-      ...data,
+      label,
+      totalDays,
       usedDays: 0,
+      validFrom,
+      validUntil,
       fiscalYear,
+      note: note ?? null,
     },
   });
 }
@@ -633,7 +526,9 @@ async function seedLeaveTypes() {
   ] as const;
 
   for (const [code,name,dpu,deduct,steps,maxMon,maxYr,stamp,stampCnt,isHalf,amOnly,pmOnly,vBasis,vMon,color,sort] of types) {
+    if (await prisma.leaveType.findUnique({ where: { code } })) continue;
     const data = {
+      code,
       name, daysPerUnit:dpu as number,
       deductFromBalance:deduct as boolean,
       approvalSteps:steps as number,
@@ -646,35 +541,11 @@ async function seedLeaveTypes() {
       validityMonths:vMon as number|null,
       color, sortOrder:sort as number,
     };
-    await prisma.leaveType.upsert({
-      where:{code},
-      update:data,   // ← 기존 레코드도 업데이트
-      create:{
-        code, ...data,
-      },
-    });
+    await prisma.leaveType.create({ data });
   }
 }
 
-/** 할당 usedDays를 실제 승인된 신청 기준으로 재계산 (중복 실행 시 정합성 보장) */
-async function recalcUsedDays() {
-  const allocs = await prisma.leaveAllocation.findMany({ where:{ isActive:true } });
-  for (const a of allocs) {
-    const items = await prisma.leaveRequestItem.findMany({
-      where:{
-        allocationId: a.id,
-        leaveRequest: { status:{ in:["APPROVED","CANCEL_REQUESTED"] } },
-      },
-    });
-    const actual = items.reduce((s,i) => s + i.days, 0);
-    if (Math.abs(actual - a.usedDays) > 0.001) {
-      await prisma.leaveAllocation.update({ where:{ id:a.id }, data:{ usedDays:actual } });
-    }
-  }
-  console.log("  ✅ usedDays 재계산 완료");
-}
-
-/** ACTIVE 사원 전체에 대해 2025 귀속 CARE/HOLIDAY_EXT 할당을 보장 */
+/** ACTIVE 사원 전체에 대해 2025 귀속 CARE/HOLIDAY_EXT 할당 보장 (없을 때만 생성) */
 async function ensureFy2025CareAndHolidayForAll() {
   const fy = 2025;
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
