@@ -26,13 +26,43 @@
 
 ## 로컬에서 실행
 
+둘 중 편한 방식으로 하면 됩니다.
+
+### 1) Docker로 한 번에 (MySQL + 앱 모두 컨테이너)
+
 ```bash
 npm install
-cp .env.example .env   # .env 값은 팀에서 공유받기
-npm run dev
+cp .env.example .env
+npm run dev:docker
 ```
 
-브라우저에서 [http://localhost:3000](http://localhost:3000) 접속.
+→ MySQL과 Next.js가 같이 뜹니다. [http://localhost:3000](http://localhost:3000) 접속.
+
+**한 번이라도 이전에 Docker로 MySQL 띄운 적 있으면** 연결 오류 시 볼륨 삭제 후 다시: `docker compose down -v` 후 `npm run dev:docker`
+
+### 2) 맥에 MySQL 이미 설치돼 있을 때 (Docker 없이)
+
+1. **MySQL 서버 켜기**  
+   `brew services start mysql` 또는 시스템 설정에서 MySQL 실행
+
+2. **.env 설정**  
+   `cp .env.example .env` 후 **`DATABASE_URL`의 비밀번호를 맥 MySQL root 비밀번호로 수정**  
+   예: `mysql://root:본인비밀번호@127.0.0.1:3306/hrm_web`
+
+3. **첫 설정 한 번에 하기** (DB 생성 + 마이그레이션 + 시드)
+   ```bash
+   npm install
+   npm run local:setup
+   ```
+   → 실패하면 “비밀번호가 틀렸거나 MySQL이 꺼져 있을 수 있습니다” 메시지 확인. `.env` 비밀번호와 MySQL 실행 여부 확인 후 다시 실행.
+
+4. **개발 서버 실행**
+   ```bash
+   npm run dev
+   ```
+   또는 `npm run dev:local` (migrate + seed 포함)
+
+   → [http://localhost:3000](http://localhost:3000) 에서 실행됨.
 
 ---
 

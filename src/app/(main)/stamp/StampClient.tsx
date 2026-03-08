@@ -90,15 +90,21 @@ export default function StampClient({
           <p className="text-xs text-gray-500 mb-3">
             스탬프는 계속 누적됩니다. 5개당 힐링데이 1회, 10개당 오후 인정휴가 1회 사용 가능합니다. 예: 20개 보유 시 힐링데이 2회 + 오후 인정 2회 사용 가능.
           </p>
-          {/* 스탬프 슬롯 (최대 30칸, 그 이상은 "외 N개") */}
-          <div className="flex items-center gap-1 flex-wrap mb-4">
-            {Array.from({ length: Math.min(count, MAX_SLOTS) }).map((_, i) => {
+          {/* 스탬프 쿠폰 (★ 채운 칸 / ☆ 빈 칸) */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-4">
+            {Array.from({ length: Math.min(Math.max(count, 10), MAX_SLOTS) }).map((_, i) => {
+              const filled = i < count;
               const s = avail[i];
               return (
-                <div key={i} title={s ? formatYMD(s.stampDate) : ""}
-                  className="w-8 h-8 rounded border-2 flex items-center justify-center text-[10px] font-bold bg-amber-400 border-amber-500 text-white">
-                  {i + 1}
-                </div>
+                <span
+                  key={i}
+                  title={s ? formatYMD(s.stampDate) : filled ? "스탬프 보유" : "미적립"}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                    filled ? "bg-amber-400 text-white" : "bg-gray-200 text-gray-300"
+                  }`}
+                >
+                  {filled ? "★" : "☆"}
+                </span>
               );
             })}
             {count > MAX_SLOTS && (

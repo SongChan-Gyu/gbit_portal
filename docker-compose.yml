@@ -32,7 +32,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
-    command: ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+    # DB 연결 재시도 후 마이그레이션 → 시드 → 개발 서버 기동
+    command: ["sh", "/app/scripts/docker-wait-db.sh"]
 
 volumes:
   mysql_data:

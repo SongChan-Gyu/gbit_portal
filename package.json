@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:local": "prisma generate && prisma migrate deploy && (npx prisma db seed || true) && next dev",
+    "local:setup": "sh scripts/local-setup.sh",
     "dev:docker": "docker compose up",
     "dev:tunnel": "bash scripts/dev-with-tunnel.sh",
     "build": "next build",
