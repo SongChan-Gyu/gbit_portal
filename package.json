@@ -8,6 +8,7 @@
     "dev:tunnel": "bash scripts/dev-with-tunnel.sh",
     "build": "next build",
     "start": "next start",
+    "start:prod": "prisma migrate deploy && npx prisma db seed && next start",
     "lint": "next lint",
     "tunnel": "node scripts/tunnel-localtunnel.mjs",
     "tunnel:ngrok": "node scripts/tunnel-ngrok.mjs",

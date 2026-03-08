@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import AuditLogClient from "@/app/(main)/admin/audit-log/AuditLogClient";
 import MenuPermEditor from "@/app/(main)/admin/menu-permissions/MenuPermEditor";
+import DataEditorTab from "@/app/(main)/admin/system/DataEditorTab";
 import { ALL_MENUS, DEFAULT_PERMISSIONS } from "@/lib/menuConfig";
 
 export const metadata = { title: "시스템 설정 | HRM" };
@@ -19,8 +20,8 @@ export default async function SystemPage({
   const { tab: tabRaw } = await searchParams;
   const tab = tabRaw ?? "audit";
 
-  // 메뉴 권한 탭은 ADMIN만 접근 가능
-  if (tab === "permissions" && user.role !== "ADMIN") redirect("/admin/system?tab=audit");
+  // 메뉴 권한 / DB 데이터 탭은 ADMIN만 접근 가능
+  if ((tab === "permissions" || tab === "data") && user.role !== "ADMIN") redirect("/admin/system?tab=audit");
 
   const perms = await (async () => {
     if (tab !== "permissions") return null;
@@ -35,6 +36,7 @@ export default async function SystemPage({
   const TABS = [
     { id:"audit",       label:"감사 로그",    adminOnly: false },
     { id:"permissions", label:"메뉴 권한",    adminOnly: true  },
+    { id:"data",        label:"DB 데이터",    adminOnly: true  },
   ];
 
   return (
@@ -75,6 +77,13 @@ export default async function SystemPage({
             perms={perms}
             roles={ROLES as unknown as string[]}
           />
+        </div>
+      )}
+
+      {/* ── DB 데이터 (원본 테이블 조회·수정) ───────────── */}
+      {tab === "data" && (
+        <div>
+          <DataEditorTab />
         </div>
       )}
     </div>

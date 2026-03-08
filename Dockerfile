@@ -17,4 +17,5 @@ FROM base AS prod
 COPY . .
 RUN npm run build
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+# 컨테이너 시작 시 마이그레이션·시드 후 앱 실행 (Pre-deploy가 빌드 단계에서 돌아가는 경우 대비)
+CMD ["npm", "run", "start:prod"]
