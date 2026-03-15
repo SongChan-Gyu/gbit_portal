@@ -6,6 +6,7 @@ import { getFiscalYear } from "@/lib/workdays";
 import { Bell, Calendar, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { isWelfareDept } from "@/lib/jeju";
 import { formatMDWithDay } from "@/lib/dateUtils";
+import DashboardMonthCalendar from "./DashboardMonthCalendar";
 
 const STATUS_BADGE: Record<string, string> = {
   PENDING: "badge-warning", APPROVED: "badge-success",
@@ -14,8 +15,6 @@ const STATUS_BADGE: Record<string, string> = {
 const STATUS_KO: Record<string, string> = {
   PENDING: "대기", APPROVED: "승인", REJECTED: "반려", CANCELLED: "취소",
 };
-
-const DAYS_KO = ["일","월","화","수","목","금","토"];
 
 function getMonthDates(year: number, month: number): string[] {
   const last = new Date(year, month, 0).getDate();
@@ -347,44 +346,13 @@ export default async function DashboardPage({
                 다음 달 <ChevronRight size={18} />
               </Link>
             </div>
-            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 max-w-3xl mx-auto">
-              <div className="grid grid-cols-7 gap-1.5 text-center">
-                {DAYS_KO.map((d) => (
-                  <div key={d} className="text-xs sm:text-sm font-semibold text-gray-500 py-1">{d}</div>
-                ))}
-                {(() => {
-                  const { year, month, dates, byDay } = teamMonthData;
-                  const firstDow = new Date(year, month - 1, 1).getDay();
-                  const pad = Array(firstDow).fill(null);
-                  const cells = [...pad, ...dates.map((d) => d)];
-                  return cells.map((dateStr, i) => {
-                    if (!dateStr) return <div key={`e-${i}`} />;
-                    const list = byDay[dateStr] ?? [];
-                    const hasLeave = list.length > 0;
-                    const isToday = dateStr === now.toISOString().slice(0, 10);
-                    return (
-                      <div
-                        key={dateStr}
-                        className={`min-h-[64px] sm:min-h-[72px] flex flex-col items-center justify-start rounded-lg text-sm p-1.5 ${
-                          isToday ? "ring-2 ring-blue-400 bg-blue-50 font-bold text-blue-700" : "text-gray-700"
-                        } ${hasLeave ? "bg-red-50/80" : ""}`}
-                      >
-                        <span className="text-sm sm:text-base">{dateStr.slice(8, 10)}</span>
-                        {hasLeave && (
-                          <div className="mt-1 space-y-0.5 w-full overflow-hidden min-w-0">
-                            {list.map((x, j) => (
-                              <div key={j} className="text-xs text-left truncate text-red-700 font-medium" title={`${x.name} ${x.status}`}>
-                                {x.name} {x.status}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
+            <DashboardMonthCalendar
+              year={teamMonthData.year}
+              month={teamMonthData.month}
+              dates={teamMonthData.dates}
+              byDay={teamMonthData.byDay}
+              todayStr={now.toISOString().slice(0, 10)}
+            />
           </div>
         </div>
       )}

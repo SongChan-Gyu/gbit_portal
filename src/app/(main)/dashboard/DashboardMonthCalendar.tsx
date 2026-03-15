@@ -1,0 +1,110 @@
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+
+type ByDay = Record<string, { name: string; status: string }[]>;
+
+const DAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
+
+export default function DashboardMonthCalendar({
+  year,
+  month,
+  dates,
+  byDay,
+  todayStr,
+}: {
+  year: number;
+  month: number;
+  dates: string[];
+  byDay: ByDay;
+  todayStr: string;
+}) {
+  const [tooltipDate, setTooltipDate] = useState<string | null>(null);
+  const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const firstDow = new Date(year, month - 1, 1).getDay();
+  const pad = Array(firstDow).fill(null);
+  const cells = [...pad, ...dates.map((d) => d)];
+
+  useEffect(() => {
+    if (!tooltipDate) return;
+    const handler = () => setTooltipDate(null);
+    document.addEventListener("click", handler, true);
+    return () => document.removeEventListener("click", handler, true);
+  }, [tooltipDate]);
+
+  function handleCellClick(e: React.MouseEvent, dateStr: string) {
+    e.stopPropagation();
+    const list = byDay[dateStr] ?? [];
+    if (list.length === 0) {
+      setTooltipDate(null);
+      return;
+    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setTooltipPos({
+      top: rect.bottom + 4,
+      left: rect.left + rect.width / 2,
+    });
+    setTooltipDate(dateStr);
+  }
+
+  const list = tooltipDate ? (byDay[tooltipDate] ?? []) : [];
+
+  return (
+    <div ref={containerRef} className="border border-gray-200 rounded-lg p-2 sm:p-3 bg-gray-50/50 max-w-2xl mx-auto">
+      <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center">
+        {DAYS_KO.map((d) => (
+          <div key={d} className="text-[10px] sm:text-xs font-semibold text-gray-500 py-0.5">{d}</div>
+        ))}
+        {cells.map((dateStr, i) => {
+          if (!dateStr) return <div key={`e-${i}`} />;
+          const dayList = byDay[dateStr] ?? [];
+          const hasLeave = dayList.length > 0;
+          const isToday = dateStr === todayStr;
+          return (
+            <button
+              key={dateStr}
+              type="button"
+              onClick={(e) => handleCellClick(e, dateStr)}
+              className={`min-h-[40px] sm:min-h-[44px] flex flex-col items-center justify-center rounded text-[11px] sm:text-xs p-0.5 touch-manipulation ${
+                isToday ? "ring-1 ring-blue-400 bg-blue-50 font-bold text-blue-700" : "text-gray-700"
+              } ${hasLeave ? "bg-red-50/80" : ""} ${hasLeave ? "cursor-pointer hover:bg-red-100/80" : ""}`}
+              title={hasLeave ? `${dateStr}: ${dayList.map((x) => `${x.name} ${x.status}`).join(", ")}` : undefined}
+            >
+              <span>{dateStr.slice(8, 10)}</span>
+              {hasLeave && (
+                <span className="mt-0.5 text-[10px] font-medium text-red-600">
+                  {dayList.length}명
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {tooltipDate && list.length > 0 && (
+        <div
+          className="fixed z-50 min-w-[140px] max-w-[90vw] py-2 px-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl"
+          style={{
+            top: tooltipPos.top,
+            left: tooltipPos.left,
+            transform: "translateX(-50%)",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="font-semibold text-gray-200 mb-1.5 border-b border-gray-600 pb-1">
+            {tooltipDate}
+          </div>
+          <ul className="space-y-1">
+            {list.map((x, j) => (
+              <li key={j} className="text-white">
+                {x.name} <span className="text-gray-300">{x.status}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
