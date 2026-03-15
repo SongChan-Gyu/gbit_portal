@@ -26,13 +26,27 @@ const MAP_CONTAINER_ID = "jeju-map-container";
 export default function JejuMap() {
   const initedRef = useRef(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [resolvedKey, setResolvedKey] = useState<string | null>(null);
 
+  // 빌드 시점 키 또는 런타임 API에서 키 조회 (배포 후 env만 넣은 경우 대비)
   useEffect(() => {
-    const key = process.env.NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY;
-    if (!key || !key.trim()) {
-      setLoadError("키 없음");
+    const buildTimeKey = process.env.NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY?.trim();
+    if (buildTimeKey) {
+      setResolvedKey(buildTimeKey);
       return;
     }
+    fetch("/api/jeju/map-config")
+      .then((r) => r.json())
+      .then((data: { kakaoMapKey?: string }) => {
+        const k = data?.kakaoMapKey?.trim();
+        if (k) setResolvedKey(k);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const key = resolvedKey;
+    if (!key) return;
 
     const initMap = () => {
       const kakao = window.kakao;
@@ -80,9 +94,11 @@ export default function JejuMap() {
     return () => {
       script.remove();
     };
-  }, []);
+  }, [resolvedKey]);
 
-  const hasKey = !!process.env.NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY?.trim();
+  const hasKey = !!(
+    process.env.NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY?.trim() || resolvedKey
+  );
 
   if (!hasKey) {
     return (
@@ -120,7 +136,9 @@ export default function JejuMap() {
           <a href={KAKAO_MAP_URL} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-blue-600 hover:underline">
             카카오 지도에서 보기 →
           </a>
-          <p className="text-xs text-gray-500 mt-2">localhost를 Kakao Developers 플랫폼 Web에 등록했는지 확인해 주세요.</p>
+          <p className="text-xs text-gray-500 mt-2">
+            Kakao Developers &gt; 내 애플리케이션 &gt; 플랫폼 &gt; Web에 사용 중인 사이트 도메인(예: https://gbitportal-production.up.railway.app)을 등록했는지 확인해 주세요.
+          </p>
         </div>
       )}
     </div>
