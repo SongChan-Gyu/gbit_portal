@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 
 export const { auth, handlers, signIn, signOut } = NextAuth({
-  trustHost: true, // 터널(loca.lt, trycloudflare 등)·프록시 환경에서 로그인/콜백 정상 동작
+  trustHost: true, // 프록시·클라우드 환경에서 로그인/콜백 정상 동작
   providers: [
     Credentials({
       name: "credentials",

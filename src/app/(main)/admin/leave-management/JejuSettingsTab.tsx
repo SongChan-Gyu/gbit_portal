@@ -10,6 +10,7 @@ export default function JejuSettingsTab() {
     accountHolder: "이기광",
     accountNumber: "1105423446194",
   });
+  const [maxNights, setMaxNights] = useState(14);
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [newBlockDate, setNewBlockDate] = useState("");
   const [loading, setLoading] = useState(true);
@@ -19,9 +20,10 @@ export default function JejuSettingsTab() {
   useEffect(() => {
     fetch("/api/admin/jeju-settings")
       .then((r) => r.ok ? r.json() : Promise.reject(new Error("조회 실패")))
-      .then((data: { depositAccount?: JejuDepositAccount; blockedDates?: string[] }) => {
+      .then((data: { depositAccount?: JejuDepositAccount; blockedDates?: string[]; maxNights?: number }) => {
         if (data.depositAccount) setDepositAccount(data.depositAccount);
         if (Array.isArray(data.blockedDates)) setBlockedDates(data.blockedDates);
+        if (typeof data.maxNights === "number" && data.maxNights >= 1) setMaxNights(data.maxNights);
       })
       .catch(() => setMessage({ type: "err", text: "설정을 불러오지 못했습니다." }))
       .finally(() => setLoading(false));
@@ -64,6 +66,20 @@ export default function JejuSettingsTab() {
 
   function removeBlockedDate(date: string) {
     setBlockedDates((prev) => prev.filter((d) => d !== date));
+  }
+
+  async function saveMaxNights() {
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch("/api/admin/jeju-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ maxNights }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (res.ok) setMessage({ type: "ok", text: "최대 연박이 저장되었습니다." });
+    else setMessage({ type: "err", text: data.error || "저장 실패" });
   }
 
   if (loading) {
@@ -126,10 +142,30 @@ export default function JejuSettingsTab() {
         </button>
       </div>
 
+      {/* 최대 연박 */}
+      <div className="card max-w-xl">
+        <h3 className="font-semibold text-gray-800 mb-3">최대 연박</h3>
+        <p className="text-xs text-gray-500 mb-4">한 번에 예약 가능한 최대 숙박 일수입니다. (예: 14일이면 최대 14박까지 선택 가능)</p>
+        <div className="flex flex-wrap gap-2 items-center">
+          <input
+            type="number"
+            min={1}
+            max={365}
+            className="input w-24"
+            value={maxNights}
+            onChange={(e) => setMaxNights(Math.min(365, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+          />
+          <span className="text-sm text-gray-600">박</span>
+          <button type="button" onClick={saveMaxNights} disabled={saving} className="btn-primary">
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+
       {/* 예약 불가일 */}
       <div className="card max-w-xl">
         <h3 className="font-semibold text-gray-800 mb-3">예약 불가일</h3>
-        <p className="text-xs text-gray-500 mb-4">특정 날짜를 예약 불가로 설정하면 해당 일자에는 신청할 수 없습니다.</p>
+        <p className="text-xs text-gray-500 mb-4">날짜를 선택 후 추가를 누르고, 필요 시 목록에서 ×로 삭제한 뒤 저장하세요. 여러 날짜를 추가·삭제한 후 한 번에 저장할 수 있습니다.</p>
         <div className="flex flex-wrap gap-2 items-center">
           <input
             type="date"

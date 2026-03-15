@@ -30,7 +30,13 @@ export default function LoginPage() {
         </div>
         <div className="space-y-4 text-sm text-blue-100">
           <p className="font-semibold text-white text-base">주요 기능</p>
-          {["연차·반차 신청 및 결재", "스탬프 쿠폰 관리", "월간 근태 현황", "조직·사원 관리"].map((f) => (
+          {[
+            "연차·반차 신청 및 결재 (팀장·PM 결재)",
+            "제주도 숙소 예약·신청 (입실·퇴실 선택, 복지부 승인)",
+            "스탬프 쿠폰 (힐링데이·오후인정)",
+            "월간 근태 현황",
+            "조직·사원 관리 (엑셀 일괄 등록)",
+          ].map((f) => (
             <p key={f} className="flex items-center gap-2">
               <span className="w-1 h-1 rounded-full bg-blue-300 inline-block"/>
               {f}

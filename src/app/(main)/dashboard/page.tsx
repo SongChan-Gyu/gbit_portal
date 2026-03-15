@@ -3,7 +3,7 @@ import prisma from "@/lib/db";
 import type { LeaveRequest, Employee, LeaveRequestItem, LeaveType } from "@prisma/client";
 import Link from "next/link";
 import { getFiscalYear } from "@/lib/workdays";
-import { Bell, Calendar, ChevronRight, CalendarRange, Home } from "lucide-react";
+import { Bell, Calendar, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { isWelfareDept } from "@/lib/jeju";
 import { formatMDWithDay } from "@/lib/dateUtils";
 
@@ -23,19 +23,27 @@ function getMonthDates(year: number, month: number): string[] {
   return Array.from({ length: last }, (_, i) => `${year}-${m}-${String(i + 1).padStart(2, "0")}`);
 }
 
-function getWeekRange(base: Date) {
-  const d = new Date(base);
-  const day = d.getDay(); // 0=Sun
-  const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7)); mon.setHours(0,0,0,0);
-  const fri = new Date(mon); fri.setDate(mon.getDate() + 4); fri.setHours(23,59,59,999);
-  return { mon, fri };
-}
-
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ teamY?: string; teamM?: string }>;
+}) {
   const session = await auth();
   const user = session!.user as any;
   const fy = getFiscalYear();
   const now = new Date();
+  const params = await searchParams;
+  let teamCalYear = params.teamY ? parseInt(params.teamY, 10) : now.getFullYear();
+  let teamCalMonth = params.teamM ? parseInt(params.teamM, 10) : now.getMonth() + 1;
+  if (teamCalMonth < 1) {
+    teamCalMonth += 12;
+    teamCalYear -= 1;
+  } else if (teamCalMonth > 12) {
+    teamCalMonth -= 12;
+    teamCalYear += 1;
+  }
+  const prevMonth = teamCalMonth === 1 ? { y: teamCalYear - 1, m: 12 } : { y: teamCalYear, m: teamCalMonth - 1 };
+  const nextMonth = teamCalMonth === 12 ? { y: teamCalYear + 1, m: 1 } : { y: teamCalYear, m: teamCalMonth + 1 };
 
   const [allocations, pendingReqs, stamps, employee, recentRequests] = await Promise.all([
     prisma.leaveAllocation.findMany({
@@ -67,6 +75,21 @@ export default async function DashboardPage() {
   const totalGranted = allocations.reduce((s, a) => s + a.totalDays, 0);  // 전체 부여
   const annualUsed   = annualAllocs.reduce((s, a) => s + a.usedDays, 0);  // 연차 사용
   const totalRemain  = annualAllocs.reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0); // 잔여 연차
+  const baseDays   = annualAllocs.find((a) => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0;
+  const tenureDays = annualAllocs.find((a) => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0;
+  const carryDays  = annualAllocs.find((a) => a.sourceCode === "CARRYOVER")?.totalDays ?? 0;
+  const annualBreakdownLabel = `연차 (기본연차 ${baseDays} 근속가산 ${tenureDays} 이월 ${carryDays})`;
+  const annualMergedForDisplay = annualAllocs.length > 0 ? {
+    id: "annual-merged",
+    label: annualBreakdownLabel,
+    totalDays: annualAllocs.reduce((s, a) => s + a.totalDays, 0),
+    usedDays: annualUsed,
+  } : null;
+  const otherAllocs = allocations.filter((a) => !ANNUAL_ONLY_SOURCES.has(a.sourceCode));
+  const allocationsForDetail = [
+    ...(annualMergedForDisplay ? [annualMergedForDisplay] : []),
+    ...otherAllocs,
+  ];
 
   let approvalPending = 0;
   let stampPending = 0;
@@ -86,104 +109,49 @@ export default async function DashboardPage() {
   }
 
   // 팀 주간 일정 (팀이 있는 모든 직원)
-  const { mon, fri } = getWeekRange(now);
-  let weekDays: Date[] = [];
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(mon); d.setDate(mon.getDate() + i);
-    weekDays.push(d);
-  }
-
-  let teamWeekData: { member: { id: string; name: string }; status: (string | null)[] }[] = [];
-
-  if (employee?.teamId) {
-    const teamMembers = employee.team?.employees ?? [];
-
-    const weekLeaves = await prisma.leaveRequest.findMany({
+  // 팀 월간 일정: 팀 소속이면 팀만, ADMIN/PM이면 팀 없어도 전사 일정 표시
+  type MonthData = { year: number; month: number; dates: string[]; byDay: Record<string, { name: string; status: string }[]> };
+  let teamMonthData: MonthData | null = null;
+  const showTeamCalendar = employee?.teamId || (user.role === "ADMIN" || user.role === "PM");
+  if (showTeamCalendar) {
+    const year = teamCalYear;
+    const month = teamCalMonth;
+    const dates = getMonthDates(year, month);
+    const first = dates[0];
+    const last = dates[dates.length - 1];
+    const firstDt = new Date(`${first}T00:00:00.000Z`);
+    const lastDt = new Date(`${last}T23:59:59.999Z`);
+    type LeaveRow = LeaveRequest & { employee: Employee; items: (LeaveRequestItem & { leaveType: LeaveType })[] };
+    const leaves: LeaveRow[] = await prisma.leaveRequest.findMany({
       where: {
         status: "APPROVED",
-        employee: { teamId: employee.teamId },
-        startDate: { lte: fri },
-        endDate:   { gte: mon },
+        ...(employee?.teamId ? { employee: { teamId: employee.teamId } } : { employee: { status: "ACTIVE" } }),
+        startDate: { lte: lastDt },
+        endDate: { gte: firstDt },
       },
       include: { employee: true, items: { include: { leaveType: true } } },
     });
-
-    teamWeekData = teamMembers
-      .filter((m: any) => m.status === "ACTIVE")
-      .map((m: any) => {
-        const myLeaves = weekLeaves.filter((r: any) => r.employeeId === m.id);
-        const statusPerDay = weekDays.map((d) => {
-          const active = myLeaves.filter((r: any) => {
-            const s = new Date(r.startDate); s.setHours(0,0,0,0);
-            const e = new Date(r.endDate);   e.setHours(23,59,59,999);
-            return d >= s && d <= e;
-          });
-          if (active.length === 0) return null;
-          const hasAmOnly = active.some((r: any) => r.items.some((it: any) => it.leaveType.isAmOnly));
-          const hasPmOnly = active.some((r: any) => r.items.some((it: any) => it.leaveType.isPmOnly));
-          const hasFull   = active.some((r: any) => r.items.some((it: any) => !it.leaveType.isAmOnly && !it.leaveType.isPmOnly));
-          if (hasFull) return "휴가";
-          if (hasAmOnly && hasPmOnly) return "휴가";
-          if (hasAmOnly) return "오전";
-          if (hasPmOnly) return "오후";
-          return "휴가";
-        });
-        return { member: { id: m.id, name: m.name }, status: statusPerDay };
-      });
-  }
-
-  const hasAnyWeekLeave = teamWeekData.some(t => t.status.some(s => s !== null));
-
-  // 팀 월간 일정: 전달·이번달·다음달
-  type MonthData = { year: number; month: number; label: string; dates: string[]; byDay: Record<string, { name: string; status: string }[]> };
-  let teamMonthData: MonthData[] = [];
-  if (employee?.teamId) {
-    const nowY = now.getFullYear();
-    const nowM = now.getMonth() + 1;
-    const months: { year: number; month: number; label: string }[] = [
-      { year: nowM === 1 ? nowY - 1 : nowY, month: nowM === 1 ? 12 : nowM - 1, label: "전달" },
-      { year: nowY, month: nowM, label: "이번달" },
-      { year: nowM === 12 ? nowY + 1 : nowY, month: nowM === 12 ? 1 : nowM + 1, label: "다음달" },
-    ];
-    type LeaveRow = LeaveRequest & { employee: Employee; items: (LeaveRequestItem & { leaveType: LeaveType })[] };
-    for (const { year, month, label } of months) {
-      const dates = getMonthDates(year, month);
-      const first = dates[0];
-      const last = dates[dates.length - 1];
-      // Prisma DateTime은 ISO-8601 전체 형식 필요 (날짜만 넣으면 클라우드에서 에러)
-      const firstDt = new Date(`${first}T00:00:00.000Z`);
-      const lastDt = new Date(`${last}T23:59:59.999Z`);
-      const leaves: LeaveRow[] = await prisma.leaveRequest.findMany({
-        where: {
-          status: "APPROVED",
-          employee: { teamId: employee.teamId },
-          startDate: { lte: lastDt },
-          endDate: { gte: firstDt },
-        },
-        include: { employee: true, items: { include: { leaveType: true } } },
-      });
-      const byDay: Record<string, { name: string; status: string }[]> = {};
-      for (const req of leaves) {
-        for (const item of req.items) {
-          const s = new Date(item.startDate);
-          const e = new Date(item.endDate);
-          const cur = new Date(s);
-          while (cur <= e) {
-            const ds = cur.toISOString().slice(0, 10);
-            if (dates.includes(ds)) {
-              const status = item.leaveType.isHalf && item.leaveType.isAmOnly ? "오전" : item.leaveType.isHalf && item.leaveType.isPmOnly ? "오후" : "휴가";
-              if (!byDay[ds]) byDay[ds] = [];
-              const name = req.employee?.name ?? "";
-              const ex = byDay[ds].find((x) => x.name === name);
-              if (!ex) byDay[ds].push({ name, status });
-              else ex.status = ex.status === status ? status : "휴가";
-            }
-            cur.setDate(cur.getDate() + 1);
+    const byDay: Record<string, { name: string; status: string }[]> = {};
+    for (const req of leaves) {
+      for (const item of req.items) {
+        const s = new Date(item.startDate);
+        const e = new Date(item.endDate);
+        const cur = new Date(s);
+        while (cur <= e) {
+          const ds = cur.toISOString().slice(0, 10);
+          if (dates.includes(ds)) {
+            const status = item.leaveType.isHalf && item.leaveType.isAmOnly ? "오전" : item.leaveType.isHalf && item.leaveType.isPmOnly ? "오후" : "휴가";
+            if (!byDay[ds]) byDay[ds] = [];
+            const name = req.employee?.name ?? "";
+            const ex = byDay[ds].find((x) => x.name === name);
+            if (!ex) byDay[ds].push({ name, status });
+            else ex.status = ex.status === status ? status : "휴가";
           }
+          cur.setDate(cur.getDate() + 1);
         }
       }
-      teamMonthData.push({ year, month, label, dates, byDay });
     }
+    teamMonthData = { year, month, dates, byDay };
   }
 
   return (
@@ -282,18 +250,21 @@ export default async function DashboardPage() {
             <Link href="/leave/my" className="text-sm md:text-xs text-slate-600 hover:underline touch-manipulation">전체보기</Link>
           </div>
           <div className="divide-y divide-gray-100">
-            {allocations.length === 0 && (
+            {allocationsForDetail.length === 0 && (
               <p className="px-4 py-4 text-xs text-gray-400">할당 정보가 없습니다.</p>
             )}
-            {allocations.map((a) => {
-              const remain = a.totalDays - a.usedDays;
-              const pct    = a.totalDays > 0 ? (a.usedDays / a.totalDays) * 100 : 0;
+            {allocationsForDetail.map((a) => {
+              const totalDays = "totalDays" in a ? a.totalDays : 0;
+              const usedDays  = "usedDays" in a ? a.usedDays : 0;
+              const remain = totalDays - usedDays;
+              const pct = totalDays > 0 ? (usedDays / totalDays) * 100 : 0;
+              const label = "label" in a ? a.label : "";
               return (
                 <div key={a.id} className="px-4 py-3 md:py-2.5">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[15px] md:text-[13px] text-gray-700 font-medium">{a.label}</span>
+                    <span className="text-[15px] md:text-[13px] text-gray-700 font-medium">{label}</span>
                     <span className="text-sm md:text-xs text-gray-500">
-                      <span className="font-semibold text-blue-700">{remain.toFixed(1)}</span> / {a.totalDays}일
+                      <span className="font-semibold text-blue-700">{remain.toFixed(1)}</span> / {totalDays}일
                     </span>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -341,112 +312,78 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* 팀 주간 일정 */}
-      {employee?.teamId && (
-        <div className="panel">
-          <div className="panel-header">
-            <div className="flex items-center gap-2">
-              <CalendarRange size={14} className="text-blue-500" />
-              <span className="panel-title">팀 주간 일정</span>
-              <span className="text-sm md:text-xs text-gray-500">
-                {formatMDWithDay(mon)} ~ {formatMDWithDay(fri)}
-              </span>
-            </div>
-            <span className="text-xs text-gray-400">{employee.team?.name}</span>
-          </div>
-          {!hasAnyWeekLeave ? (
-            <div className="px-4 py-6 text-center text-xs text-gray-400">이번 주 팀원 휴가 없음</div>
-          ) : (
-            <div className="table-scroll">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th className="w-20">팀원</th>
-                    {weekDays.map((d, i) => (
-                      <th key={i} className="text-center min-w-[56px]">
-                        <span className={d.toDateString() === now.toDateString() ? "text-blue-600 font-bold" : ""}>
-                          {d.getDate()}<span className="text-gray-400 font-normal">({DAYS_KO[d.getDay()]})</span>
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {teamWeekData.map(({ member, status }) => (
-                    <tr key={member.id} className={member.id === user.employeeId ? "bg-blue-50/40" : ""}>
-                      <td className="font-medium text-gray-800 whitespace-nowrap">
-                        {member.name}
-                        {member.id === user.employeeId && <span className="ml-1 text-[10px] text-blue-500">나</span>}
-                      </td>
-                      {status.map((s, i) => (
-                        <td key={i} className="text-center">
-                          {s === "휴가" && (
-                            <span className="inline-block text-[11px] px-1.5 py-0.5 rounded bg-red-100 text-red-600 font-medium">휴가</span>
-                          )}
-                          {s === "오전" && (
-                            <span className="inline-block text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-600 font-medium">오전↑</span>
-                          )}
-                          {s === "오후" && (
-                            <span className="inline-block text-[11px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600 font-medium">오후↓</span>
-                          )}
-                          {s === null && <span className="text-gray-200 text-sm">—</span>}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 팀 월간 일정 (전달·이번달·다음달) */}
-      {employee?.teamId && teamMonthData.length > 0 && (
+      {/* 팀 월간 일정 (한 달만 표시, 이전/다음 달은 클릭으로 이동) */}
+      {teamMonthData && (
         <div className="panel">
           <div className="panel-header">
             <div className="flex items-center gap-2">
               <Calendar size={14} className="text-blue-500" />
-              <span className="panel-title">팀 월간 일정</span>
+              <span className="panel-title">
+                {employee?.teamId ? "팀 월간 일정" : "전체 월간 일정"}
+              </span>
             </div>
             <Link href="/team-schedule?view=month" className="text-sm text-slate-600 hover:underline">전체보기</Link>
           </div>
           <div className="panel-body">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {teamMonthData.map(({ year, month, label, dates, byDay }) => {
-                const firstDow = new Date(year, month - 1, 1).getDay();
-                const pad = Array(firstDow).fill(null);
-                const cells = [...pad, ...dates.map((d) => d)];
-                return (
-                  <div key={`${year}-${month}`} className="border border-gray-100 rounded-lg p-2 bg-gray-50/50">
-                    <p className="text-xs font-semibold text-gray-600 mb-2 text-center">
-                      {label} — {year}년 {month}월
-                    </p>
-                    <div className="grid grid-cols-7 gap-0.5 text-center">
-                      {DAYS_KO.map((d) => (
-                        <div key={d} className="text-[10px] font-medium text-gray-400 py-0.5">{d}</div>
-                      ))}
-                      {cells.map((dateStr, i) => {
-                        if (!dateStr) return <div key={`e-${i}`} />;
-                        const list = byDay[dateStr] ?? [];
-                        const hasLeave = list.length > 0;
-                        const isToday = dateStr === now.toISOString().slice(0, 10);
-                        return (
-                          <div
-                            key={dateStr}
-                            className={`min-h-[28px] flex flex-col items-center justify-center rounded text-[10px] ${
-                              isToday ? "ring-1 ring-blue-400 bg-blue-50 font-bold text-blue-700" : "text-gray-600"
-                            } ${hasLeave ? "bg-red-50/80" : ""}`}
-                          >
-                            <span>{dateStr.slice(8, 10)}</span>
-                            {hasLeave && <span className="text-[9px] text-red-600">{list.length}명</span>}
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <Link
+                href={`/dashboard?teamY=${prevMonth.y}&teamM=${prevMonth.m}`}
+                className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 p-1.5 rounded hover:bg-gray-100 shrink-0"
+              >
+                <ChevronLeft size={18} /> 이전 달
+              </Link>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-semibold text-gray-800">
+                  {teamMonthData.year}년 {teamMonthData.month}월
+                </span>
+                {(teamCalYear !== now.getFullYear() || teamCalMonth !== now.getMonth() + 1) && (
+                  <Link href="/dashboard" className="text-xs text-blue-600 hover:underline shrink-0">이번 달</Link>
+                )}
+              </div>
+              <Link
+                href={`/dashboard?teamY=${nextMonth.y}&teamM=${nextMonth.m}`}
+                className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 p-1.5 rounded hover:bg-gray-100 shrink-0"
+              >
+                다음 달 <ChevronRight size={18} />
+              </Link>
+            </div>
+            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 max-w-3xl mx-auto">
+              <div className="grid grid-cols-7 gap-1.5 text-center">
+                {DAYS_KO.map((d) => (
+                  <div key={d} className="text-xs sm:text-sm font-semibold text-gray-500 py-1">{d}</div>
+                ))}
+                {(() => {
+                  const { year, month, dates, byDay } = teamMonthData;
+                  const firstDow = new Date(year, month - 1, 1).getDay();
+                  const pad = Array(firstDow).fill(null);
+                  const cells = [...pad, ...dates.map((d) => d)];
+                  return cells.map((dateStr, i) => {
+                    if (!dateStr) return <div key={`e-${i}`} />;
+                    const list = byDay[dateStr] ?? [];
+                    const hasLeave = list.length > 0;
+                    const isToday = dateStr === now.toISOString().slice(0, 10);
+                    return (
+                      <div
+                        key={dateStr}
+                        className={`min-h-[64px] sm:min-h-[72px] flex flex-col items-center justify-start rounded-lg text-sm p-1.5 ${
+                          isToday ? "ring-2 ring-blue-400 bg-blue-50 font-bold text-blue-700" : "text-gray-700"
+                        } ${hasLeave ? "bg-red-50/80" : ""}`}
+                      >
+                        <span className="text-sm sm:text-base">{dateStr.slice(8, 10)}</span>
+                        {hasLeave && (
+                          <div className="mt-1 space-y-0.5 w-full overflow-hidden min-w-0">
+                            {list.map((x, j) => (
+                              <div key={j} className="text-xs text-left truncate text-red-700 font-medium" title={`${x.name} ${x.status}`}>
+                                {x.name} {x.status}
+                              </div>
+                            ))}
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
             </div>
           </div>
         </div>

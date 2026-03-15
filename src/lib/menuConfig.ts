@@ -40,6 +40,8 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     section: "main",
     children: [
       { key: "jeju", label: "예약하기", href: "/jeju" },
+      { key: "jeju_my", label: "예약 신청 내역", href: "/jeju/my" },
+      { key: "jeju_approve", label: "결재함", href: "/jeju/approve" },
       { key: "jeju_info", label: "숙소 정보", href: "/jeju/info" },
       { key: "jeju_admin", label: "숙소 관리", href: "/jeju/admin" },
     ],
@@ -86,22 +88,15 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "dashboard",
     "leave_apply", "leave_my", "leave_policy",
     "attendance", "stamp",
-    "jeju", "jeju_info",
+    "jeju", "jeju_my", "jeju_info",
   ],
   TEAM_LEAD: [
     "dashboard",
     "leave_apply", "leave_my", "leave_approve", "leave_policy",
     "attendance", "stamp",
-    "jeju", "jeju_info",
+    "jeju", "jeju_my", "jeju_info",
   ],
-  PM: [
-    "dashboard",
-    "leave_apply", "leave_my", "leave_approve", "leave_policy",
-    "attendance", "stamp",
-    "jeju", "jeju_info", "jeju_admin",
-    "admin_organization", "admin_leave_settings", "admin_leave_mgmt", "admin_system",
-    "test_impersonate", "test_user_switch",
-  ],
+  PM: ALL_MENU_KEYS,
   ADMIN: ALL_MENU_KEYS,
 };
 

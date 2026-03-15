@@ -36,7 +36,7 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
             </div>
           </div>
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => signOut({ callbackUrl: typeof window !== "undefined" ? `${window.location.origin}/login` : "/login" })}
             className="flex items-center gap-1.5 text-[12px] text-gray-500 hover:text-red-600 hover:bg-red-50 px-2 py-1.5 rounded transition-colors">
             <LogOut size={14} />
             <span className="hidden sm:inline">로그아웃</span>

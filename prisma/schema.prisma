@@ -392,13 +392,14 @@ model JejuAccommodation {
   guestPhone    String
   guestCount    Int       // 입실 인원
   depositorName String    // 입금자명 (예약금 무통장입금 시 예약자가 입력)
-  status        String    @default("PENDING")  // PENDING / APPROVED / REJECTED / CANCELLED
+  status        String    @default("PENDING")  // PENDING / APPROVED / REJECTED / CANCELLED / CANCEL_REQUESTED
   approvedById  String?
   approvedBy    Employee? @relation("JejuApprover", fields: [approvedById], references: [id])
   approvedAt    DateTime?
   rejectComment String?
   cancelledAt   DateTime?
   cancelReason  String?
+  cancelRequestedAt DateTime?  // 취소 요청 시각 (복지부/PM 취소 승인 시 최종 cancelledAt 사용)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

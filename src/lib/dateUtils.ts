@@ -1,4 +1,38 @@
 /**
+ * 일자 정보 통일: 모든 날짜 연산·비교는 YYYY-MM-DD 문자열 사용.
+ * - todayYMD(): 오늘 날짜 (로컬 기준)
+ * - addDaysYMD(ymd, n): ymd에 n일 더한 YYYY-MM-DD (UTC 기준 연산, 타임존 영향 없음)
+ * - toYMD(date): Date → YYYY-MM-DD (로컬 날짜 기준, 표시/입력용)
+ */
+
+/** 오늘 날짜 YYYY-MM-DD (로컬) */
+export function todayYMD(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+/** YYYY-MM-DD에 n일 더한 날짜 (타임존 무관, 연산만 UTC 사용) */
+export function addDaysYMD(ymd: string, n: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d + n));
+  const yy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(date.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+/** Date → YYYY-MM-DD (로컬 날짜 기준) */
+export function toYMD(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * 상대 시간 표현 (예: "3분 전", "2시간 전", "어제")
  */
 export function formatDistanceToNow(dateStr: string | Date): string {

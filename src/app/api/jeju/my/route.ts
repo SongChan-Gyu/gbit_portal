@@ -9,6 +9,7 @@ export async function GET() {
 
   const list = await prisma.jejuAccommodation.findMany({
     where: { employeeId: user.employeeId },
+    include: { employee: { select: { name: true } } },
     orderBy: { startDate: "desc" },
   });
 
@@ -22,11 +23,14 @@ export async function GET() {
       guestName: r.guestName,
       guestPhone: r.guestPhone,
       guestCount: r.guestCount,
+      depositorName: r.depositorName,
+      applicantName: r.employee.name,
       status: r.status,
+      cancelRequestedAt: (r as { cancelRequestedAt?: Date | null }).cancelRequestedAt?.toISOString() ?? null,
+      cancelReason: r.cancelReason,
       approvedAt: r.approvedAt?.toISOString() ?? null,
       rejectComment: r.rejectComment,
       cancelledAt: r.cancelledAt?.toISOString() ?? null,
-      cancelReason: r.cancelReason,
       createdAt: r.createdAt.toISOString(),
     }))
   );

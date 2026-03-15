@@ -54,8 +54,8 @@ const LEAVE_GROUPS: GroupDef[] = [
     color: "#2563eb", borderClass: "border-blue-500",
     subs: [
       { label: "종일",    code: "ANNUAL" },
-      { label: "오전반차", code: "AM_HALF",  desc: "오전 4시간" },
-      { label: "오후반차", code: "PM_HALF",  desc: "오후 4시간" },
+      { label: "오전반차", code: "AM_HALF",  desc: "" },
+      { label: "오후반차", code: "PM_HALF",  desc: "" },
     ],
   },
   {
@@ -281,9 +281,6 @@ export default function LeaveApplyForm({
     const it = items[calendarItemIdx];
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
     const isHalf = lt?.isHalf ?? false;
-    const today = todayStr();
-
-    if (dateStr < today) return;
 
     if (calendarStep === "start") {
       setCalendarPickedStart(dateStr);
@@ -582,17 +579,16 @@ export default function LeaveApplyForm({
                       </span>
                     </div>
                     <div className="space-y-1">
-                      {annualPoolAllocs.filter(a => a.totalDays - a.usedDays > 0).map((a) => (
-                        <div key={a.id} className="flex items-center justify-between text-xs text-orange-700">
-                          <span className="truncate mr-3">{a.label}</span>
+                      {annualPoolAllocs.length > 0 && (
+                        <div className="flex items-center justify-between text-xs text-orange-700">
+                          <span className="truncate mr-3">
+                            연차 (기본연차 {annualPoolAllocs.find(a => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0} 근속가산 {annualPoolAllocs.find(a => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0} 이월 {annualPoolAllocs.find(a => a.sourceCode === "CARRYOVER")?.totalDays ?? 0})
+                          </span>
                           <span className="shrink-0 tabular-nums">
-                            잔여 {(a.totalDays - a.usedDays).toFixed(1)}일
-                            <span className="text-orange-400 ml-1.5">
-                              ~{formatYMD(a.validUntil)}
-                            </span>
+                            잔여 {annualPoolRemaining.toFixed(1)}일
                           </span>
                         </div>
-                      ))}
+                      )}
                     </div>
                     {annualPoolRemaining < actualDays && actualDays > 0 && (
                       <div className="flex items-center gap-1.5 mt-2 text-xs text-red-600 font-medium">
@@ -823,18 +819,17 @@ export default function LeaveApplyForm({
                   if (!dateStr) return <div key={`e-${i}`} />;
                   const isPast = dateStr < today;
                   const isStart = dateStr === start;
-                  const isInRange = calendarStep === "end" && start && dateStr >= start && dateStr >= today;
+                  const isInRange = calendarStep === "end" && start && dateStr >= start;
                   return (
                     <button key={dateStr} type="button"
-                      disabled={isPast}
                       onClick={() => onCalendarDateClick(dateStr)}
                       className={`aspect-square rounded text-sm font-medium transition-colors ${
-                        isPast
-                          ? "text-gray-300 cursor-not-allowed"
-                          : isStart
-                            ? "bg-blue-600 text-white hover:bg-blue-700"
-                            : isInRange
-                              ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                        isStart
+                          ? "bg-blue-600 text-white hover:bg-blue-700"
+                          : isInRange
+                            ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                            : isPast
+                              ? "text-gray-500 hover:bg-gray-100"
                               : "text-gray-700 hover:bg-gray-100"
                       }`}>
                       {dateStr.slice(8, 10)}

@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 
   if (!isJejuDateBookable(startDate)) {
     return NextResponse.json({
-      error: "매월 1일 기준 2달 후 말일까지만 예약 가능합니다. 선택한 시작일이 예약 가능 기간을 넘었습니다.",
+      error: "예약 시작일(입실일)은 매월 1일 기준 2달 후 말일까지만 선택 가능합니다. 선택한 시작일이 해당 기간을 넘었습니다.",
     }, { status: 400 });
   }
 

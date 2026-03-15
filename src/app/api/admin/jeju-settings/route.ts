@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
-import { JEJU_DEPOSIT_ACCOUNT_DEFAULT, type JejuDepositAccount } from "@/lib/jeju";
+import { JEJU_DEPOSIT_ACCOUNT_DEFAULT, JEJU_MAX_NIGHTS_DEFAULT, type JejuDepositAccount } from "@/lib/jeju";
 
 /** 복지부 또는 PM/ADMIN만 접근 */
 async function canManageJejuSettings(user: { employeeId?: string; role?: string }) {
@@ -25,10 +25,12 @@ export async function GET() {
 
   let depositAccount: JejuDepositAccount = { ...JEJU_DEPOSIT_ACCOUNT_DEFAULT };
   let blockedDates: string[] = [];
+  let maxNights = JEJU_MAX_NIGHTS_DEFAULT;
   try {
-    const [accountConfig, blockedConfig] = await Promise.all([
+    const [accountConfig, blockedConfig, maxNightsConfig] = await Promise.all([
       prisma.systemConfig.findUnique({ where: { key: "jejuDepositAccount" } }),
       prisma.systemConfig.findUnique({ where: { key: "jejuBlockedDates" } }),
+      prisma.systemConfig.findUnique({ where: { key: "jejuMaxNights" } }),
     ]);
     if (accountConfig?.value) {
       const parsed = JSON.parse(accountConfig.value) as JejuDepositAccount;
@@ -38,10 +40,14 @@ export async function GET() {
       const arr = JSON.parse(blockedConfig.value);
       if (Array.isArray(arr)) blockedDates = arr.filter((x: unknown) => typeof x === "string");
     }
+    if (maxNightsConfig?.value) {
+      const n = parseInt(maxNightsConfig.value, 10);
+      if (!isNaN(n) && n >= 1) maxNights = n;
+    }
   } catch {
     // keep defaults
   }
-  return NextResponse.json({ depositAccount, blockedDates });
+  return NextResponse.json({ depositAccount, blockedDates, maxNights });
 }
 
 /** PATCH - 예약금 계좌, 예약 불가일 저장 */
@@ -56,6 +62,7 @@ export async function PATCH(req: Request) {
   const body = await req.json().catch(() => ({})) as {
     depositAccount?: JejuDepositAccount;
     blockedDates?: string[];
+    maxNights?: number;
   };
 
   if (body.depositAccount != null) {
@@ -79,6 +86,18 @@ export async function PATCH(req: Request) {
       where: { key: "jejuBlockedDates" },
       create: { key: "jejuBlockedDates", value: JSON.stringify(valid) },
       update: { value: JSON.stringify(valid) },
+    });
+  }
+
+  if (body.maxNights != null) {
+    const n = typeof body.maxNights === "number" ? body.maxNights : parseInt(String(body.maxNights), 10);
+    if (isNaN(n) || n < 1 || n > 365) {
+      return NextResponse.json({ error: "최대 연박은 1~365 사이로 입력해 주세요." }, { status: 400 });
+    }
+    await prisma.systemConfig.upsert({
+      where: { key: "jejuMaxNights" },
+      create: { key: "jejuMaxNights", value: String(n) },
+      update: { value: String(n) },
     });
   }
 

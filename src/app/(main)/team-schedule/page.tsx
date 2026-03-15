@@ -103,7 +103,10 @@ export default async function TeamSchedulePage({
     include: { team: { include: { employees: { where: { status: "ACTIVE" }, orderBy: { name: "asc" } } } } },
   });
 
-  if (!me?.team) {
+  const isAdminOrPm = user.role === "ADMIN" || user.role === "PM";
+  const membersSource = me?.team?.employees ?? (isAdminOrPm ? await prisma.employee.findMany({ where: { status: "ACTIVE" }, orderBy: { name: "asc" }, include: { team: true } }) : []);
+
+  if (membersSource.length === 0 && !me?.team) {
     return (
       <div className="max-w-4xl mx-auto">
         <h1 className="page-title mb-6">팀 일정</h1>
@@ -112,7 +115,7 @@ export default async function TeamSchedulePage({
     );
   }
 
-  const memberIds = me.team.employees.map((m: { id: string }) => m.id);
+  const memberIds = membersSource.map((m: { id: string }) => m.id);
   const weekDates = getWeekDates(getBaseDate(weekOffset));
   const monthDates = getMonthDates(year, safeMonth);
   const startDate = view === "week"
@@ -142,10 +145,10 @@ export default async function TeamSchedulePage({
   const dateList = view === "week" ? weekDates : monthDates;
   const { schedule, byDay } = buildSchedule(leaveRequests, dateList);
 
-  const members = me.team.employees.map((m: { id: string; name: string; position: string }) => ({
+  const members = membersSource.map((m: { id: string; name: string; position?: string; team?: { name: string } | null }) => ({
     id: m.id,
     name: m.name,
-    position: m.position,
+    position: m.position ?? (m.team?.name ?? ""),
     isMe: m.id === user.employeeId,
   }));
 
@@ -153,8 +156,10 @@ export default async function TeamSchedulePage({
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="page-title">팀 일정</h1>
-          <p className="text-sm text-gray-500 mt-1">{me.team.name} · 휴가 여부만 표시됩니다</p>
+          <h1 className="page-title">{me?.team ? "팀 일정" : "전체 일정"}</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {me?.team ? `${me.team.name} · ` : ""}휴가 여부(오전/오후) 표시
+          </p>
         </div>
       </div>
       <TeamScheduleClient
@@ -167,6 +172,7 @@ export default async function TeamSchedulePage({
         byDay={byDay}
         todayStr={new Date().toISOString().slice(0, 10)}
         weekOffset={weekOffset}
+        isAdminOrPm={isAdminOrPm}
       />
     </div>
   );

@@ -15,17 +15,17 @@ export function calcNights(startDate: Date, endDate: Date): number {
   return Math.max(0, Math.floor((e.getTime() - s.getTime()) / (24 * 60 * 60 * 1000)));
 }
 
-/** 매월 1일 기준: 2달 후 말일까지 예약 가능. ex) 3월 1일 → 5월 31일까지 예약 가능 (6월은 4월 1일부터) */
+/** 예약 가능 기간: 매월 1일 기준 2달 후 말일까지가 예약 시작일(입실일) 한도. ex) 3월 → 5/31까지 시작일 가능 */
 export function getJejuBookingWindowEnd(): Date {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth(); // 0-based
-  const end = new Date(y, m + 2 + 1, 0); // currentMonth + 2 의 말일
+  const end = new Date(y, m + 2 + 1, 0); // 현재 월 + 2 의 말일 (예약 시작일 한도)
   end.setHours(23, 59, 59, 999);
   return end;
 }
 
-/** 해당 날짜가 예약 가능 구간인지 (시작일이 2달 후 말일 이내인지). 5/30~6/4 같은 걸침 예약은 시작일만 체크 */
+/** 예약 시작일(입실일)이 한도 이내인지. 매월 1일 기준 2달 후 말일 이내만 신청 가능 */
 export function isJejuDateBookable(startDate: Date): boolean {
   const end = getJejuBookingWindowEnd();
   const s = new Date(startDate);

@@ -42,9 +42,10 @@ export async function GET(req: Request) {
   });
   const welfare = isWelfareDept(emp);
 
+  /* 승인된 예약 + 승인 대기 중인 신청도 해당 기간 차단 (중복 신청 방지) */
   const approved = await prisma.jejuAccommodation.findMany({
     where: {
-      status: "APPROVED",
+      status: { in: ["APPROVED", "PENDING"] },
       startDate: { lte: to },
       endDate: { gte: from },
     },
@@ -54,6 +55,7 @@ export async function GET(req: Request) {
 
   if (welfare) {
     const byDate: Record<string, { name: string; empNo: string; requestId: string }[]> = {};
+    const welfareOccupiedSet = new Set<string>();
     for (const r of approved) {
       const start = new Date(r.startDate);
       const end = new Date(r.endDate);
@@ -61,6 +63,9 @@ export async function GET(req: Request) {
       end.setHours(0, 0, 0, 0);
       for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
         const key = d.toISOString().slice(0, 10);
+        welfareOccupiedSet.add(key);
+        /* 복지부 달력에는 승인된 건만 이름 표시 (PENDING은 '예약됨'으로만) */
+        if (r.status !== "APPROVED") continue;
         if (!byDate[key]) byDate[key] = [];
         byDate[key].push({
           name: r.employee.name,
@@ -69,8 +74,9 @@ export async function GET(req: Request) {
         });
       }
     }
+    const occupiedDates = Array.from(welfareOccupiedSet).sort();
     const inRangeBlocked = blockedDates.filter((d) => d >= fromStr && d <= toStr);
-    return NextResponse.json({ welfare: true, byDate, blockedDates: inRangeBlocked });
+    return NextResponse.json({ welfare: true, byDate, occupiedDates, blockedDates: inRangeBlocked });
   }
 
   const occupiedDates: string[] = [];

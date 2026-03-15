@@ -3,18 +3,21 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
 
-/** 복지부만: 승인 또는 반려 */
+/** 복지부 또는 PM/ADMIN: 승인 또는 반려 */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as any;
-
-  const emp = await prisma.employee.findUnique({
-    where: { id: user.employeeId },
-    include: { team: true },
-  });
-  if (!isWelfareDept(emp)) {
-    return NextResponse.json({ error: "복지부만 승인/반려할 수 있습니다." }, { status: 403 });
+  if (user.role === "PM" || user.role === "ADMIN") {
+    // 허용
+  } else {
+    const emp = await prisma.employee.findUnique({
+      where: { id: user.employeeId },
+      select: { dutyDept: true },
+    });
+    if (!isWelfareDept(emp)) {
+      return NextResponse.json({ error: "복지부 또는 관리자만 승인/반려할 수 있습니다." }, { status: 403 });
+    }
   }
 
   const body = await req.json();

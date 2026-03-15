@@ -26,8 +26,9 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     where: { id: user.employeeId },
     select: { dutyDept: true },
   });
-  if (isWelfareDept(employee) && !allowedMenuKeys.includes("jeju_admin")) {
-    allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
+  if (isWelfareDept(employee)) {
+    if (!allowedMenuKeys.includes("jeju_admin")) allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
+    if (!allowedMenuKeys.includes("jeju_approve")) allowedMenuKeys = [...allowedMenuKeys, "jeju_approve"];
   }
 
   return (

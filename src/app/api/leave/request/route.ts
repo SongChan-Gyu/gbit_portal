@@ -417,12 +417,16 @@ export async function POST(req: Request) {
       } else {
         if (groupApprover)
           await tx.leaveApproval.create({ data: { leaveRequestId: req.id, approverId: groupApprover.id, step: 1, status: "PENDING" } });
+        const snapshotPayload = JSON.stringify({
+          totalDays: groupTotalDays,
+          types: groupItems.map((i) => ltMap[i.leaveTypeId]?.name ?? ""),
+        });
         await tx.leaveHistory.create({
           data: {
             leaveRequestId: req.id,
             action: "SUBMITTED",
             actorId: user.employeeId,
-            snapshot: JSON.stringify({ totalDays: groupTotalDays, items: groupItems.map((i) => ({ ...i, lt: ltMap[i.leaveTypeId]?.name })) }),
+            snapshot: snapshotPayload.length > 191 ? snapshotPayload.slice(0, 188) + "..." : snapshotPayload,
           },
         });
       }
@@ -452,22 +456,27 @@ export async function POST(req: Request) {
 
   for (const r of leaveReqs) {
     if (!r.isAutoApprove && r.approver?.phone) {
-      const first = r.groupItems[0];
-      const last = r.groupItems[r.groupItems.length - 1];
-      await sendLeaveRequestAlimtalk(prisma, r.approver!.id, r.approver!.phone,
-        r.approver!.name, employee!.name,
-        r.groupItems.map((i) => ltMap[i.leaveTypeId]?.name).join("+"),
-        first?.startDate ?? "", last?.endDate ?? ""
-      );
+      try {
+        const first = r.groupItems[0];
+        const last = r.groupItems[r.groupItems.length - 1];
+        await sendLeaveRequestAlimtalk(prisma, r.approver!.id, r.approver!.phone,
+          r.approver!.name, employee!.name,
+          r.groupItems.map((i) => ltMap[i.leaveTypeId]?.name).join("+"),
+          first?.startDate ?? "", last?.endDate ?? ""
+        );
+      } catch (alimErr) {
+        console.warn("[leave/request] 알림톡 발송 실패 (휴가 신청은 완료됨)", alimErr);
+      }
     }
   }
 
   return NextResponse.json({ ok: true, id: createdIds[0], ids: createdIds });
   } catch (e) {
-    console.error("[leave/request POST]", e);
-    return NextResponse.json(
-      { error: "휴가 신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." },
-      { status: 500 }
-    );
+    const err = e instanceof Error ? e : new Error(String(e));
+    console.error("[leave/request POST]", err.message, err);
+    const msg = process.env.NODE_ENV === "development"
+      ? `휴가 신청 처리 중 오류: ${err.message}`
+      : "휴가 신청 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

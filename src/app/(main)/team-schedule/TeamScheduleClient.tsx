@@ -21,6 +21,12 @@ interface Member {
   isMe: boolean;
 }
 
+const STATUS_LABEL: Record<Exclude<DayStatus, null>, string> = {
+  FULL: "휴가",
+  AM: "오전",
+  PM: "오후",
+};
+
 export default function TeamScheduleClient({
   view,
   members,
@@ -31,6 +37,7 @@ export default function TeamScheduleClient({
   byDay,
   todayStr,
   weekOffset,
+  isAdminOrPm = false,
 }: {
   view: "week" | "month";
   members: Member[];
@@ -41,6 +48,7 @@ export default function TeamScheduleClient({
   byDay: Record<string, { name: string; status: DayStatus }[]>;
   todayStr: string;
   weekOffset: number;
+  isAdminOrPm?: boolean;
 }) {
   const router = useRouter();
 
@@ -155,20 +163,21 @@ export default function TeamScheduleClient({
                     {isToday && <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />}
                   </div>
                   <div className="space-y-0.5">
-                    {list.slice(0, 3).map((x, j) => {
+                    {(isAdminOrPm ? list : list.slice(0, 5)).map((x, j) => {
                       const cfg = x.status != null ? STATUS_CONFIG[x.status] : null;
+                      const label = x.status != null ? STATUS_LABEL[x.status] : "";
                       return (
                         <div
                           key={j}
                           className={`text-[10px] px-1 py-0.5 rounded truncate border ${cfg?.bg ?? ""} ${cfg?.text ?? ""} ${cfg?.border ?? ""}`}
-                          title={`${x.name} ${cfg?.label ?? ""}`}
+                          title={`${x.name} ${label}`}
                         >
-                          {x.name.slice(0, 2)} {cfg?.label?.slice(0, 2) ?? ""}
+                          {x.name} {label}
                         </div>
                       );
                     })}
-                    {list.length > 3 && (
-                      <div className="text-[10px] text-gray-500">+{list.length - 3}</div>
+                    {!isAdminOrPm && list.length > 5 && (
+                      <div className="text-[10px] text-gray-500">+{list.length - 5}</div>
                     )}
                   </div>
                 </div>

@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { MapPin, Car, Clock, AlertTriangle } from "lucide-react";
+import JejuMap from "./JejuMap";
 
 export const metadata = { title: "숙소 정보 | 제주도 숙소 | GBIT Portal" };
 
@@ -50,23 +51,15 @@ export default async function JejuInfoPage() {
             네비게이션에서 &quot;고도 17&quot; 또는 위 주소로 검색하시면 됩니다.
           </p>
           <a
-            href="https://map.naver.com/v5/search/제주특별자치도%20제주시%20한경면%20고산로2길%2010"
+            href="https://map.kakao.com/link/search/제주특별자치도%20제주시%20한경면%20고산로2길%2010"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 mt-2 text-sm font-medium text-blue-600 hover:text-blue-800"
           >
-            네이버 지도에서 보기
+            카카오 지도에서 보기
           </a>
         </div>
-        <div className="rounded-lg overflow-hidden border border-gray-200 bg-gray-100" style={{ minHeight: 280 }}>
-          <iframe
-            title="제주 숙소 위치 지도"
-            src="https://map.naver.com/v5/embed/search/제주특별자치도%20제주시%20한경면%20고산로2길%2010?c=15,0,0,0,dh"
-            className="w-full h-[280px] border-0"
-            allowFullScreen
-            loading="lazy"
-          />
-        </div>
+        <JejuMap />
         <div>
           <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-1">
             <Car size={16} className="text-blue-600" />

@@ -1,76 +1,108 @@
 # GBIT Portal (지비아이티 포털)
 
-휴가·연차 신청·결재, 스탬프 쿠폰, 근태 현황, 조직·사원 관리를 위한 내부 포털입니다.
+휴가·연차 신청·결재, 스탬프 쿠폰, 근태 현황, 제주도 숙소 예약, 조직·사원 관리를 위한 내부 포털입니다.
+
+**운영:** https://gbitportal-production.up.railway.app/
 
 ---
 
-## 운영 사이트
+## 1. 로컬 실행 (Docker 없이)
 
-**https://gbitportal-production.up.railway.app/**
+- **MySQL:** 프로젝트에서 MySQL을 띄우지 않음. **이미 띄워져 있으면 그대로 두고**, 꺼져 있을 때만 사용자가 직접 `mysql.server start` 또는 `brew services start mysql` 로 띄움.
+- **개발 서버:** `npm run dev` 한 번만 실행하면 됨. **이미 3000 포트에서 서버가 떠 있으면 다시 띄우지 않고**, 안 떠 있으면 그때만 띄움. 띄워 둔 동안에는 코드 변경이 자동 반영됨.
 
----
-
-## 함께 유지보수하기 (Cursor · Git · Railway)
-
-여러 명이 Cursor로 작업하고, Git으로 코드 공유하고, Railway로 배포하는 방법은 아래 문서를 보세요.
-
-→ **[docs/COLLABORATION-MANUAL.md](docs/COLLABORATION-MANUAL.md)**
-
-- **처음 프로젝트 받을 때**: Cursor에서 **Clone from Git** → `https://github.com/SongChan-Gyu/gbit_portal.git` 넣고 클론
-- **우리 팀 링크**: 운영 사이트 주소, Git 저장소, Railway 대시보드, 환경 변수 설정 위치
-- **Cursor**: 각자 계정 사용 (같은 아이디 동시 접속 불가)
-- **Git**: 작업 전 `git pull`, 작업 후 `commit` + `push`
-- **Railway**: 배포·환경 변수는 Railway 대시보드에서 관리
-
----
-
-## 로컬에서 실행
-
-둘 중 편한 방식으로 하면 됩니다.
-
-### 1) Docker로 한 번에 (MySQL + 앱 모두 컨테이너)
-
-```bash
-npm install
-cp .env.example .env
-npm run dev:docker
-```
-
-→ MySQL과 Next.js가 같이 뜹니다. [http://localhost:3000](http://localhost:3000) 접속.
-
-**한 번이라도 이전에 Docker로 MySQL 띄운 적 있으면** 연결 오류 시 볼륨 삭제 후 다시: `docker compose down -v` 후 `npm run dev:docker`
-
-### 2) 맥에 MySQL 이미 설치돼 있을 때 (Docker 없이)
-
-1. **MySQL 서버 켜기**  
-   `brew services start mysql` 또는 시스템 설정에서 MySQL 실행
-
-2. **.env 설정**  
-   `cp .env.example .env` 후 **`DATABASE_URL`의 비밀번호를 맥 MySQL root 비밀번호로 수정**  
-   예: `mysql://root:본인비밀번호@127.0.0.1:3306/hrm_web`
-
-3. **첫 설정 한 번에 하기** (DB 생성 + 마이그레이션 + 시드)
+1. **.env**  
+   `cp .env.example .env` 후 `DATABASE_URL` 비밀번호를 맥 MySQL root 비밀번호에 맞춤  
+   예: `mysql://root:비밀번호@127.0.0.1:3306/hrm_web` (반드시 `127.0.0.1`, localhost 시 P1001 가능)
+2. **최초 1회**  
    ```bash
    npm install
    npm run local:setup
    ```
-   → 실패하면 “비밀번호가 틀렸거나 MySQL이 꺼져 있을 수 있습니다” 메시지 확인. `.env` 비밀번호와 MySQL 실행 여부 확인 후 다시 실행.
-
-4. **개발 서버 실행**
+3. **개발 서버** (MySQL은 이미 띄워 둔 상태에서)  
    ```bash
    npm run dev
    ```
-   또는 `npm run dev:local` (migrate + seed 포함)
-
-   → [http://localhost:3000](http://localhost:3000) 에서 실행됨.
+   → http://localhost:3000
 
 ---
 
-## 문서
+## 2. 클라우드 배포 (Railway)
 
-| 문서 | 설명 |
+- **대시보드:** https://railway.app  
+- GitHub 저장소 연동 후 **main 브랜치 push 시 자동 빌드·배포** (Dockerfile 기준)
+- **환경 변수** (Railway 대시보드 → 서비스 → Variables):
+  - `DATABASE_URL` — MySQL 연결 문자열
+  - `NEXTAUTH_URL` — 배포 도메인 (예: `https://xxx.railway.app`)
+  - `NEXTAUTH_SECRET` — 32자 이상 랜덤 시크릿
+
+배포 시 **DB는 기존 데이터 유지, 없는 것만 시드에서 insert** 하도록 되어 있음. (시드 로직 변경하지 말 것.)
+
+---
+
+## 3. 스크립트 정리
+
+| 명령 | 용도 |
 |------|------|
-| [docs/COLLABORATION-MANUAL.md](docs/COLLABORATION-MANUAL.md) | Cursor·Git·Railway 함께 쓰기 매뉴얼 |
-| [docs/PROJECT-OVERVIEW.md](docs/PROJECT-OVERVIEW.md) | 프로젝트 구조·메뉴·기능 개요 |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Railway 배포 가이드 |
-| [docs/TESTING.md](docs/TESTING.md) | 테스트·데이터 정합성 검증 |
+| `npm run dev` | 로컬 개발 서버 |
+| `npm run dev:local` | prisma generate + migrate + seed 후 dev (최초/DB 초기화 시) |
+| `npm run local:setup` | DB 생성 + migrate + seed 한 번에 (로컬 MySQL용) |
+| `npm run build` | Next 빌드 |
+| `npm run start` | 프로덕션 서버 (빌드 후) |
+| `npm run start:prod` | migrate + seed 후 start (배포 서버용) |
+| `npm run lint` | ESLint |
+| `npm run db:generate` | Prisma 클라이언트 생성 |
+| `npm run db:push` | 스키마를 DB에 반영 (마이그레이션 없이) |
+| `npm run db:seed` | 전체 시드 (휴가유형·휴일·샘플 사원 등) |
+| `npm run db:seed:base` | 기초데이터만 (휴가유형 + 휴일 API 동기화) |
+| `npm run db:migrate` | prisma migrate dev (스키마 변경 시) |
+| `npm run db:studio` | Prisma Studio |
+| `npm run verify:leave` | 휴가 규정·결재·할당 정합성 검증 |
+| `npm run verify:data` | DB 연결·User/Employee/할당 usedDays 등 정합성 검증 |
+| `npm run cron` | 스케줄러(월별 발생/근속 등) 실행 |
+
+---
+
+## 4. 프로젝트·기능 요약
+
+- **기술:** Next.js 15 (App Router), React 19, Prisma, NextAuth v5, Tailwind CSS
+- **휴가:** 귀속 5/1~익년 4/30, 연차/근속/경조/특별/반차, 팀장·PM 결재
+- **제주도 숙소:** 달력 입실·퇴실 선택 → 신청, 복지부·PM 결재함, 카카오 지도(선택)
+- **날짜:** 일자 연산·표시는 `YYYY-MM-DD` + `@/lib/dateUtils`(todayYMD, addDaysYMD, toYMD) 사용
+
+**메뉴:** 대시보드, 휴가 신청/내 휴가/결재함/휴가 규정, 근태, 스탬프, 제주도 숙소(예약/신청 내역/결재함/숙소 정보/숙소 관리), 관리(인사·휴가 설정·휴가 관리·시스템 설정).
+
+**요건·룰 정리:** 휴가/숙소/스탬프 규칙은 [REQUIREMENTS.md](./REQUIREMENTS.md) 참고. **요건이 바뀌면 반드시 REQUIREMENTS.md도 함께 수정**할 것.
+
+---
+
+## 5. 함께 유지보수 (Cursor · Git · Railway)
+
+- **프로젝트 받기:** Cursor → Clone from Git → `https://github.com/SongChan-Gyu/gbit_portal.git`
+- **Cursor:** 각자 계정 사용 (같은 아이디 동시 접속 불가)
+- **Git:** 작업 전 `git pull`, 작업 후 `git add .` → `git commit -m "설명"` → `git push`
+- **환경 변수·비밀:** `.env`는 Git에 올리지 말고, 팀 내부로만 공유. 클라우드는 Railway Variables에서 설정.
+- **배포:** 한 명씩; 배포 전 `git pull` 후 push로 자동 배포.
+
+---
+
+## 6. 테스트·검증
+
+```bash
+npm run verify:leave   # 휴가 규정·할당 usedDays·결재 단계
+npm run verify:data    # DB 연결·정합성
+npm run build          # 빌드
+npm run lint           # 린트
+```
+
+**수동 체크:** 휴가 신청/결재/취소, 제주 숙소 예약(입실·퇴실 선택)·결재, 스탬프·힐링데이, 인사 관리(사원 등록·엑셀).
+
+---
+
+## 7. 환경 변수 (.env.example 기준)
+
+- `DATABASE_URL` — MySQL (로컬: `127.0.0.1` 권장)
+- `NEXTAUTH_URL` — 배포 시 실제 도메인
+- `NEXTAUTH_SECRET` — 운영 시 강한 랜덤 시크릿
+- `NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY` — 제주 숙소 지도 (선택, Kakao Developers에서 JavaScript 키 + Web 도메인 등록)
+- 이메일/알림톡 등은 .env.local에서 설정
