@@ -1,0 +1,47 @@
+import { auth } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import Link from "next/link";
+import prisma from "@/lib/db";
+import FormBuilder from "../../FormBuilder";
+
+export const metadata = { title: "양식 수정 | GBIT Portal" };
+
+export default async function EditFormPage({ params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  const user = session?.user as any;
+  if (!["PM", "ADMIN"].includes(user?.role ?? "")) redirect("/dashboard");
+
+  const { id } = await params;
+  const form = await prisma.form.findUnique({
+    where: { id },
+    include: { fields: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (!form) redirect("/admin/forms");
+
+  const initial = {
+    title: form.title,
+    slug: form.slug,
+    description: form.description ?? "",
+    isActive: form.isActive,
+    fields: form.fields.map((f) => ({
+      id: f.id,
+      label: f.label,
+      fieldType: f.fieldType as "text" | "select",
+      options: f.options ? (JSON.parse(f.options) as string[]) : undefined,
+      required: f.required,
+    })),
+  };
+
+  return (
+    <div className="max-w-2xl">
+      <div className="mb-6">
+        <Link href="/admin/forms" className="text-sm text-gray-500 hover:text-gray-700">
+          ← 양식 관리
+        </Link>
+        <h1 className="page-title mt-2">양식 수정</h1>
+        <p className="text-sm text-gray-500 mt-0.5">{form.title} · /f/{form.slug}</p>
+      </div>
+      <FormBuilder formId={id} initial={initial} />
+    </div>
+  );
+}

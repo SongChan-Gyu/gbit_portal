@@ -68,7 +68,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const baseDays = annualPoolRows.find((a) => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0;
   const tenureDays = annualPoolRows.find((a) => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0;
   const carryDays = annualPoolRows.find((a) => a.sourceCode === "CARRYOVER")?.totalDays ?? 0;
-  const annualBreakdownLabel = `연차 (기본연차 ${baseDays} 근속가산 ${tenureDays} 이월 ${carryDays})`;
+  const annualBreakdownLabel = `연차 (기본 ${baseDays} · 근속 ${tenureDays} · 이월 ${carryDays})`;
   const annualMerged = annualPoolRows.length > 0 ? [{
     id: "annual-merged",
     label: annualBreakdownLabel,

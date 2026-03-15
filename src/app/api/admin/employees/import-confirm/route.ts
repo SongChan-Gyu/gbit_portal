@@ -19,11 +19,17 @@ export async function POST(req: Request) {
 
   const created: string[] = [];
   const errors: { row: number; message: string }[] = [];
+  let nextAutoNum = await getNextAutoNum(prisma);
 
   for (const row of rows) {
-    const existing = await prisma.employee.findUnique({ where: { empNo: row.empNo } });
+    let empNo = (row.empNo || "").trim();
+    if (!empNo) {
+      empNo = `E${String(nextAutoNum).padStart(3, "0")}`;
+      nextAutoNum += 1;
+    }
+    const existing = await prisma.employee.findUnique({ where: { empNo } });
     if (existing) {
-      errors.push({ row: row._rowIndex, message: `사번 ${row.empNo} 이미 존재` });
+      errors.push({ row: row._rowIndex, message: `사번 ${empNo} 이미 존재` });
       continue;
     }
 
@@ -32,7 +38,7 @@ export async function POST(req: Request) {
     try {
       const emp = await prisma.employee.create({
         data: {
-          empNo: row.empNo,
+          empNo,
           name: row.name,
           teamId,
           position: row.position,
@@ -58,4 +64,17 @@ export async function POST(req: Request) {
     errors,
     message: `${created.length}명 등록 완료${errors.length ? `, ${errors.length}건 실패` : ""}`,
   });
+}
+
+async function getNextAutoNum(prisma: { employee: { findMany: (args: { select: { empNo: true } }) => Promise<{ empNo: string }[]> } }): Promise<number> {
+  const employees = await prisma.employee.findMany({ select: { empNo: true } });
+  let maxNum = 0;
+  for (const e of employees) {
+    const m = /^E(\d+)$/i.exec(e.empNo);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (!isNaN(n) && n > maxNum) maxNum = n;
+    }
+  }
+  return maxNum + 1;
 }

@@ -26,7 +26,10 @@ export async function POST(req: Request) {
 
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
   const employees = await prisma.employee.findMany({
-    where: { status:{ in:["ACTIVE","INVITED"] } },
+    where: {
+      status: { in: ["ACTIVE", "INVITED"] },
+      employeeType: { not: "EXTERNAL" },
+    },
     include: { team: true },
   });
 

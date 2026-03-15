@@ -53,6 +53,7 @@ model Employee {
   notifications     Notification[]
   jejuAccommodations JejuAccommodation[]
   jejuApprovedBy    JejuAccommodation[] @relation("JejuApprover")
+  notices           Notice[]
 
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -70,6 +71,24 @@ model User {
   lastLoginAt  DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+
+  passwordResetTokens PasswordResetToken[]
+}
+
+// ─────────────────────────────────────────
+// 비밀번호 재설정 토큰 (비밀번호 찾기 링크용, 1시간 유효)
+// ─────────────────────────────────────────
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([token])
+  @@index([userId])
 }
 
 // ─────────────────────────────────────────
@@ -406,6 +425,83 @@ model JejuAccommodation {
   @@index([employeeId])
   @@index([status])
   @@index([startDate, endDate])
+}
+
+// ─────────────────────────────────────────
+// 유동 양식 (건강검진 신청 등 - 비회원도 링크로 제출 가능)
+// ─────────────────────────────────────────
+model Form {
+  id          String    @id @default(cuid())
+  title       String    // e.g. "건강검진 신청"
+  slug        String    @unique  // URL용: health-check-2025
+  description String?   @db.Text
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  fields      FormField[]
+  submissions FormSubmission[]
+}
+
+model FormField {
+  id        String  @id @default(cuid())
+  formId    String
+  form      Form    @relation(fields: [formId], references: [id], onDelete: Cascade)
+  sortOrder Int     @default(0)
+  label     String  // 질문/필드명
+  fieldType String  @default("text")  // text | select
+  options   String? @db.Text  // select일 때 JSON 배열 e.g. ["본인","가족"]
+  required  Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  answers FormSubmissionAnswer[]
+
+  @@index([formId])
+}
+
+model FormSubmission {
+  id            String    @id @default(cuid())
+  formId        String
+  form          Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
+  submitterName String    // 본인 이름 (필수)
+  submitterEmail String?  @default("")
+  submitterPhone String?  @default("")
+  createdAt     DateTime  @default(now())
+
+  answers FormSubmissionAnswer[]
+
+  @@index([formId])
+  @@index([formId, createdAt])
+}
+
+model FormSubmissionAnswer {
+  id             String         @id @default(cuid())
+  formSubmissionId String
+  formSubmission   FormSubmission @relation(fields: [formSubmissionId], references: [id], onDelete: Cascade)
+  formFieldId      String
+  formField        FormField     @relation(fields: [formFieldId], references: [id], onDelete: Cascade)
+  value            String        @db.Text
+  createdAt        DateTime      @default(now())
+
+  @@unique([formSubmissionId, formFieldId])
+  @@index([formSubmissionId])
+  @@index([formFieldId])
+}
+
+// ─────────────────────────────────────────
+// 공지사항 (PM/ADMIN만 작성, 리치 텍스트, 댓글 없음)
+// ─────────────────────────────────────────
+model Notice {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   @db.LongText  // HTML
+  authorId  String
+  author    Employee @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────

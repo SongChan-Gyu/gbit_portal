@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import Link from "next/link";
 import { formatYMD } from "@/lib/dateUtils";
+import { EMPLOYEE_TYPE_TO_LABEL } from "@/lib/employeeExcel";
 import InviteButton from "./InviteButton";
+import ResetPasswordButton from "./ResetPasswordButton";
 import ExcelImportBlock from "./ExcelImportBlock";
 
 const STATUS_BADGE: Record<string,string> = {
@@ -60,7 +62,7 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
       {/* 검색 */}
       <form className="mb-6">
         <div className="flex flex-col sm:flex-row gap-2">
-          <input name="q" defaultValue={q} className="input flex-1 min-w-0 rounded-lg border-gray-200" placeholder="이름 · 사번 · 직위 검색" />
+          <input name="q" defaultValue={q} className="input flex-1 min-w-0 rounded-lg border-gray-200" placeholder="이름 · 사번 · 직급 검색" />
           <button type="submit" className="btn-primary px-6 py-2.5 rounded-lg font-medium shrink-0">검색</button>
         </div>
       </form>
@@ -73,8 +75,9 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">사번</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">이름</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">팀</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">직위</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">직급</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">직급부서</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">고용유형</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">역할</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">상태</th>
               <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">아이디</th>
@@ -97,6 +100,7 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
                     )}
                   </span>
                 </td>
+                <td className="px-4 py-3 text-xs text-gray-600">{EMPLOYEE_TYPE_TO_LABEL[emp.employeeType ?? ""] ?? emp.employeeType ?? "-"}</td>
                 <td className="px-4 py-3"><span className="text-xs font-medium text-gray-600">{ROLE_LABEL[emp.role]}</span></td>
                 <td className="px-4 py-3">
                   <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_BADGE[emp.status]}`}>
@@ -106,9 +110,10 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
                 <td className="px-4 py-3 text-gray-500 text-sm">{emp.user?.username ?? "-"}</td>
                 <td className="px-4 py-3 text-sm text-gray-500">{formatYMD(emp.hireDate)}</td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-end gap-2 flex-wrap">
                     <Link href={`/admin/employees/${emp.id}`} className="text-sm text-blue-600 hover:text-blue-800 font-medium">수정</Link>
                     <InviteButton employeeId={emp.id} name={emp.name} currentStatus={emp.status} />
+                    <ResetPasswordButton employeeId={emp.id} name={emp.name} hasUser={!!emp.user} />
                   </div>
                 </td>
               </tr>
@@ -132,6 +137,7 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[emp.status]}`}>
                     {STATUS_LABEL[emp.status]}
                   </span>
+                  <span className="text-xs text-gray-500">{EMPLOYEE_TYPE_TO_LABEL[emp.employeeType ?? ""] ?? "-"}</span>
                   <span className="text-xs text-gray-500">{ROLE_LABEL[emp.role]}</span>
                   <span className={["OPERATIONS", "EDUCATION", "WELFARE"].includes(emp.dutyDept ?? "") ? "text-blue-600 font-medium" : "text-gray-500"}>
                     {dutyDeptDisplay(emp.dutyDept ?? null)}
@@ -143,14 +149,13 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
                 <p className="text-xs text-gray-400 mt-1.5">입사 {formatYMD(emp.hireDate)}</p>
               </div>
             </div>
-            <div className="flex gap-2 mt-4 pt-3 border-t border-gray-100">
+            <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-gray-100">
               <Link href={`/admin/employees/${emp.id}`}
-                className="flex-1 py-2.5 rounded-lg text-center text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
+                className="flex-1 min-w-0 py-2.5 rounded-lg text-center text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
                 수정
               </Link>
-              <div className="flex-1 min-w-0">
-                <InviteButton employeeId={emp.id} name={emp.name} currentStatus={emp.status} />
-              </div>
+              <InviteButton employeeId={emp.id} name={emp.name} currentStatus={emp.status} />
+              <ResetPasswordButton employeeId={emp.id} name={emp.name} hasUser={!!emp.user} />
             </div>
           </div>
         ))}

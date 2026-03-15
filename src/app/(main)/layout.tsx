@@ -21,12 +21,14 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     : DEFAULT_PERMISSIONS;
   let allowedMenuKeys: string[] = allPerms[user.role] ?? DEFAULT_PERMISSIONS[user.role] ?? [];
 
-  // 제주 숙소 관리: 복지부(dutyDept)도 노출 (역할이 STAFF/TEAM_LEAD여도)
+  // 외부개발자: 휴가/스탬프/근태 미관리, 제주 숙소만 사용
   const employee = await prisma.employee.findUnique({
     where: { id: user.employeeId },
-    select: { dutyDept: true },
+    select: { dutyDept: true, employeeType: true },
   });
-  if (isWelfareDept(employee)) {
+  if (employee?.employeeType === "EXTERNAL") {
+    allowedMenuKeys = ["dashboard", "notices", "jeju", "jeju_my", "jeju_info"];
+  } else if (isWelfareDept(employee)) {
     if (!allowedMenuKeys.includes("jeju_admin")) allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
     if (!allowedMenuKeys.includes("jeju_approve")) allowedMenuKeys = [...allowedMenuKeys, "jeju_approve"];
   }

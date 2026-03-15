@@ -574,6 +574,22 @@ async function ensureFy2025CareAndHolidayForAll() {
       fy
     );
   }
+
+  // ── 공지사항 샘플 1건 (없을 때만)
+  const noticeCount = await prisma.notice.count();
+  if (noticeCount === 0) {
+    const adminEmp = await prisma.employee.findFirst({ where: { role: { in: ["ADMIN", "PM"] } } });
+    if (adminEmp) {
+      await prisma.notice.create({
+        data: {
+          title: "2026년 5월 귀속연도부터 휴가·숙소 관리 시스템 운영 안내",
+          content: `<p><strong>안녕하세요.</strong></p><p>2026년 5월 귀속연도부터 휴가와 제주도 숙소 관리를 이 시스템으로 진행할 예정입니다.</p><p>부족한 점이 많겠지만, 잘못된 점이나 불편한 점이 있으면 <strong>건의</strong>해 주시면 반영하겠습니다.</p><p>감사합니다.</p>`,
+          authorId: adminEmp.id,
+        },
+      });
+      console.log("  ✓ 공지사항 샘플 1건 생성");
+    }
+  }
 }
 
 main()

@@ -13,7 +13,7 @@ export async function GET() {
     const wb = XLSX.utils.book_new();
     const wsData: string[][] = [
       [...TEMPLATE_HEADERS],
-      ["E001", "홍길동", "개발팀", "선임", "운영부", "2024-01-15", "1990-05-20", "010-1234-5678", "hong@example.com", "정규직", "팀원"],
+      ["홍길동", "개발팀", "사원", "운영부", "2024-01-15", "1990-05-20", "010-1234-5678", "hong@example.com", "정규직", "팀원"],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, "사원목록");
@@ -23,7 +23,8 @@ export async function GET() {
     return new NextResponse(body, {
       headers: {
         "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "Content-Disposition": 'attachment; filename="사원_일괄등록_양식.xlsx"',
+        "Content-Disposition": "attachment; filename=\"employee_import_template.xlsx\"; filename*=UTF-8''%EC%82%AC%EC%9B%90_%EC%9D%BC%EA%B4%84%EB%93%B1%EB%A1%9D_%EC%96%91%EC%8B%9D.xlsx",
+        "Cache-Control": "no-store",
       },
     });
   } catch (err) {

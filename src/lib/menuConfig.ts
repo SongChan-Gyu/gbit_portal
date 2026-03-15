@@ -19,6 +19,7 @@ export interface MenuGroupDef {
 /** 단일 메뉴는 href만, 그룹은 children만 */
 export const MENU_GROUPS: MenuGroupDef[] = [
   { key: "dashboard", label: "대시보드", icon: "🏠", href: "/dashboard", section: "main" },
+  { key: "notices", label: "공지사항", icon: "📌", href: "/notices", section: "main" },
   {
     key: "leave",
     label: "휴가",
@@ -55,6 +56,8 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { key: "admin_organization", label: "인사 관리", href: "/admin/organization" },
       { key: "admin_leave_settings", label: "휴가 설정", href: "/admin/leave-settings" },
       { key: "admin_leave_mgmt", label: "휴가 관리", href: "/admin/leave-management" },
+      { key: "admin_forms", label: "양식 관리", href: "/admin/forms" },
+      { key: "admin_notices", label: "공지사항", href: "/admin/notices" },
       { key: "admin_system", label: "시스템 설정", href: "/admin/system" },
     ],
   },
@@ -85,13 +88,13 @@ export const ALL_MENU_KEYS = collectAllKeys();
 /** 역할별 기본 메뉴 권한 */
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   STAFF: [
-    "dashboard",
+    "dashboard", "notices",
     "leave_apply", "leave_my", "leave_policy",
     "attendance", "stamp",
     "jeju", "jeju_my", "jeju_info",
   ],
   TEAM_LEAD: [
-    "dashboard",
+    "dashboard", "notices",
     "leave_apply", "leave_my", "leave_approve", "leave_policy",
     "attendance", "stamp",
     "jeju", "jeju_my", "jeju_info",

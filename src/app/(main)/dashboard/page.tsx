@@ -77,7 +77,7 @@ export default async function DashboardPage({
   const baseDays   = annualAllocs.find((a) => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0;
   const tenureDays = annualAllocs.find((a) => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0;
   const carryDays  = annualAllocs.find((a) => a.sourceCode === "CARRYOVER")?.totalDays ?? 0;
-  const annualBreakdownLabel = `연차 (기본연차 ${baseDays} 근속가산 ${tenureDays} 이월 ${carryDays})`;
+  const annualBreakdownLabel = `연차 (기본 ${baseDays} · 근속 ${tenureDays} · 이월 ${carryDays})`;
   const annualMergedForDisplay = annualAllocs.length > 0 ? {
     id: "annual-merged",
     label: annualBreakdownLabel,
@@ -152,6 +152,12 @@ export default async function DashboardPage({
     }
     teamMonthData = { year, month, dates, byDay };
   }
+
+  const recentNotices = await prisma.notice.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 2,
+    select: { id: true, title: true },
+  });
 
   return (
     <div className="space-y-4">
@@ -353,6 +359,25 @@ export default async function DashboardPage({
               byDay={teamMonthData.byDay}
               todayStr={now.toISOString().slice(0, 10)}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 공지사항 (최신 2개, 하단 작게) */}
+      {recentNotices.length > 0 && (
+        <div className="pt-2 border-t border-gray-100">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
+            <span className="font-medium text-gray-600">공지</span>
+            {recentNotices.map((n, i) => (
+              <span key={n.id} className="flex items-center gap-x-2">
+                {i > 0 && <span className="text-gray-300">·</span>}
+                <Link href={`/notices/${n.id}`} className="text-blue-600 hover:underline truncate max-w-[160px] sm:max-w-xs">
+                  {n.title}
+                </Link>
+              </span>
+            ))}
+            <span className="text-gray-300">·</span>
+            <Link href="/notices" className="text-gray-400 hover:text-gray-600 shrink-0">더보기</Link>
           </div>
         </div>
       )}

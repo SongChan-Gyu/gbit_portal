@@ -93,6 +93,11 @@ export default function LoginPage() {
             <button type="submit" disabled={loading} className="btn-primary w-full btn-lg justify-center mt-2">
               {loading ? <><span className="spinner" /><span>로그인 중</span></> : "로그인"}
             </button>
+            <p className="mt-3 text-center text-sm text-gray-500">
+              <a href="/find-id" className="text-blue-600 hover:underline">아이디 찾기</a>
+              {" · "}
+              <a href="/forgot-password" className="text-blue-600 hover:underline">비밀번호 찾기</a>
+            </p>
           </form>
 
           <div className="mt-6 p-3 bg-gray-50 border border-gray-200 rounded text-xs text-gray-500 space-y-1">

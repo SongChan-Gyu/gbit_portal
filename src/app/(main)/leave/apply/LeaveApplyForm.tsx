@@ -582,7 +582,7 @@ export default function LeaveApplyForm({
                       {annualPoolAllocs.length > 0 && (
                         <div className="flex items-center justify-between text-xs text-orange-700">
                           <span className="truncate mr-3">
-                            연차 (기본연차 {annualPoolAllocs.find(a => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0} 근속가산 {annualPoolAllocs.find(a => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0} 이월 {annualPoolAllocs.find(a => a.sourceCode === "CARRYOVER")?.totalDays ?? 0})
+                            연차 (기본 {annualPoolAllocs.find(a => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0} · 근속 {annualPoolAllocs.find(a => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0} · 이월 {annualPoolAllocs.find(a => a.sourceCode === "CARRYOVER")?.totalDays ?? 0})
                           </span>
                           <span className="shrink-0 tabular-nums">
                             잔여 {annualPoolRemaining.toFixed(1)}일

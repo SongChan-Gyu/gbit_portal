@@ -26,6 +26,13 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
   const user = session.user as any;
 
+  const emp = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (emp?.employeeType === "EXTERNAL")
+    return NextResponse.json({ error: "외부개발자는 휴가 신청이 불가합니다." }, { status: 403 });
+
   const { items } = await req.json() as {
     items: { leaveTypeId: string; allocationId: string; startDate: string; endDate: string; days: number; reason?: string }[];
   };

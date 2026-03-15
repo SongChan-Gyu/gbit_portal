@@ -10,8 +10,9 @@ interface Employee {
 }
 
 const ROLES = [["STAFF","팀원"],["TEAM_LEAD","팀장"],["PM","PM"],["ADMIN","관리자"]];
-const TYPES = [["FULL","정규직"],["FREE","프리랜서"]];
-/** 직급부서: 귀속연도 초기화 시 운영부/교육부/복지부 소속이면 직무부서휴가 2일 부여 */
+const TYPES = [["FULL","정규직"],["FREE","프리랜서"],["EXTERNAL","외부개발자"]];
+const POSITIONS = [["사원","사원"],["대리","대리"],["과장","과장"],["차장","차장"],["부장","부장"],["이사","이사"]];
+/** 직급부서: 귀속연도 초기화 시 운영부/교육부/복지부 소속이면 직무부서휴가 2일 부여. 외부개발자는 휴가 미관리 */
 const DUTY_DEPT_OPTIONS = [
   ["", "선택 안함"],
   ["OPERATIONS", "운영부"],
@@ -53,10 +54,17 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
   return (
     <form onSubmit={submit} className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="label">사번 *</label>
-          <input className="input" value={form.empNo??""} onChange={(e)=>set("empNo",e.target.value)} required />
-        </div>
+        {isEdit ? (
+          <div>
+            <label className="label">사번</label>
+            <input className="input bg-gray-50" value={form.empNo??""} readOnly />
+          </div>
+        ) : (
+          <div>
+            <label className="label">사번</label>
+            <p className="text-sm text-gray-500 py-2">저장 시 자동 부여됩니다.</p>
+          </div>
+        )}
         <div>
           <label className="label">이름 *</label>
           <input className="input" value={form.name??""} onChange={(e)=>set("name",e.target.value)} required />
@@ -72,8 +80,10 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
           </select>
         </div>
         <div>
-          <label className="label">직위 *</label>
-          <input className="input" value={form.position??""} onChange={(e)=>set("position",e.target.value)} required />
+          <label className="label">직급 *</label>
+          <select className="input" value={form.position??""} onChange={(e)=>set("position",e.target.value)} required>
+            {POSITIONS.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
         </div>
       </div>
 

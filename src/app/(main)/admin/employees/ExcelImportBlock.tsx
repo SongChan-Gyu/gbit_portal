@@ -3,14 +3,18 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { FileSpreadsheet, Download, Upload, CheckCircle, AlertCircle } from "lucide-react";
-import { TEMPLATE_HEADERS } from "@/lib/employeeExcel";
+import {
+  TEMPLATE_HEADERS,
+  DUTY_DEPT_TO_LABEL,
+  EMPLOYEE_TYPE_TO_LABEL,
+  ROLE_TO_LABEL,
+} from "@/lib/employeeExcel";
 import type { ParsedEmployeeRow } from "@/lib/employeeExcel";
 
 const SAMPLE_ROW: Record<string, string> = {
-  사번: "E001",
   이름: "홍길동",
   팀: "개발팀",
-  직위: "선임",
+  직급: "사원",
   직급부서: "운영부",
   입사일: "2024-01-15",
   생년월일: "1990-05-20",
@@ -19,6 +23,16 @@ const SAMPLE_ROW: Record<string, string> = {
   고용유형: "정규직",
   역할: "팀원",
 };
+
+function dutyDeptLabel(code: string): string {
+  return DUTY_DEPT_TO_LABEL[code] || code || "-";
+}
+function employeeTypeLabel(code: string): string {
+  return EMPLOYEE_TYPE_TO_LABEL[code] || code || "-";
+}
+function roleLabel(code: string): string {
+  return ROLE_TO_LABEL[code] || code || "-";
+}
 
 export default function ExcelImportBlock() {
   const router = useRouter();
@@ -33,9 +47,18 @@ export default function ExcelImportBlock() {
   const [resultErrors, setResultErrors] = useState<{ row: number; message: string }[]>([]);
 
   async function downloadTemplate() {
+    const apiPath = "/api/admin/employees/import-template";
+    const fullUrl = typeof window !== "undefined" ? `${window.location.origin}${apiPath}` : apiPath;
     try {
-      const res = await fetch("/api/admin/employees/import-template", { credentials: "include" });
-      if (!res.ok) throw new Error("다운로드 실패");
+      const res = await fetch(fullUrl, { credentials: "include" });
+      if (!res.ok) {
+        const ct = res.headers.get("content-type");
+        if (ct?.includes("application/json")) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `다운로드 실패 (${res.status})`);
+        }
+        throw new Error(`다운로드 실패 (${res.status})`);
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -43,8 +66,10 @@ export default function ExcelImportBlock() {
       a.download = "사원_일괄등록_양식.xlsx";
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      window.open("/api/admin/employees/import-template", "_blank");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "다운로드 실패";
+      alert(msg + "\n\n아래 링크를 우클릭 → '다른 이름으로 링크 저장'으로 저장해 보세요.");
+      window.open(fullUrl, "_blank");
     }
   }
 
@@ -83,8 +108,11 @@ export default function ExcelImportBlock() {
     setResultMessage("");
     setResultErrors([]);
 
-    const res = await fetch("/api/admin/employees/import-confirm", {
+    const confirmPath = "/api/admin/employees/import-confirm";
+    const confirmUrl = typeof window !== "undefined" ? `${window.location.origin}${confirmPath}` : confirmPath;
+    const res = await fetch(confirmUrl, {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ rows: previewRows }),
     });
@@ -139,12 +167,12 @@ export default function ExcelImportBlock() {
           </table>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          직급부서: 운영부/교육부/복지부/해당사항없음 · 고용유형: 정규직/프리랜서 · 역할: 팀원/팀장/PM/관리자
+          직급: 사원/대리/과장/차장/부장/이사 · 직급부서: 운영부/교육부/복지부/해당사항없음 · 고용유형: 정규직/프리랜서/외부개발자 · 역할: 팀원/팀장/PM/관리자
         </p>
       </div>
 
       {/* 2. 템플릿 다운로드 + 파일 선택 */}
-      <div className="flex flex-col sm:flex-row gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap items-center">
         <button
           type="button"
           onClick={downloadTemplate}
@@ -153,6 +181,13 @@ export default function ExcelImportBlock() {
           <Download size={18} />
           엑셀 템플릿 다운로드
         </button>
+        <a
+          href="/api/admin/employees/import-template"
+          download="사원_일괄등록_양식.xlsx"
+          className="text-sm text-gray-500 hover:text-blue-600 underline"
+        >
+          링크로 저장 (다운로드 안 될 때)
+        </a>
         <label className="btn-primary inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg cursor-pointer">
           <Upload size={18} />
           {loading ? "처리 중..." : "엑셀 파일 선택"}
@@ -200,17 +235,16 @@ export default function ExcelImportBlock() {
                 {previewRows.map((r, i) => (
                   <tr key={i} className="border-b border-gray-100 hover:bg-gray-50/50">
                     <td className="px-2 py-1.5 text-gray-400">{r._rowIndex}</td>
-                    <td className="px-2 py-1.5">{r.empNo}</td>
                     <td className="px-2 py-1.5 font-medium">{r.name}</td>
                     <td className="px-2 py-1.5">{r.team || "-"}</td>
                     <td className="px-2 py-1.5">{r.position}</td>
-                    <td className="px-2 py-1.5">{r.dutyDept || "-"}</td>
+                    <td className="px-2 py-1.5">{dutyDeptLabel(r.dutyDept)}</td>
                     <td className="px-2 py-1.5">{r.hireDate}</td>
                     <td className="px-2 py-1.5">{r.birthDate || "-"}</td>
                     <td className="px-2 py-1.5">{r.phone || "-"}</td>
                     <td className="px-2 py-1.5">{r.email || "-"}</td>
-                    <td className="px-2 py-1.5">{r.employeeType}</td>
-                    <td className="px-2 py-1.5">{r.role}</td>
+                    <td className="px-2 py-1.5">{employeeTypeLabel(r.employeeType)}</td>
+                    <td className="px-2 py-1.5">{roleLabel(r.role)}</td>
                   </tr>
                 ))}
               </tbody>

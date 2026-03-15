@@ -1,13 +1,12 @@
 /**
  * 사원 엑셀 일괄 등록 양식
  * - 1행: 헤더(아래 TEMPLATE_HEADERS 순서)
- * - 2행~: 데이터 (빈 행 제외)
+ * - 2행~: 데이터. 사번은 비워두면 자동 부여됨.
  */
 export const TEMPLATE_HEADERS = [
-  "사번",
   "이름",
   "팀",
-  "직위",
+  "직급",
   "직급부서",
   "입사일",
   "생년월일",
@@ -16,6 +15,9 @@ export const TEMPLATE_HEADERS = [
   "고용유형",
   "역할",
 ] as const;
+
+/** 직급: 사원, 대리, 과장, 차장, 부장, 이사 (한글 그대로 저장) */
+export const POSITION_OPTIONS = ["사원", "대리", "과장", "차장", "부장", "이사"] as const;
 
 /** 직급부서: 엑셀에는 한글 또는 코드 입력 가능 */
 export const DUTY_DEPT_MAP: Record<string, string> = {
@@ -30,6 +32,14 @@ export const DUTY_DEPT_MAP: Record<string, string> = {
   "NONE": "NONE",
 };
 
+/** 코드 → 한글 (미리보기/표시용) */
+export const DUTY_DEPT_TO_LABEL: Record<string, string> = {
+  OPERATIONS: "운영부",
+  EDUCATION: "교육부",
+  WELFARE: "복지부",
+  NONE: "해당사항없음",
+};
+
 export const ROLE_MAP: Record<string, string> = {
   "": "STAFF",
   "팀원": "STAFF",
@@ -41,20 +51,36 @@ export const ROLE_MAP: Record<string, string> = {
   "ADMIN": "ADMIN",
 };
 
+export const ROLE_TO_LABEL: Record<string, string> = {
+  STAFF: "팀원",
+  TEAM_LEAD: "팀장",
+  PM: "PM",
+  ADMIN: "관리자",
+};
+
 export const EMPLOYEE_TYPE_MAP: Record<string, string> = {
   "": "FULL",
   "정규직": "FULL",
   "프리랜서": "FREE",
+  "외부개발자": "EXTERNAL",
   "FULL": "FULL",
   "FREE": "FREE",
+  "EXTERNAL": "EXTERNAL",
+};
+
+/** 고용유형 코드 → 한글. 외부개발자는 휴가 관리 없음, 제주 숙소 등만 가능 */
+export const EMPLOYEE_TYPE_TO_LABEL: Record<string, string> = {
+  FULL: "정규직",
+  FREE: "프리랜서",
+  EXTERNAL: "외부개발자",
 };
 
 export interface ParsedEmployeeRow {
   _rowIndex: number;
-  empNo: string;
+  empNo: string; // 비어 있으면 import 시 자동 부여
   name: string;
   team: string;
-  position: string;
+  position: string; // 직급: 사원/대리/과장/차장/부장/이사
   dutyDept: string;
   hireDate: string;
   birthDate: string;
@@ -97,28 +123,26 @@ export function parseSheetToRows(
     colIndex[h] = headerRow.indexOf(h);
     if (colIndex[h] === -1) colIndex[h] = i;
   });
+  ["사번", "직위"].forEach((h) => {
+    if (colIndex[h] === undefined) colIndex[h] = headerRow.indexOf(h);
+  });
 
   for (let i = 1; i < rows.length; i++) {
     const raw = rows[i] as unknown[];
-    const get = (key: (typeof headers)[number]) => {
+    const get = (key: string) => {
       const idx = colIndex[key] ?? headers.indexOf(key);
       return idx >= 0 && raw[idx] != null ? cellStr(raw[idx]) : "";
     };
-    const empNo = get("사번");
     const name = get("이름");
-    const position = get("직위");
+    const position = (get("직급") || get("직위")).trim();
     const hireDate = get("입사일");
-    if (!empNo && !name && !position && !hireDate) continue;
-    if (!empNo) {
-      errors.push(`${i + 1}행: 사번이 비어 있습니다.`);
-      continue;
-    }
+    if (!name && !position && !hireDate) continue;
     if (!name) {
       errors.push(`${i + 1}행: 이름이 비어 있습니다.`);
       continue;
     }
     if (!position) {
-      errors.push(`${i + 1}행: 직위가 비어 있습니다.`);
+      errors.push(`${i + 1}행: 직급이 비어 있습니다.`);
       continue;
     }
     if (!hireDate) {
@@ -130,7 +154,7 @@ export function parseSheetToRows(
     const employeeType = (EMPLOYEE_TYPE_MAP[get("고용유형")] ?? get("고용유형")) || "FULL";
     result.push({
       _rowIndex: i + 1,
-      empNo,
+      empNo: get("사번") || "", // 비어 있으면 import-confirm에서 자동 부여
       name,
       team: get("팀"),
       position,
