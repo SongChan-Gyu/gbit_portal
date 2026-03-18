@@ -1,0 +1,83 @@
+name: DB Backup (mysqldump)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 매일 03:40 KST = 18:40 UTC(전날)
+    - cron: "40 18 * * *"
+
+concurrency:
+  group: hrm-db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Validate required secret
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DATABASE_URL:-}" ]; then
+            echo "Missing secrets.DATABASE_URL"
+            exit 1
+          fi
+
+      - name: Install mysql client
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      - name: Dump database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, sys, urllib.parse, datetime
+          url = os.environ["DATABASE_URL"]
+          u = urllib.parse.urlparse(url)
+          if u.scheme not in ("mysql", "mysql2"):
+            print(f"Unsupported scheme: {u.scheme}", file=sys.stderr); sys.exit(1)
+          user = urllib.parse.unquote(u.username or "")
+          pw   = urllib.parse.unquote(u.password or "")
+          host = u.hostname or ""
+          port = str(u.port or 3306)
+          db   = (u.path or "").lstrip("/")
+          if not all([user, host, db]):
+            print("Invalid DATABASE_URL (need user/host/db)", file=sys.stderr); sys.exit(1)
+          now = datetime.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+          print(f"user={user}")
+          print(f"host={host}")
+          print(f"port={port}")
+          print(f"db={db}")
+          print(f"stamp={now}")
+          PY
+
+          USER="$(python3 -c 'import os,urllib.parse;u=urllib.parse.urlparse(os.environ["DATABASE_URL"]);print(urllib.parse.unquote(u.username or ""))')"
+          PASS="$(python3 -c 'import os,urllib.parse;u=urllib.parse.urlparse(os.environ["DATABASE_URL"]);print(urllib.parse.unquote(u.password or ""))')"
+          HOST="$(python3 -c 'import os,urllib.parse;u=urllib.parse.urlparse(os.environ["DATABASE_URL"]);print(u.hostname or "")')"
+          PORT="$(python3 -c 'import os,urllib.parse;u=urllib.parse.urlparse(os.environ["DATABASE_URL"]);print(u.port or 3306)')"
+          DB="$(python3 -c 'import os,urllib.parse;u=urllib.parse.urlparse(os.environ["DATABASE_URL"]);print((u.path or "").lstrip("/"))')"
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+
+          OUT="db-backup-${DB}-${STAMP}.sql.gz"
+          # 참고: --single-transaction은 InnoDB에 유리
+          MYSQL_PWD="${PASS}" mysqldump \
+            --host="${HOST}" --port="${PORT}" --user="${USER}" \
+            --single-transaction --quick --routines --triggers --events \
+            "${DB}" | gzip -c > "${OUT}"
+
+          ls -lah "${OUT}"
+
+      - name: Upload backup artifact (GitHub retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup
+          path: db-backup-*.sql.gz
+          if-no-files-found: error
+          retention-days: 14
+

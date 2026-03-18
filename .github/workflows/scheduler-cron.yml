@@ -1,0 +1,71 @@
+name: Scheduler Cron (call HRM APIs)
+
+on:
+  workflow_dispatch:
+  schedule:
+    # KST(Asia/Seoul) 기준으로 맞추려면, UTC로 변환해서 넣어야 합니다.
+    # - 00:15 KST = 15:15 UTC (전날)
+    # - 00:10 KST = 15:10 UTC (전날)
+    # 아래는 매일 15:15 UTC에 실행(= KST 00:15)
+    - cron: "15 15 * * *"
+
+concurrency:
+  group: hrm-scheduler-cron
+  cancel-in-progress: false
+
+jobs:
+  call-cron-apis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate required secrets
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${APP_URL:-}" ]; then
+            echo "Missing secrets.APP_URL (예: https://xxx.up.railway.app)"
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "Missing secrets.CRON_SECRET"
+            exit 1
+          fi
+
+      - name: Call /api/cron/monthly-accrual
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "${APP_URL}/api/cron/monthly-accrual" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -d '{}' | head -c 4000
+
+      - name: Call /api/cron/tenure-check
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          # 서버에서 오늘 날짜를 계산하는 로직이 있으므로 body 없이도 동작하지만,
+          # 기존 API가 date 파라미터를 허용하는 경우를 위해 today를 함께 전달합니다.
+          TODAY="$(date -u +%F)"
+          curl -fsS -X POST "${APP_URL}/api/cron/tenure-check" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -d "{\"date\":\"${TODAY}\",\"window\":0}" | head -c 4000
+
+      - name: Call /api/cron/birthday-half
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "${APP_URL}/api/cron/birthday-half" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -d '{}' | head -c 4000
+
