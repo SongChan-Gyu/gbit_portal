@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getFiscalYear } from "@/lib/workdays";
 import { sendLeaveRequestAlimtalk } from "@/lib/kakao";
+import { writeAudit, getIp } from "@/lib/audit";
 
 /** 연차 = 기본연차 + 근속가산 + 이월연차만. 특별휴가(근속1/5/10년)·부서추가는 별도 풀 */
 const ANNUAL_ONLY_SOURCES = [
@@ -485,6 +486,16 @@ export async function POST(req: Request) {
         warnings.push("카카오 알림톡 발송에 실패했습니다. (휴가 신청은 정상 처리됨)");
       }
     }
+  }
+
+  for (const id of createdIds) {
+    await writeAudit({
+      entityType: "LeaveRequest",
+      entityId: id,
+      action: "CREATED",
+      actorId: user.employeeId,
+      ip: getIp(req) ?? undefined,
+    });
   }
 
   return NextResponse.json({ ok: true, id: createdIds[0], ids: createdIds, warnings: warnings.length ? warnings : undefined });

@@ -4,6 +4,18 @@
  */
 import prisma from "@/lib/db";
 
+/** 요청에서 클라이언트 IP 추출 (프록시/로드밸런서 대응) */
+export function getIp(req: Request): string | null {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  const real = req.headers.get("x-real-ip");
+  if (real) return real;
+  return null;
+}
+
 export type AuditAction =
   | "CREATED" | "UPDATED" | "DELETED"
   | "APPROVED" | "REJECTED" | "CANCELLED" | "RESTORED"

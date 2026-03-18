@@ -124,6 +124,15 @@ export async function POST(req: Request) {
         },
       });
     });
+    const { writeAudit, getIp } = await import("@/lib/audit");
+    await writeAudit({
+      entityType: "JejuAccommodation",
+      entityId: created.id,
+      action: "CREATED",
+      actorId: user.employeeId,
+      after: { startDate, endDate, nights, status: "PENDING" },
+      ip: getIp(req) ?? undefined,
+    });
     return NextResponse.json({ ok: true, id: created.id });
   } catch (e: any) {
     if (e?.message === "OVERLAP") {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { writeAudit, getIp } from "@/lib/audit";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id:string }> }) {
   const { id } = await params;
@@ -26,6 +27,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     alimtalkEnabled,
   } = body;
 
+  const before = await prisma.employee.findUnique({ where: { id }, select: { name: true, status: true } });
   await prisma.employee.update({
     where:{ id },
     data:{
@@ -39,6 +41,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
       ...(emailEnabled != null ? { emailEnabled: !!emailEnabled } : {}),
       ...(alimtalkEnabled != null ? { alimtalkEnabled: !!alimtalkEnabled } : {}),
     },
+  });
+  await writeAudit({
+    entityType: "Employee",
+    entityId: id,
+    action: "UPDATED",
+    actorId: user?.employeeId ?? null,
+    before: before ?? undefined,
+    after: { name, status },
+    ip: getIp(req) ?? undefined,
   });
   return NextResponse.json({ ok:true });
 }

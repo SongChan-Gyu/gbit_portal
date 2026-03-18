@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
+import { writeAudit, getIp } from "@/lib/audit";
 
 /** 복지부 또는 PM/ADMIN: 취소 요청(CANCEL_REQUESTED) 건에 대해 취소 승인 → CANCELLED, 취소 반려 → APPROVED */
 export async function POST(req: Request) {
@@ -45,6 +46,14 @@ export async function POST(req: Request) {
         cancelReason: row.cancelReason ? `${row.cancelReason} (취소 승인됨)` : "취소 승인",
       },
     });
+    await writeAudit({
+      entityType: "JejuAccommodation",
+      entityId: requestId,
+      action: "CANCELLED",
+      actorId: user.employeeId,
+      after: { status: "CANCELLED" },
+      ip: getIp(req) ?? undefined,
+    });
   } else {
     await prisma.jejuAccommodation.update({
       where: { id: requestId },
@@ -53,6 +62,15 @@ export async function POST(req: Request) {
         cancelRequestedAt: null,
         cancelReason: null,
       },
+    });
+    await writeAudit({
+      entityType: "JejuAccommodation",
+      entityId: requestId,
+      action: "RESTORED",
+      actorId: user.employeeId,
+      after: { status: "APPROVED" },
+      note: "취소 요청 반려",
+      ip: getIp(req) ?? undefined,
     });
   }
 

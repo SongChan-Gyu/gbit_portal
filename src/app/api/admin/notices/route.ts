@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { writeAudit, getIp } from "@/lib/audit";
 
 /** GET: 공지 목록 (최신순) */
 export async function GET() {
@@ -33,6 +34,14 @@ export async function POST(req: Request) {
       authorId: u.employeeId,
     },
     include: { author: { select: { name: true } } },
+  });
+  await writeAudit({
+    entityType: "Notice",
+    entityId: notice.id,
+    action: "CREATED",
+    actorId: u?.employeeId ?? null,
+    after: { title: notice.title },
+    ip: getIp(req) ?? undefined,
   });
   return NextResponse.json(notice);
 }

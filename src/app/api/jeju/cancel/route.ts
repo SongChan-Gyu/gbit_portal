@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
+import { writeAudit, getIp } from "@/lib/audit";
 
 /** 본인 신청 취소 또는 복지부가 타인 신청 취소 */
 export async function POST(req: Request) {
@@ -51,6 +52,15 @@ export async function POST(req: Request) {
           cancelReason: reason?.trim() || null,
         },
       });
+      await writeAudit({
+        entityType: "JejuAccommodation",
+        entityId: requestId,
+        action: "CANCELLED",
+        actorId: user.employeeId,
+        after: { status: "CANCEL_REQUESTED" },
+        note: "취소 요청",
+        ip: getIp(req) ?? undefined,
+      });
       return NextResponse.json({ ok: true });
     }
     if (welfare) {
@@ -61,6 +71,14 @@ export async function POST(req: Request) {
           cancelledAt: now,
           cancelReason: reason?.trim() || (isOwn ? null : "복지부 취소 처리"),
         },
+      });
+      await writeAudit({
+        entityType: "JejuAccommodation",
+        entityId: requestId,
+        action: "CANCELLED",
+        actorId: user.employeeId,
+        after: { status: "CANCELLED" },
+        ip: getIp(req) ?? undefined,
       });
       return NextResponse.json({ ok: true });
     }
@@ -76,6 +94,14 @@ export async function POST(req: Request) {
         cancelReason: reason?.trim() || (welfare && !isOwn ? "복지부 취소 처리" : null),
       },
     });
+  });
+  await writeAudit({
+    entityType: "JejuAccommodation",
+    entityId: requestId,
+    action: "CANCELLED",
+    actorId: user.employeeId,
+    after: { status: "CANCELLED" },
+    ip: getIp(req) ?? undefined,
   });
 
   return NextResponse.json({ ok: true });

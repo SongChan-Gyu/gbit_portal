@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getNextEmpNo } from "@/lib/empNo";
+import { writeAudit, getIp } from "@/lib/audit";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -43,6 +44,14 @@ export async function POST(req: Request) {
       emailEnabled: !!emailEnabled,
       alimtalkEnabled: !!alimtalkEnabled,
     },
+  });
+  await writeAudit({
+    entityType: "Employee",
+    entityId: emp.id,
+    action: "CREATED",
+    actorId: user?.employeeId ?? null,
+    after: { empNo: emp.empNo, name: emp.name },
+    ip: getIp(req) ?? undefined,
   });
   return NextResponse.json({ ok:true, id:emp.id });
 }

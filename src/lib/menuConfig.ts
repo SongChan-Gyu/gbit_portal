@@ -68,7 +68,6 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     icon: "🔧",
     section: "dev",
     children: [
-      { key: "test_impersonate", label: "결재 테스트", href: "/test/impersonate" },
       { key: "test_user_switch", label: "사용자 전환", href: "/test/user-switch" },
     ],
   },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { writeAudit, getIp } from "@/lib/audit";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -33,6 +34,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     const existing = await prisma.form.findUnique({ where: { slug: slugNorm } });
     if (existing) return NextResponse.json({ error: "이미 사용 중인 URL 경로입니다." }, { status: 400 });
   }
+  const before = form ? { title: form.title, slug: form.slug } : undefined;
   await prisma.$transaction(async (tx) => {
     await tx.formField.deleteMany({ where: { formId: id } });
     await tx.form.update({
@@ -56,6 +58,15 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       },
     });
   });
+  await writeAudit({
+    entityType: "Form",
+    entityId: id,
+    action: "UPDATED",
+    actorId: u?.employeeId ?? null,
+    before,
+    after: { title: title ?? form?.title, slug: slugNorm ?? form?.slug },
+    ip: getIp(req) ?? undefined,
+  });
   const updated = await prisma.form.findUnique({
     where: { id },
     include: { fields: { orderBy: { sortOrder: "asc" } } },
@@ -63,12 +74,23 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   return NextResponse.json(updated);
 }
 
-export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const u = session?.user as any;
   if (!["PM", "ADMIN"].includes(u?.role ?? ""))
     return NextResponse.json({ error: "권한 없음" }, { status: 403 });
   const { id } = await ctx.params;
+  const form = await prisma.form.findUnique({ where: { id }, select: { title: true, slug: true } });
   await prisma.form.delete({ where: { id } }).catch(() => null);
+  if (form) {
+    await writeAudit({
+      entityType: "Form",
+      entityId: id,
+      action: "DELETED",
+      actorId: u?.employeeId ?? null,
+      before: form,
+      ip: getIp(req) ?? undefined,
+    });
+  }
   return NextResponse.json({ ok: true });
 }

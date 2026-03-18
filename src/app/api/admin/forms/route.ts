@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { writeAudit, getIp } from "@/lib/audit";
 
 /** GET: 폼 목록 */
 export async function GET() {
@@ -56,6 +57,14 @@ export async function POST(req: Request) {
       },
     },
     include: { fields: { orderBy: { sortOrder: "asc" } } },
+  });
+  await writeAudit({
+    entityType: "Form",
+    entityId: form.id,
+    action: "CREATED",
+    actorId: u?.employeeId ?? null,
+    after: { title: form.title, slug: form.slug },
+    ip: getIp(req) ?? undefined,
   });
   return NextResponse.json(form);
 }

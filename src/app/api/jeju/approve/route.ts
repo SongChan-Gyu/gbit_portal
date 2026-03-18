@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
+import { writeAudit, getIp } from "@/lib/audit";
 
 /** 복지부 또는 PM/ADMIN: 승인 또는 반려 */
 export async function POST(req: Request) {
@@ -55,6 +56,15 @@ export async function POST(req: Request) {
         data: { status: "REJECTED", approvedById: user.employeeId, approvedAt: now, rejectComment: comment?.trim() || null },
       });
     }
+  });
+
+  await writeAudit({
+    entityType: "JejuAccommodation",
+    entityId: requestId,
+    action: action === "APPROVE" ? "APPROVED" : "REJECTED",
+    actorId: user.employeeId,
+    after: { status: action === "APPROVE" ? "APPROVED" : "REJECTED" },
+    ip: getIp(req) ?? undefined,
   });
 
   return NextResponse.json({ ok: true });

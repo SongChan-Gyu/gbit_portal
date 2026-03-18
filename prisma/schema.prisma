@@ -380,6 +380,21 @@ model AuditLog {
 }
 
 // ─────────────────────────────────────────
+// 요청(접속) 로그 (IP, 메서드, URL - 운영/보안 확인용)
+// ─────────────────────────────────────────
+model RequestLog {
+  id        String   @id @default(cuid())
+  method   String   // GET, POST, ...
+  path     String   @db.VarChar(512)
+  ip       String?  @db.VarChar(64)
+  userId   String?  // 로그인 시 세션 사용자 ID (선택)
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([path])
+}
+
+// ─────────────────────────────────────────
 // 알림
 // ─────────────────────────────────────────
 model Notification {

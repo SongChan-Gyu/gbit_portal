@@ -42,7 +42,6 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   admin_leave_mgmt: CalendarClock,
   admin_system: Settings2,
   dev: Wrench,
-  test_impersonate: Wrench,
   test_user_switch: UserRoundCog,
 };
 

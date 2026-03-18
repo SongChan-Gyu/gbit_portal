@@ -17,7 +17,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/teams", label: "팀 관리", roles: ["ADMIN"] },
   { href: "/admin/leave-grant", label: "연차 부여/이월", roles: ["ADMIN"] },
   { href: "/admin/leave-management", label: "휴가 관리", roles: ["ADMIN"] },
-  { href: "/test/impersonate", label: "결재 테스트", roles: ["ADMIN"] },
 ];
 
 export default function MobileNav({
