@@ -12,8 +12,9 @@
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed": "npx tsx prisma/seed.ts",
+    "db:seed": "npx tsx prisma/seed-base.ts",
     "db:seed:base": "npx tsx prisma/seed-base.ts",
+    "db:seed:dev": "npx tsx prisma/seed.ts",
     "verify:leave": "npx tsx scripts/verify-leave-policy.ts",
     "verify:data": "npx tsx scripts/verify-data-integrity.ts",
     "db:studio": "prisma studio",
@@ -37,7 +38,7 @@
     "xlsx": "^0.18.5"
   },
   "prisma": {
-    "seed": "npx tsx prisma/seed.ts"
+    "seed": "npx tsx prisma/seed-base.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

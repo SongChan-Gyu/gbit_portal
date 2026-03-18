@@ -53,8 +53,9 @@
 | `npm run lint` | ESLint |
 | `npm run db:generate` | Prisma 클라이언트 생성 |
 | `npm run db:push` | 스키마를 DB에 반영 (마이그레이션 없이) |
-| `npm run db:seed` | 전체 시드 (휴가유형·휴일·샘플 사원 등) |
+| `npm run db:seed` | 운영 기초데이터 시드 (휴가유형 + 휴일 API 동기화) |
 | `npm run db:seed:base` | 기초데이터만 (휴가유형 + 휴일 API 동기화) |
+| `npm run db:seed:dev` | 개발/테스트용 샘플 데이터까지 포함한 전체 시드 |
 | `npm run db:migrate` | prisma migrate dev (스키마 변경 시) |
 | `npm run db:studio` | Prisma Studio |
 | `npm run verify:leave` | 휴가 규정·결재·할당 정합성 검증 |
@@ -122,3 +123,19 @@ npm run lint           # 린트
 - **방법 3:** 서버/VM에서 systemd 또는 launchd로 `node cron-runner.mjs`를 백그라운드 서비스로 등록. (README 상단 cron-runner.mjs 주석 참고.)
 
 **데이터 백업:** 클라우드 DB(PlanetScale, Railway MySQL 등)를 쓰더라도 **별도 백업**을 권장합니다. 제공업체의 자동 스냅샷만 믿지 말고, 주기적으로 `mysqldump` 또는 DB 서비스의 export 기능으로 덤프를 받아 두거나, 별도 백업 스크립트를 돌리는 것이 좋습니다. 마이그레이션 히스토리(`prisma/migrations`)는 Git에 있으므로, 덤프만 있으면 특정 시점으로 복구 가능합니다.
+
+---
+
+## 9. 운영 오픈 절차(권장)
+
+오픈(예: 2026-05-01) 직전에 아래 순서로 진행하는 것을 권장합니다.
+
+1. **운영 기초데이터 시드 실행** (휴가유형/공휴일만 갱신)
+   - `npm run db:seed` 또는 `npm run db:seed:base`
+2. **테스트 데이터 정리** (관리자/PM 계정만 남기기)
+   - DRY RUN(프리뷰): `KEEP_USERNAMES="admin,pm" npx tsx scripts/production-wipe.ts`
+   - 실제 삭제: `CONFIRM_WIPE=WIPE KEEP_USERNAMES="admin,pm" npx tsx scripts/production-wipe.ts`
+   - **주의**: 이 스크립트는 **Dockerfile/배포 Start Command에 넣지 않습니다.** 오픈 직전에 **딱 1회 수동 실행**(Railway의 Run Command/railway run 등)만 하세요.
+   - 동작: 마스터(휴가유형/공휴일/팀/시스템설정)는 유지하고, 트랜잭션 데이터 및 테스트 사원/계정을 삭제합니다.
+3. 이사님이 **사원 엑셀 일괄 등록** → **2026 귀속년도 초기화** → **초대 이메일 일괄 발송**
+
