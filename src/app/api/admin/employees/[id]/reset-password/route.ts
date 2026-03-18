@@ -38,9 +38,21 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     data: { passwordHash: hash },
   });
 
-  if (sendEmail && employee.email?.trim()) {
+  if (sendEmail) {
     const override = process.env.TEST_EMAIL_OVERRIDE?.trim();
-    const to = override || employee.email.trim();
+    if (!override && employee.emailEnabled === false) {
+      return NextResponse.json({
+        ok: true,
+        message: "비밀번호가 초기화되었습니다. (이 사원은 이메일 전송(수신) 미사용 상태라 메일을 발송하지 않았습니다. 임시 비밀번호를 직접 전달해 주세요.)",
+      });
+    }
+    const to = override || employee.email?.trim() || "";
+    if (!to) {
+      return NextResponse.json({
+        ok: true,
+        message: "비밀번호가 초기화되었습니다. (이메일이 등록되어 있지 않아 메일을 발송하지 않았습니다. 임시 비밀번호를 직접 전달해 주세요.)",
+      });
+    }
     try {
       await sendMail({
         to,

@@ -35,6 +35,21 @@ function getMonthRange(year: number, month: number) {
   return { from: toYMD(from), to: toYMD(to) };
 }
 
+const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
+function dowLabel(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+  return DOW_KO[dt.getDay()] ?? "";
+}
+function nightsBetween(startYmd: string, endYmd: string): number {
+  const [sy, sm, sd] = startYmd.split("-").map((x) => parseInt(x, 10));
+  const [ey, em, ed] = endYmd.split("-").map((x) => parseInt(x, 10));
+  const s = new Date(sy, (sm ?? 1) - 1, sd ?? 1).getTime();
+  const e = new Date(ey, (em ?? 1) - 1, ed ?? 1).getTime();
+  const diff = Math.round((e - s) / (24 * 60 * 60 * 1000));
+  return Math.max(0, diff);
+}
+
 /** 입실일 S 기준 선택 가능한 퇴실일 (1박~maxNights박, [S,E) 구간에 예약/블록 없음). 퇴실일은 시작일 한도와 무관하게 S+1~S+maxNights까지 허용 */
 function getValidCheckOutDates(
   checkInYmd: string,
@@ -79,7 +94,8 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
   const [checkOutDate, setCheckOutDate] = useState("");
   const [applyGuestName, setApplyGuestName] = useState("");
   const [applyGuestPhone, setApplyGuestPhone] = useState("");
-  const [applyGuestCount, setApplyGuestCount] = useState(1);
+  // 모바일에서 number input을 편집할 때(지우고 다시 입력) 값이 강제로 되돌아가 편집이 막히는 케이스가 있어 문자열로 유지
+  const [applyGuestCount, setApplyGuestCount] = useState("1");
   const [applyDepositorName, setApplyDepositorName] = useState("");
   const [applyReason, setApplyReason] = useState("");
   const [applySubmitting, setApplySubmitting] = useState(false);
@@ -201,8 +217,8 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
       setApplyError("입금자명을 입력해 주세요. (예약금 이체 시 사용)");
       return;
     }
-    const count = Number(applyGuestCount);
-    if (!Number.isInteger(count) || count < 1) {
+    const count = parseInt(String(applyGuestCount).trim(), 10);
+    if (!Number.isFinite(count) || count < 1) {
       setApplyError("입실 인원을 1명 이상 입력해 주세요.");
       return;
     }
@@ -230,7 +246,7 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
     setCheckOutDate("");
     setApplyGuestName("");
     setApplyGuestPhone("");
-    setApplyGuestCount(1);
+    setApplyGuestCount("1");
     setApplyDepositorName("");
     setApplyReason("");
     loadOccupied(year, month);
@@ -325,7 +341,10 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
             <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
               <p className="text-sm font-medium text-gray-700">이용일 (선택 완료)</p>
               <p className="text-base font-bold text-gray-900">
-                {checkInDate} 입실 15:00 → {checkOutDate} 퇴실 11:00
+                {checkInDate}({dowLabel(checkInDate)}) 입실 15:00 → {checkOutDate}({dowLabel(checkOutDate)}) 퇴실 11:00
+              </p>
+              <p className="text-sm text-gray-600 mt-1">
+                총 <span className="font-semibold">{nightsBetween(checkInDate, checkOutDate)}</span>박
               </p>
             </div>
             <div>
@@ -352,15 +371,47 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
             </div>
             <div>
               <label className="label">입실 인원 *</label>
-              <input
-                type="number"
-                min={1}
-                max={99}
-                className="input w-full"
-                value={applyGuestCount}
-                onChange={(e) => setApplyGuestCount(parseInt(e.target.value, 10) || 1)}
-                required
-              />
+              <div className="flex items-stretch gap-2">
+                <button
+                  type="button"
+                  className="px-4 rounded-lg border border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 active:bg-gray-100"
+                  onClick={() => {
+                    const n = parseInt(String(applyGuestCount).trim(), 10);
+                    const cur = Number.isFinite(n) ? n : 1;
+                    setApplyGuestCount(String(Math.max(1, cur - 1)));
+                  }}
+                  aria-label="인원 줄이기"
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  min={1}
+                  max={99}
+                  className="input w-full"
+                  value={applyGuestCount}
+                  inputMode="numeric"
+                  onChange={(e) => setApplyGuestCount(e.target.value)}
+                  onBlur={() => {
+                    const n = parseInt(String(applyGuestCount).trim(), 10);
+                    if (!Number.isFinite(n) || n < 1) setApplyGuestCount("1");
+                    else setApplyGuestCount(String(Math.min(99, n)));
+                  }}
+                  required
+                />
+                <button
+                  type="button"
+                  className="px-4 rounded-lg border border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 active:bg-gray-100"
+                  onClick={() => {
+                    const n = parseInt(String(applyGuestCount).trim(), 10);
+                    const cur = Number.isFinite(n) ? n : 1;
+                    setApplyGuestCount(String(Math.min(99, cur + 1)));
+                  }}
+                  aria-label="인원 늘리기"
+                >
+                  +
+                </button>
+              </div>
             </div>
             <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 space-y-2">
               <p className="text-sm font-semibold text-amber-800">예약금 이체</p>

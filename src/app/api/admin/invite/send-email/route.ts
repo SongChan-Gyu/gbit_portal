@@ -20,6 +20,9 @@ export async function POST(req: Request) {
 
   // 테스트용: .env.local에 TEST_EMAIL_OVERRIDE=zx2253@naver.com 등 설정 시 해당 주소로 발송
   const override = process.env.TEST_EMAIL_OVERRIDE?.trim();
+  if (!override && emp.emailEnabled === false) {
+    return NextResponse.json({ error: "해당 사원은 이메일 전송(수신) 미사용 상태입니다. 내 정보에서 이메일 전송을 사용으로 바꾼 뒤 다시 시도해 주세요." }, { status: 400 });
+  }
   const email = override || emp.email?.trim();
   if (!email)
     return NextResponse.json({ error: "해당 사원에 이메일이 등록되어 있지 않습니다." }, { status: 400 });

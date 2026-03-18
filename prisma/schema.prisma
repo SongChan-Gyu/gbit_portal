@@ -37,6 +37,8 @@ model Employee {
   birthDate    DateTime?     // 생년월일 (생일반차쿠폰 등)
   phone        String   @default("")
   email        String?
+  emailEnabled Boolean  @default(false) // 이메일 발송(수신) 사용 여부 (사원별). 기본 미사용.
+  alimtalkEnabled Boolean @default(false) // 카카오 알림톡 사용 여부 (사원별). 기본 미사용.
   status       String       @default("PENDING") // PENDING/INVITED/ACTIVE/INACTIVE
   role         String       @default("STAFF")   // STAFF/TEAM_LEAD/PM/ADMIN
 

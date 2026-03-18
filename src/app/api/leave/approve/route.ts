@@ -62,7 +62,9 @@ export async function POST(req: Request) {
     const emp = request.employee;
     await writeAudit({ entityType:"LeaveRequest", entityId:request.id, action:"REJECTED",
       actorId, note:`${emp.name} 휴가 반려 (${comment})` });
-    if (emp.phone) await sendLeaveResultAlimtalk(prisma, emp.id, emp.phone, emp.name, "반려", comment ?? "");
+    if (emp.phone && emp.alimtalkEnabled !== false) {
+      await sendLeaveResultAlimtalk(prisma, emp.id, emp.phone, emp.name, "반려", comment ?? "");
+    }
     return NextResponse.json({ ok:true });
   }
 
@@ -132,7 +134,9 @@ export async function POST(req: Request) {
   if (isLastStep) {
     await writeAudit({ entityType:"LeaveRequest", entityId:request.id, action:"APPROVED",
       actorId, note:`${emp.name} 휴가 최종 승인 (총 ${request.totalDays}일)` });
-    if (emp.phone) await sendLeaveResultAlimtalk(prisma, emp.id, emp.phone, emp.name, "승인", "");
+    if (emp.phone && emp.alimtalkEnabled !== false) {
+      await sendLeaveResultAlimtalk(prisma, emp.id, emp.phone, emp.name, "승인", "");
+    }
   }
 
   return NextResponse.json({ ok:true });

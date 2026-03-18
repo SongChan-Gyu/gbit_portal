@@ -105,4 +105,7 @@ npm run lint           # 린트
 - `NEXTAUTH_URL` — 배포 시 실제 도메인
 - `NEXTAUTH_SECRET` — 운영 시 강한 랜덤 시크릿
 - `NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY` — 제주 숙소 지도 (선택, Kakao Developers에서 JavaScript 키 + Web 도메인 등록)
-- 이메일/알림톡 등은 .env.local에서 설정
+
+**운영(클라우드) 이메일:** Railway 등 Variables에 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` 입력. 회사 메일 서버(smtp.gmail.com / smtp.office365.com / smtp.naver.com 등)와 발신용 계정·비밀번호만 맞추면 됨. 자세한 예시는 `.env.example` 주석 참고.
+
+**카카오 알림톡:** 카카오 비즈니스 채널 개설 후 알리고(Aligo)·비즈고 등 중계 서비스에서 연동·템플릿 검수 후 API 키 발급. `.env.example` 하단 주석에 설정 흐름 정리됨. 미설정 시 알림톡은 스킵되고 로그만 남음.

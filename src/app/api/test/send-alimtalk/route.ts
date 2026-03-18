@@ -17,9 +17,9 @@ export async function POST(req: Request) {
   if (!["PM", "ADMIN"].includes(u?.role ?? ""))
     return NextResponse.json({ error: "관리자 전용" }, { status: 403 });
 
-  const { phone, template } = await req.json();
-  if (!phone || typeof phone !== "string")
-    return NextResponse.json({ error: "phone 필요" }, { status: 400 });
+  const { phone, template } = await req.json().catch(() => ({}));
+  // 테스트는 TEST_PHONE_OVERRIDE가 있으면 그 번호로 강제됨. (phone은 선택)
+  const resolvedPhone = typeof phone === "string" && phone.trim() ? phone.trim() : "01000000000";
 
   const templateType = template ?? "LEAVE_REQUEST";
   const testId = "test-alimtalk";
@@ -29,7 +29,7 @@ export async function POST(req: Request) {
       await sendInviteAlimtalk(
         prisma,
         testId,
-        phone,
+        resolvedPhone,
         "테스트이름",
         "https://example.com/register/test-token"
       );
@@ -37,7 +37,7 @@ export async function POST(req: Request) {
       await sendLeaveRequestAlimtalk(
         prisma,
         testId,
-        phone,
+        resolvedPhone,
         "결재자(테스트)",
         "신청자(테스트)",
         "연차",
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
       await sendLeaveResultAlimtalk(
         prisma,
         testId,
-        phone,
+        resolvedPhone,
         "테스트이름",
         "승인",
         "테스트 발송입니다."

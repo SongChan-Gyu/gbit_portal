@@ -5,6 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Megaphone,
+  User,
   CalendarPlus,
   CalendarCheck,
   CheckSquare,
@@ -25,6 +26,7 @@ export const DEFAULT_MENU_ICON = LayoutDashboard;
 
 export const ICON_MAP: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard,
+  me: User,
   notices: Megaphone,
   leave: CalendarPlus,
   leave_apply: CalendarPlus,

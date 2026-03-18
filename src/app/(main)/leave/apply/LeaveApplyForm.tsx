@@ -114,6 +114,14 @@ const LEAVE_GROUPS: GroupDef[] = [
 const CODE_TO_GROUP: Record<string, string> = {};
 LEAVE_GROUPS.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP[s.code] = g.key; }));
 
+const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
+function ymdWithDay(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
+  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
+  const w = DOW_KO[dt.getDay()] ?? "";
+  return `${ymd}(${w})`;
+}
+
 // ── 중복 체크 ─────────────────────────────────────────────────
 function detectOverlap(items: LeaveItem[], leaveTypes: LT[]): string | null {
   const byDate: Record<string, { am: boolean; pm: boolean; full: boolean }> = {};
@@ -713,8 +721,8 @@ export default function LeaveApplyForm({
                       </span>
                       <span className="text-xs text-gray-400 ml-2">
                         {it.startDate === it.endDate
-                          ? it.startDate
-                          : `${it.startDate} ~ ${it.endDate}`}
+                          ? ymdWithDay(it.startDate)
+                          : `${ymdWithDay(it.startDate)} ~ ${ymdWithDay(it.endDate)}`}
                       </span>
                     </div>
                   </div>

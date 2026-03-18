@@ -10,7 +10,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error:"권한 없음" }, { status:403 });
 
   const body = await req.json();
-  const { empNo: empNoRaw, name, teamId, position, dutyDept, role, employeeType, hireDate, birthDate, phone, email } = body;
+  const {
+    empNo: empNoRaw,
+    name,
+    teamId,
+    position,
+    dutyDept,
+    role,
+    employeeType,
+    hireDate,
+    birthDate,
+    phone,
+    email,
+    emailEnabled,
+    alimtalkEnabled,
+  } = body;
   if (!name||!position||!hireDate)
     return NextResponse.json({ error:"필수 항목 누락 (이름, 직급, 입사일)" }, { status:400 });
 
@@ -22,7 +36,12 @@ export async function POST(req: Request) {
     data:{
       empNo, name, teamId:teamId||null, position, dutyDept:dutyDept||null, role:role||"STAFF",
       employeeType:employeeType||"FULL",
-      hireDate:new Date(hireDate), birthDate:birthDate ? new Date(birthDate) : null, phone:phone||"", email:email||null,
+      hireDate:new Date(hireDate),
+      birthDate:birthDate ? new Date(birthDate) : null,
+      phone:phone||"",
+      email:email||null,
+      emailEnabled: !!emailEnabled,
+      alimtalkEnabled: !!alimtalkEnabled,
     },
   });
   return NextResponse.json({ ok:true, id:emp.id });

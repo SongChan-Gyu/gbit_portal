@@ -7,6 +7,8 @@ interface Employee {
   id:string; empNo:string; name:string; teamId:string|null; position:string;
   dutyDept:string|null; role:string; employeeType:string; hireDate:string; birthDate:string|null;
   phone:string; email:string|null; status:string;
+  emailEnabled: boolean;
+  alimtalkEnabled: boolean;
 }
 
 const ROLES = [["STAFF","팀원"],["TEAM_LEAD","팀장"],["PM","PM"],["ADMIN","관리자"]];
@@ -24,8 +26,20 @@ const DUTY_DEPT_OPTIONS = [
 export default function EmployeeForm({ teams, employee }: { teams:Team[]; employee?:Employee }) {
   const router = useRouter();
   const [form, setForm] = useState<Partial<Employee>>(employee
-    ? { ...employee, hireDate: String(employee.hireDate).slice(0,10), dutyDept: employee.dutyDept ?? "", birthDate: employee.birthDate ? String(employee.birthDate).slice(0,10) : "" }
-    : { role:"STAFF", employeeType:"FULL", status:"PENDING", dutyDept:"" }
+    ? {
+      ...employee,
+      hireDate: String(employee.hireDate).slice(0,10),
+      dutyDept: employee.dutyDept ?? "",
+      birthDate: employee.birthDate ? String(employee.birthDate).slice(0,10) : "",
+    }
+    : {
+      role:"STAFF",
+      employeeType:"FULL",
+      status:"PENDING",
+      dutyDept:"",
+      emailEnabled: false,
+      alimtalkEnabled: false,
+    }
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -34,6 +48,9 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
 
   function set(k: keyof Employee, v: string) {
     setForm((p) => ({ ...p, [k]:v }));
+  }
+  function setBool(k: "emailEnabled" | "alimtalkEnabled", v: boolean) {
+    setForm((p) => ({ ...p, [k]: v }));
   }
 
   async function submit(e: React.FormEvent) {
@@ -132,6 +149,29 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
           <label className="label">이메일</label>
           <input type="email" className="input" value={form.email??""} onChange={(e)=>set("email",e.target.value)} />
         </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
+        <p className="text-sm font-semibold text-gray-700">알림 수신 설정</p>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!form.emailEnabled}
+            onChange={(e) => setBool("emailEnabled", e.target.checked)}
+          />
+          <span className="text-sm text-gray-700">이메일 전송(수신) 사용</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!form.alimtalkEnabled}
+            onChange={(e) => setBool("alimtalkEnabled", e.target.checked)}
+          />
+          <span className="text-sm text-gray-700">카카오 알림톡 사용</span>
+        </label>
+        <p className="text-xs text-gray-500">
+          기본값은 모두 미사용입니다. 운영 정책에 따라 사원 본인이 내 정보에서 켤 수 있습니다.
+        </p>
       </div>
 
       {isEdit && (

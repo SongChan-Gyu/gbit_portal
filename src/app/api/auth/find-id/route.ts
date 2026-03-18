@@ -30,6 +30,11 @@ export async function POST(req: Request) {
   }
 
   const override = process.env.TEST_EMAIL_OVERRIDE?.trim();
+  if (!override && employee.emailEnabled === false) {
+    return NextResponse.json({
+      error: "이메일 전송(수신)이 미사용 상태입니다. 로그인 후 내 정보에서 이메일 전송을 사용으로 바꾼 뒤 다시 시도해 주세요.",
+    }, { status: 400 });
+  }
   const to = override || email;
 
   try {

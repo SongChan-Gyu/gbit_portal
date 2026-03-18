@@ -33,7 +33,9 @@ export async function POST(req: Request) {
   // 카카오톡 알림톡은 선택적 (설정 없으면 스킵)
   try {
     const { sendInviteAlimtalk } = await import("@/lib/kakao");
-    await sendInviteAlimtalk(prisma, employeeId, emp.phone, emp.name, url);
+    if (emp.phone && emp.alimtalkEnabled !== false) {
+      await sendInviteAlimtalk(prisma, employeeId, emp.phone, emp.name, url);
+    }
   } catch {
     // 알림톡 미설정 시 무시 — URL은 화면에 표시됨
   }

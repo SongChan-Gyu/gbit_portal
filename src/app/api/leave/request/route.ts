@@ -461,8 +461,17 @@ export async function POST(req: Request) {
     return results;
   });
 
+  const warnings: string[] = [];
   for (const r of leaveReqs) {
-    if (!r.isAutoApprove && r.approver?.phone) {
+    if (!r.isAutoApprove) {
+      if (!r.approver?.phone) {
+        warnings.push("결재자 연락처가 없어 카카오 알림톡을 발송하지 못했습니다.");
+        continue;
+      }
+      if (r.approver.alimtalkEnabled === false) {
+        warnings.push("결재자가 카카오 알림톡 미사용 상태라 알림톡을 발송하지 않았습니다.");
+        continue;
+      }
       try {
         const first = r.groupItems[0];
         const last = r.groupItems[r.groupItems.length - 1];
@@ -473,11 +482,12 @@ export async function POST(req: Request) {
         );
       } catch (alimErr) {
         console.warn("[leave/request] 알림톡 발송 실패 (휴가 신청은 완료됨)", alimErr);
+        warnings.push("카카오 알림톡 발송에 실패했습니다. (휴가 신청은 정상 처리됨)");
       }
     }
   }
 
-  return NextResponse.json({ ok: true, id: createdIds[0], ids: createdIds });
+  return NextResponse.json({ ok: true, id: createdIds[0], ids: createdIds, warnings: warnings.length ? warnings : undefined });
   } catch (e) {
     const err = e instanceof Error ? e : new Error(String(e));
     console.error("[leave/request POST]", err.message, err);
