@@ -32,24 +32,31 @@ export async function PATCH(req: Request) {
 
   const body = await req.json().catch(() => ({}));
   const phone = body.phone != null ? String(body.phone).trim() : undefined;
-  const email = body.email != null ? String(body.email).trim().toLowerCase() : undefined;
-  const emailEnabled = body.emailEnabled != null ? !!body.emailEnabled : undefined;
+  const emailRaw = body.email;
+  const email =
+    emailRaw !== undefined && emailRaw !== null
+      ? String(emailRaw).trim().toLowerCase() || null
+      : undefined;
   const alimtalkEnabled = body.alimtalkEnabled != null ? !!body.alimtalkEnabled : undefined;
 
-  // 이메일을 켜려면 이메일 주소가 있어야 함
-  if (emailEnabled === true) {
-    const finalEmail = email ?? (await prisma.employee.findUnique({ where: { id: u.employeeId }, select: { email: true } }))?.email ?? "";
-    if (!String(finalEmail).trim()) {
-      return NextResponse.json({ error: "이메일 전송을 사용하려면 이메일을 먼저 입력해 주세요." }, { status: 400 });
-    }
+  const existing = await prisma.employee.findUnique({
+    where: { id: u.employeeId },
+    select: { email: true },
+  });
+  if (!existing) {
+    return NextResponse.json({ error: "사원 정보를 찾을 수 없습니다." }, { status: 404 });
   }
+
+  const nextEmail = email !== undefined ? email : existing.email;
+  // 본인 변경: 이메일 주소가 있으면 시스템·찾기·초대 등 필수 발송을 위해 수신 허용으로 고정(미수신 끄기 불가)
+  const emailEnabled = !!nextEmail;
 
   await prisma.employee.update({
     where: { id: u.employeeId },
     data: {
       ...(phone !== undefined ? { phone } : {}),
-      ...(email !== undefined ? { email: email || null } : {}),
-      ...(emailEnabled !== undefined ? { emailEnabled } : {}),
+      ...(email !== undefined ? { email } : {}),
+      emailEnabled,
       ...(alimtalkEnabled !== undefined ? { alimtalkEnabled } : {}),
     },
   });
