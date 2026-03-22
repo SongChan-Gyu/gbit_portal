@@ -27,6 +27,7 @@ export default function Error({
         <button
           onClick={reset}
           className="inline-flex items-center justify-center px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white text-sm font-medium rounded-lg transition-colors"
+          aria-label="다시 시도"
         >
           다시 시도
         </button>

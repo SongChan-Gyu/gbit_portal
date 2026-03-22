@@ -186,7 +186,7 @@ export default function AttendanceClient({
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-            <table className="border-collapse" style={{ fontSize:"11px", minWidth:"max-content" }}>
+            <table className="border-collapse attendance-table-mobile" style={{ fontSize:"11px", minWidth:"max-content" }}>
               <thead>
                 {/* 팀 헤더 행 */}
                 <tr className="bg-[#1e3a5f] text-white">
@@ -315,7 +315,7 @@ export default function AttendanceClient({
           </div>
 
           <div className="overflow-x-auto rounded-lg border border-gray-200 shadow-sm">
-            <table className="border-collapse text-xs" style={{ minWidth:"max-content" }}>
+            <table className="border-collapse text-xs attendance-table-mobile" style={{ minWidth:"max-content" }}>
               <thead>
                 <tr className="bg-[#1e3a5f] text-white">
                   <th className="sticky left-0 z-20 bg-[#1e3a5f] border border-[#2a4a70] px-2 py-2 text-left whitespace-nowrap min-w-[60px]">팀</th>

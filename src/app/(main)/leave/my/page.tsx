@@ -148,7 +148,32 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
         <div className="panel-header">
           <span className="panel-title">유형별 잔여 상세</span>
         </div>
-        <div className="table-scroll">
+        {/* 모바일: 카드 */}
+        <div className="md:hidden divide-y divide-gray-100">
+          {fyAllocs.length === 0 && (
+            <div className="px-4 py-6 text-center text-gray-400 text-sm">해당 연도 할당 없음</div>
+          )}
+          {fyAllocs.map((a) => {
+            const rem = a.totalDays - a.usedDays;
+            const isExp = new Date(a.validUntil) < new Date();
+            return (
+              <div key={a.id} className={`px-4 py-3 ${isExp ? "opacity-60" : ""}`}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-medium text-gray-800">{a.label}</p>
+                  {isExp && <span className="badge badge-danger">만료</span>}
+                </div>
+                {a.note && <p className="text-xs text-gray-400 mt-0.5">{a.note}</p>}
+                <div className="flex justify-between items-baseline mt-1.5 text-sm">
+                  <span className="text-gray-500">부여 {a.totalDays} · 사용 <span className="text-red-600">{a.usedDays}</span></span>
+                  <span className="font-bold text-blue-700">잔여 {rem.toFixed(1)}</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">{formatYMD(a.validFrom)} ~ {formatYMD(a.validUntil)}</p>
+              </div>
+            );
+          })}
+        </div>
+        {/* PC: 테이블 */}
+        <div className="hidden md:block table-scroll">
         <table className="data-table allocation-table">
           <thead>
             <tr><th>구분</th><th>부여</th><th>사용</th><th>잔여</th><th>유효기간</th></tr>

@@ -1,15 +1,26 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { resetPasswordSchema } from "@/lib/validations/auth";
+import { apiError, rateLimited } from "@/lib/apiError";
+import { checkRateLimit, getRateLimitKey } from "@/lib/rateLimit";
 
 export async function POST(req: Request) {
+  const key = getRateLimitKey(req, "reset-password");
+  const { ok, retryAfter } = await checkRateLimit(key, true);
+  if (!ok) {
+    return rateLimited(
+      `요청이 너무 많습니다. ${retryAfter ? `${Math.ceil(retryAfter / 60)}분 후` : "잠시 후"} 다시 시도해 주세요.`
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
-  const token = String(body.token ?? "").trim();
-  const newPassword = String(body.newPassword ?? "").trim();
-  if (!token || !newPassword)
-    return NextResponse.json({ error: "토큰과 새 비밀번호를 입력해 주세요." }, { status: 400 });
-  if (newPassword.length < 8)
-    return NextResponse.json({ error: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
+  const parsed = resetPasswordSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? "토큰과 새 비밀번호를 입력해 주세요.";
+    return apiError(msg, { status: 400, code: "VALIDATION_ERROR" });
+  }
+  const { token, newPassword } = parsed.data;
 
   const reset = await prisma.passwordResetToken.findUnique({
     where: { token },

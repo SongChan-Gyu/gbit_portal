@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
+import useSWR from "swr";
 import { Search, RefreshCw, ChevronLeft, ChevronRight, Clock, Eye, X } from "lucide-react";
 
 interface AuditLog {
@@ -38,37 +39,32 @@ const ENTITY_LABELS: Record<string, string> = {
   System:          "시스템",
 };
 
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
 export default function AuditLogClient() {
-  const [logs, setLogs]         = useState<AuditLog[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [total, setTotal]       = useState(0);
-  const [page, setPage]         = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [q, setQ]               = useState("");
+  const [page, setPage] = useState(1);
+  const [q, setQ] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [detailLog, setDetailLog] = useState<AuditLog | null>(null);
+  const params = new URLSearchParams({ page: String(page) });
+  if (q) params.set("q", q);
+  if (typeFilter) params.set("type", typeFilter);
+  if (actionFilter) params.set("action", actionFilter);
+  const { data, isLoading: loading, mutate } = useSWR(
+    `/api/admin/audit-log?${params}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const logs = (data?.logs ?? []) as AuditLog[];
+  const total = data?.total ?? 0;
+  const totalPages = data?.totalPages ?? 1;
 
-  const load = useCallback(async (pg = 1) => {
-    setLoading(true);
-    const params = new URLSearchParams({ page: String(pg) });
-    if (q)            params.set("q", q);
-    if (typeFilter)   params.set("type", typeFilter);
-    if (actionFilter) params.set("action", actionFilter);
-    const res  = await fetch(`/api/admin/audit-log?${params}`);
-    const data = await res.json();
-    setLogs(data.logs ?? []);
-    setTotal(data.total ?? 0);
-    setPage(data.page ?? 1);
-    setTotalPages(data.totalPages ?? 1);
-    setLoading(false);
-  }, [q, typeFilter, actionFilter]);
-
-  useEffect(() => { load(1); }, [load]);
+  const load = useCallback((pg: number) => setPage(pg), []);
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    load(1);
+    setPage(1);
   }
 
   return (
@@ -89,7 +85,7 @@ export default function AuditLogClient() {
           {Object.keys(ACTION_COLOR).map(a => <option key={a} value={a}>{a}</option>)}
         </select>
         <button type="submit" className="btn-primary text-sm px-4">검색</button>
-        <button type="button" onClick={() => load(page)} className="btn-secondary text-sm px-3" title="새로고침">
+        <button type="button" onClick={() => mutate()} className="btn-secondary text-sm px-3" title="새로고침">
           <RefreshCw size={14} className={loading ? "animate-spin" : ""}/>
         </button>
       </form>

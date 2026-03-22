@@ -80,8 +80,8 @@ export default function Sidebar({
                   const active = isActive(group.href);
                   return (
                     <Link key={group.key} href={group.href} onClick={onClose}
-                      className={`flex items-center gap-2.5 mx-2 px-3 py-2.5 rounded mb-0.5 transition-colors text-sm ${
-                        active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      className={`flex items-center gap-2.5 mx-2 px-3 py-2.5 rounded-lg mb-0.5 transition-colors text-sm min-h-[44px] touch-manipulation ${
+                        active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50 active:bg-gray-100 hover:text-gray-900"
                       }`}>
                       <Icon size={17} className={active ? "text-blue-600" : "text-gray-400"} />
                       <span className="flex-1">{group.label}</span>
@@ -98,7 +98,7 @@ export default function Sidebar({
                     <button
                       type="button"
                       onClick={() => setExpanded((p) => (p === group.key ? null : group.key))}
-                      className="flex items-center gap-2.5 mx-2 px-3 py-2.5 rounded w-full text-left transition-colors text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                      className="flex items-center gap-2.5 mx-2 px-3 py-2.5 rounded-lg w-full text-left transition-colors text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-100 hover:text-gray-900 min-h-[44px] touch-manipulation"
                     >
                       <Icon size={17} className="text-gray-400" />
                       <span className="flex-1">{group.label}</span>
@@ -110,8 +110,8 @@ export default function Sidebar({
                           const active = isActive(c.href);
                           return (
                             <Link key={c.key} href={c.href} onClick={onClose}
-                              className={`flex items-center gap-2 px-2.5 py-2 rounded text-sm transition-colors ${
-                                active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                              className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors min-h-[40px] touch-manipulation ${
+                                active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50 active:bg-gray-100 hover:text-gray-900"
                               }`}>
                               <span className="flex-1">{c.label}</span>
                               {active && <ChevronRight size={12} className="text-blue-400" />}

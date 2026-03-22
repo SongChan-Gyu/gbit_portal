@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import prisma from "@/lib/db";
 import Link from "next/link";
 import { formatYMD } from "@/lib/dateUtils";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export const metadata = { title: "공지사항 | GBIT Portal" };
 
@@ -31,7 +32,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
         </div>
         <div
           className="p-4 sm:p-6 prose prose-sm max-w-none text-gray-700 notice-content"
-          dangerouslySetInnerHTML={{ __html: notice.content || "" }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(notice.content) }}
         />
       </article>
     </div>

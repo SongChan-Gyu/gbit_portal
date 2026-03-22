@@ -7,6 +7,8 @@
   html {
     font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     -webkit-font-smoothing: antialiased;
+    /* 모바일 터치 시 노란 하이라이트 제거 후 커스텀 feedback */
+    -webkit-tap-highlight-color: rgba(59, 130, 246, 0.15);
   }
   * { @apply box-border; }
   body { @apply bg-slate-50 text-gray-900 text-[13px] leading-relaxed; }
@@ -32,33 +34,33 @@
 }
 
 @layer components {
-  /* ─── 버튼 (크기·둥글기 통일, 위화감 감소) */
+  /* ─── 버튼 (크기·둥글기 통일, 모바일 터치 피드백) */
   .btn-primary {
     @apply inline-flex items-center justify-center gap-1.5
       bg-slate-600 hover:bg-slate-700 active:bg-slate-800
       text-white text-[13px] font-medium rounded-lg px-3.5 py-1.5
-      transition-colors select-none
+      transition-colors select-none touch-manipulation
       disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-secondary {
     @apply inline-flex items-center justify-center gap-1.5
       bg-white hover:bg-gray-50 active:bg-gray-100
       border border-gray-300 text-gray-700 text-[13px] font-medium
-      rounded-lg px-3.5 py-1.5 transition-colors select-none
+      rounded-lg px-3.5 py-1.5 transition-colors select-none touch-manipulation
       disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .btn-danger {
     @apply inline-flex items-center justify-center gap-1.5
-      bg-rose-500 hover:bg-rose-600 text-white text-[13px] font-medium
-      rounded-lg px-3.5 py-1.5 transition-colors disabled:opacity-40;
+      bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white text-[13px] font-medium
+      rounded-lg px-3.5 py-1.5 transition-colors touch-manipulation disabled:opacity-40;
   }
   .btn-ghost {
     @apply inline-flex items-center gap-1.5
-      text-gray-600 hover:bg-gray-100 text-[13px] rounded-lg px-2.5 py-1.5
-      transition-colors select-none;
+      text-gray-600 hover:bg-gray-100 active:bg-gray-200 text-[13px] rounded-lg px-2.5 py-1.5
+      transition-colors select-none touch-manipulation;
   }
-  .btn-sm { @apply px-2.5 py-1 text-xs rounded-lg; }
-  .btn-lg { @apply px-4 py-2 text-sm rounded-lg; }
+  .btn-sm { @apply px-2.5 py-1 text-xs rounded-lg touch-manipulation; }
+  .btn-lg { @apply px-4 py-2 text-sm rounded-lg touch-manipulation; }
   @media (min-width: 769px) {
     .btn-primary, .btn-secondary, .btn-danger, .btn-ghost { font-size: 0.875rem; }
     .input { font-size: 1rem; padding: 0.5rem 0.75rem; }
@@ -67,8 +69,8 @@
     .label { font-size: 0.875rem; }
   }
   @media (max-width: 768px) {
-    .btn-primary, .btn-secondary, .btn-danger { @apply text-[13px] py-2 px-3.5; }
-    .btn-sm { @apply text-xs py-1.5 px-2.5; }
+    .btn-primary, .btn-secondary, .btn-danger { @apply text-[13px] py-2.5 px-4 min-h-[44px]; }
+    .btn-sm { @apply text-xs py-2 px-3 min-h-[40px]; }
     .input { @apply text-[15px] py-2.5; }
   }
 
@@ -146,6 +148,13 @@
     .data-table th { @apply text-xs px-3 py-3; }
     .data-table td { @apply px-3 py-3; }
   }
+  /* 근태 테이블: 모바일에서 13px 이상으로 가독성 확보 */
+  @media (max-width: 768px) {
+    .attendance-table-mobile,
+    .attendance-table-mobile th,
+    .attendance-table-mobile td { font-size: 13px !important; }
+    .attendance-table-mobile .text-\[9px\] { font-size: 10px !important; }
+  }
 
   /* ─── 폼 레이아웃 */
   .form-section {
@@ -200,5 +209,26 @@
   .rich-editor-content:empty::before {
     content: attr(data-placeholder);
     @apply text-gray-400;
+  }
+
+  /* ─── 모바일: 체크박스 터치 영역 확대 (label에 min-h 적용) */
+  @media (max-width: 768px) {
+    label.checkbox-touch,
+    label:has(input[type="checkbox"]):not(.checkbox-touch-exclude) {
+      @apply min-h-[44px] inline-flex items-center gap-3 cursor-pointer;
+    }
+  }
+
+  /* ─── 모바일: input/select 16px (iOS 줌 방지) */
+  @media (max-width: 768px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select, textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  /* ─── 하단 Safe area (노치 등) */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
   }
 }

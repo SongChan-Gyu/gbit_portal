@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
@@ -75,21 +76,31 @@ function getValidCheckOutDates(
   return out;
 }
 
+const fetcher = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))));
+
 export default function JejuClient({ welfare }: { welfare: boolean }) {
   const router = useRouter();
   const now = new Date();
   const todayYmd = todayYMD();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
-  const [occupied, setOccupied] = useState<{
-    welfare: boolean;
-    byDate?: Record<string, { name: string; empNo: string; requestId: string }[]>;
-    occupiedDates?: string[];
-    blockedDates?: string[];
-  }>({ welfare: false });
-  const [allList, setAllList] = useState<ListRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [config, setConfig] = useState<JejuConfig | null>(null);
+  const { from, to } = getMonthRange(year, month);
+  const { data: occupied = { welfare: false }, isLoading: loadingOccupied, mutate: mutateOccupied } = useSWR(
+    `/api/jeju/occupied-dates?from=${from}&to=${to}`,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const { data: allListRaw, isLoading: loadingRequests, mutate: mutateRequests } = useSWR<ListRequest[]>(
+    welfare ? "/api/jeju/requests" : null,
+    fetcher,
+    { revalidateOnFocus: false }
+  );
+  const { data: config } = useSWR<JejuConfig>("/api/jeju/config", fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+  const allList = allListRaw ?? [];
+  const loading = loadingOccupied || (welfare && loadingRequests);
   const [checkInDate, setCheckInDate] = useState("");
   const [checkOutDate, setCheckOutDate] = useState("");
   const [applyGuestName, setApplyGuestName] = useState("");
@@ -101,26 +112,6 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
   const [applySubmitting, setApplySubmitting] = useState(false);
   const [applyError, setApplyError] = useState("");
 
-  const loadOccupied = useCallback(async (y: number, m: number) => {
-    const { from, to } = getMonthRange(y, m);
-    const res = await fetch(`/api/jeju/occupied-dates?from=${from}&to=${to}`);
-    if (res.ok) setOccupied(await res.json());
-  }, []);
-
-  const loadAll = useCallback(async () => {
-    if (!welfare) return;
-    const res = await fetch("/api/jeju/requests");
-    if (res.ok) setAllList(await res.json());
-  }, [welfare]);
-
-  useEffect(() => {
-    fetch("/api/jeju/config").then((r) => { if (r.ok) r.json().then(setConfig); });
-  }, []);
-
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([loadOccupied(year, month), loadAll()]).finally(() => setLoading(false));
-  }, [year, month, loadOccupied, loadAll]);
 
   const prevMonth = () => {
     if (month === 1) { setYear((y) => y - 1); setMonth(12); } else setMonth((m) => m - 1);
@@ -129,8 +120,8 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
     if (month === 12) { setYear((y) => y + 1); setMonth(1); } else setMonth((m) => m + 1);
   };
 
-  const occupiedDates = occupied.occupiedDates ?? [];
-  const blockedSet = new Set(occupied.blockedDates ?? []);
+  const occupiedDates = (occupied.occupiedDates ?? []) as string[];
+  const blockedSet = new Set<string>(occupied.blockedDates ?? []);
   const windowEndYmd = config?.bookingWindowEnd ?? todayYmd;
   const maxNights = config?.maxNights ?? 14;
 
@@ -249,8 +240,8 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
     setApplyGuestCount("1");
     setApplyDepositorName("");
     setApplyReason("");
-    loadOccupied(year, month);
-    loadAll();
+    mutateOccupied();
+    mutateRequests();
     router.push("/jeju/my?applied=1");
     router.refresh();
   }

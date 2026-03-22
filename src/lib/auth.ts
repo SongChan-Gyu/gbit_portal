@@ -14,8 +14,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         bypassToken: { label: "BypassToken" },  // 테스트용 우회 토큰
       },
       async authorize(credentials) {
-        // ── 테스트 우회 로그인 (bypassToken 있으면 비밀번호 불필요)
+        // ── 테스트 우회 로그인 (bypassToken 있으면 비밀번호 불필요). RESTRICT_TEST_BYPASS=true 시 비활성
         if (credentials?.bypassToken) {
+          if (process.env.RESTRICT_TEST_BYPASS === "true") return null;
           const bypass = await prisma.testBypass.findUnique({
             where: { token: credentials.bypassToken as string },
           });

@@ -94,9 +94,13 @@ npm run verify:leave   # 휴가 규정·할당 usedDays·결재 단계
 npm run verify:data    # DB 연결·정합성
 npm run build          # 빌드
 npm run lint           # 린트
+npm run test           # 단위 테스트 (Vitest)
+npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 ```
 
 **수동 체크:** 휴가 신청/결재/취소, 제주 숙소 예약(입실·퇴실 선택)·결재, 스탬프·힐링데이, 인사 관리(사원 등록·엑셀).
+
+**헬스체크:** `GET /api/health` — DB 연결 여부 확인 (Railway 프로브 등).
 
 ---
 

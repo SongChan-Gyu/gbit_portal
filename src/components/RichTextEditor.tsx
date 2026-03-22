@@ -69,6 +69,7 @@ export default function RichTextEditor({
           onClick={() => cmd("bold")}
           className="px-2 py-1 text-sm font-bold border border-gray-200 rounded hover:bg-gray-100"
           title="굵게"
+          aria-label="굵게"
         >
           B
         </button>
@@ -77,6 +78,7 @@ export default function RichTextEditor({
           onClick={() => cmd("italic")}
           className="px-2 py-1 text-sm italic border border-gray-200 rounded hover:bg-gray-100"
           title="기울임"
+          aria-label="기울임"
         >
           I
         </button>
@@ -85,6 +87,7 @@ export default function RichTextEditor({
           onClick={() => cmd("underline")}
           className="px-2 py-1 text-sm underline border border-gray-200 rounded hover:bg-gray-100"
           title="밑줄"
+          aria-label="밑줄"
         >
           U
         </button>
@@ -110,6 +113,7 @@ export default function RichTextEditor({
           onClick={insertImage}
           className="px-2 py-1 text-sm border border-gray-200 rounded hover:bg-gray-100"
           title="이미지 삽입"
+          aria-label="이미지 삽입"
         >
           🖼 이미지
         </button>

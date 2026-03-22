@@ -45,7 +45,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           </aside>
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <Header allowedMenuKeys={allowedMenuKeys} />
-            <main className="flex-1 overflow-y-auto">
+            <main className="flex-1 overflow-y-auto safe-area-bottom">
               <div className="px-4 py-5 md:px-6 md:py-6 max-w-5xl mx-auto w-full">
                 {children}
               </div>

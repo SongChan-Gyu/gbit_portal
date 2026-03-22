@@ -16,9 +16,14 @@ export default async function ApprovePage({
   const user = session!.user as any;
   if (!["TEAM_LEAD","PM","ADMIN"].includes(user.role)) redirect("/dashboard");
 
-  const { view: viewRaw, tab: tabRaw } = await searchParams;
+  const params = await searchParams;
+  const viewRaw = params.view;
+  const tabRaw = params.tab;
+  const pageRaw = (params as Record<string, string | undefined>).page;
   const tab  = tabRaw  ?? "leave";
   const view = viewRaw ?? "pending";
+  const page = Math.max(1, parseInt(String(pageRaw ?? "1"), 10));
+  const PAGE_SIZE = 30;
 
   // ── 휴가 결재 데이터 (관리자는 본인 결재 건만; 전체 내역은 별도 조회) ──────────────────────────────────
   const approvals = await prisma.leaveApproval.findMany({
@@ -78,7 +83,11 @@ export default async function ApprovePage({
   const stampPending  = stampRequests.filter(r => r.status === "PENDING").length;
   const totalPending  = leavePending + stampPending;
 
-  // 관리자: 전체 휴가 내역 (모든 직원, 승인/대기/취소신청) — 조회 및 직권 취소용
+  // 관리자: 전체 휴가 내역 (모든 직원, 승인/대기/취소신청) — 조회 및 직권 취소용 (페이지네이션)
+  const adminTotal =
+    user.role === "ADMIN"
+      ? await prisma.leaveRequest.count({ where: { status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED"] } } })
+      : 0;
   const adminAllRequests =
     user.role === "ADMIN"
       ? await prisma.leaveRequest.findMany({
@@ -88,9 +97,11 @@ export default async function ApprovePage({
             items: { include: { leaveType: true } },
           },
           orderBy: { createdAt: "desc" },
-          take: 200,
+          skip: (page - 1) * PAGE_SIZE,
+          take: PAGE_SIZE,
         })
       : [];
+  const adminTotalPages = Math.ceil(adminTotal / PAGE_SIZE);
 
   return (
     <div className="max-w-3xl">
@@ -107,7 +118,7 @@ export default async function ApprovePage({
       {/* 탭: 휴가결재 / 스탬프승인 */}
       <div className="flex gap-2 mb-4 border-b border-gray-200 pb-0 text-[15px] md:text-sm">
         <a href={`?tab=leave&view=${view}`}
-          className={`px-4 py-3 md:py-2.5 font-medium border-b-2 -mb-px transition-colors touch-manipulation ${
+          className={`px-4 py-3 md:py-2.5 font-medium border-b-2 -mb-px transition-colors touch-manipulation min-h-[44px] flex items-center active:bg-gray-100 rounded-t-lg ${
             tab === "leave"
               ? "border-slate-600 text-slate-700"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -120,7 +131,7 @@ export default async function ApprovePage({
           )}
         </a>
         <a href={`?tab=stamp&view=${view}`}
-          className={`px-4 py-3 md:py-2.5 font-medium border-b-2 -mb-px transition-colors touch-manipulation ${
+          className={`px-4 py-3 md:py-2.5 font-medium border-b-2 -mb-px transition-colors touch-manipulation min-h-[44px] flex items-center active:bg-gray-100 rounded-t-lg ${
             tab === "stamp"
               ? "border-slate-600 text-slate-700"
               : "border-transparent text-gray-500 hover:text-gray-700"
@@ -300,8 +311,43 @@ export default async function ApprovePage({
             <div className="panel">
               <p className="px-4 py-2 text-sm text-gray-500 border-b border-gray-200 md:text-xs">
                 모든 직원의 휴가 신청·승인 내역입니다. 필요 시 관리자 직권 취소를 할 수 있습니다.
+                {adminTotal > 0 && (
+                  <span className="ml-2 font-medium text-gray-600">
+                    전체 {adminTotal}건 · {page}/{adminTotalPages}페이지
+                  </span>
+                )}
               </p>
-              <div className="table-scroll">
+              {/* 모바일: 카드 */}
+              <div className="md:hidden divide-y divide-gray-100">
+                {adminAllRequests.map((req) => (
+                  <div key={req.id} className="px-4 py-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-gray-800">{req.employee.name}</p>
+                        <p className="text-xs text-gray-500">{req.employee.team?.name}</p>
+                      </div>
+                      <span className={`badge shrink-0 ${
+                        req.status === "APPROVED" ? "badge-success" :
+                        req.status === "CANCEL_REQUESTED" ? "badge-warning" : "badge-default"
+                      }`}>
+                        {req.status === "APPROVED" ? "승인" : req.status === "CANCEL_REQUESTED" ? "취소신청" : "대기"}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {req.items.map((i) => i.leaveType.name).join("+")} · {formatMDWithDay(req.startDate)}
+                      {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
+                      <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
+                    </p>
+                    <div className="mt-2">
+                      {(req.status === "APPROVED" || req.status === "PENDING") && (
+                        <AdminCancelButton requestId={req.id} />
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {/* PC: 테이블 */}
+              <div className="hidden md:block table-scroll">
               <table className="data-table request-list-table">
                 <thead>
                   <tr>
@@ -348,12 +394,75 @@ export default async function ApprovePage({
                 </tbody>
               </table>
               </div>
+              {adminAllRequests.length === 0 && (
+                <div className="md:hidden px-4 py-8 text-center text-gray-400 text-sm">내역이 없습니다.</div>
+              )}
+              {adminTotalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 py-3 border-t border-gray-200">
+                  {page > 1 && (
+                    <a href={`?tab=leave&view=admin&page=${page - 1}`} className="btn-sm btn-secondary">← 이전</a>
+                  )}
+                  <span className="text-sm text-gray-500 px-2">{page} / {adminTotalPages}</span>
+                  {page < adminTotalPages && (
+                    <a href={`?tab=leave&view=admin&page=${page + 1}`} className="btn-sm btn-secondary">다음 →</a>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
           {view === "all" && (
             <div className="panel">
-              <div className="table-scroll">
+              {/* 모바일: 카드 */}
+              <div className="md:hidden divide-y divide-gray-100">
+                {[...actionable,...pastApprovals].map((ap) => {
+                  const req = ap.leaveRequest;
+                  const statusMap: Record<string,string> = { PENDING:"대기", APPROVED:"승인", REJECTED:"반려" };
+                  return (
+                    <div key={ap.id} className="px-4 py-3">
+                      <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">신청</span>
+                      <div className="flex flex-wrap items-start justify-between gap-2 mt-1.5">
+                        <div>
+                          <p className="font-semibold text-gray-800">{req.employee.name}</p>
+                          <p className="text-xs text-gray-500">{req.employee.team?.name}</p>
+                        </div>
+                        <span className={`badge shrink-0 ${ap.status==="APPROVED"?"badge-success":ap.status==="REJECTED"?"badge-default":"badge-warning"}`}>{statusMap[ap.status]??"대기"}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {req.items.map(i => i.leaveType.name).join("+")} · {formatMDWithDay(req.startDate)}
+                        {req.startDate.toDateString()!==req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
+                        <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
+                      </p>
+                    </div>
+                  );
+                })}
+                {[...cancelActionable,...pastCancel].map((ap) => {
+                  const req = ap.leaveRequest;
+                  const statusMap: Record<string,string> = { CANCEL_PENDING:"대기", CANCEL_APPROVED:"취소승인", CANCEL_REJECTED:"취소반려" };
+                  return (
+                    <div key={`cancel-${ap.id}`} className="px-4 py-3 bg-amber-50/30">
+                      <span className="text-xs bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">취소</span>
+                      <div className="flex flex-wrap items-start justify-between gap-2 mt-1.5">
+                        <div>
+                          <p className="font-semibold text-gray-800">{req.employee.name}</p>
+                          <p className="text-xs text-gray-500">{req.employee.team?.name}</p>
+                        </div>
+                        <span className={`badge shrink-0 ${ap.status==="CANCEL_APPROVED"?"badge-success":ap.status==="CANCEL_REJECTED"?"badge-default":"badge-warning"}`}>{statusMap[ap.status]??"대기"}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {req.items.map(i => i.leaveType.name).join("+")} · {formatMDWithDay(req.startDate)}
+                        {req.startDate.toDateString()!==req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
+                        <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
+                      </p>
+                    </div>
+                  );
+                })}
+                {actionable.length+pastApprovals.length+cancelActionable.length+pastCancel.length===0 && (
+                  <div className="px-4 py-8 text-center text-gray-400 text-sm">내역이 없습니다.</div>
+                )}
+              </div>
+              {/* PC: 테이블 */}
+              <div className="hidden md:block table-scroll">
               <table className="data-table request-list-table">
                 <thead>
                   <tr>

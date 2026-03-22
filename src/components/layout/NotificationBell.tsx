@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
+import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import {
   Bell, BellRing, Check, CheckCheck, ChevronRight, X,
@@ -43,32 +44,18 @@ const TYPE_COLOR: Record<string, string> = {
 
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
 
-  const fetchNotifications = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/notifications?limit=15");
-      if (res.ok) {
-        const data = await res.json();
-        setNotifications(data.notifications ?? []);
-        setUnreadCount(data.unreadCount ?? 0);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const fetcher = (url: string) => fetch(url).then((r) => r.ok ? r.json() : { notifications: [], unreadCount: 0 });
+  const { data, isLoading: loading, mutate } = useSWR("/api/notifications?limit=15", fetcher, {
+    refreshInterval: 30_000,
+    revalidateOnFocus: true,
+  });
+  const notifications = (data?.notifications ?? []) as Notification[];
+  const unreadCount = data?.unreadCount ?? 0;
 
-  // 주기적 폴링 (30초)
-  useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchNotifications]);
+  const fetchNotifications = useCallback(() => mutate(), [mutate]);
 
   // 외부 클릭 시 닫기
   useEffect(() => {
@@ -93,10 +80,7 @@ export default function NotificationBell() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids }),
     });
-    setNotifications((prev) =>
-      prev.map((n) => (ids.includes(n.id) ? { ...n, isRead: true } : n))
-    );
-    setUnreadCount((c) => Math.max(0, c - ids.length));
+    mutate();
   }
 
   async function markAllRead() {
@@ -105,8 +89,7 @@ export default function NotificationBell() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ all: true }),
     });
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setUnreadCount(0);
+    mutate();
   }
 
   function handleItemClick(n: Notification) {
@@ -134,7 +117,7 @@ export default function NotificationBell() {
 
       {/* 드롭다운 패널 */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-[380px] bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-[min(380px,calc(100vw-2rem))] max-w-[calc(100vw-1rem)] bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden">
           {/* 헤더 */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
             <div className="flex items-center gap-2">

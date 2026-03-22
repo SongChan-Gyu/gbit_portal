@@ -2,17 +2,30 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { sendMail } from "@/lib/email";
 import { wrapEmailBody } from "@/lib/emailTemplate";
+import { findIdSchema } from "@/lib/validations/auth";
+import { apiError, rateLimited } from "@/lib/apiError";
+import { checkRateLimit, getRateLimitKey } from "@/lib/rateLimit";
 
 /**
  * 아이디 찾기: 이름 + 이메일로 본인 확인 후, 해당 이메일로 아이디(username) 발송.
  * HRM에서 흔히 쓰는 방식. 일치하는 계정이 없어도 동일 메시지 반환(정보 노출 최소화).
  */
 export async function POST(req: Request) {
+  const key = getRateLimitKey(req, "find-id");
+  const { ok, retryAfter } = await checkRateLimit(key, true);
+  if (!ok) {
+    return rateLimited(
+      `요청이 너무 많습니다. ${retryAfter ? `${Math.ceil(retryAfter / 60)}분 후` : "잠시 후"} 다시 시도해 주세요.`
+    );
+  }
+
   const body = await req.json().catch(() => ({}));
-  const name = String(body.name ?? "").trim();
-  const email = String(body.email ?? "").trim().toLowerCase();
-  if (!name || !email)
-    return NextResponse.json({ error: "이름과 이메일을 입력해 주세요." }, { status: 400 });
+  const parsed = findIdSchema.safeParse(body);
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? "이름과 이메일을 입력해 주세요.";
+    return apiError(msg, { status: 400, code: "VALIDATION_ERROR" });
+  }
+  const { name, email } = parsed.data;
 
   const employee = await prisma.employee.findFirst({
     where: {
