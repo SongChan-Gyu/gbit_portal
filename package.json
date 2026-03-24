@@ -17,6 +17,8 @@
     "db:seed:dev": "npx tsx prisma/seed.ts",
     "verify:leave": "npx tsx scripts/verify-leave-policy.ts",
     "verify:data": "npx tsx scripts/verify-data-integrity.ts",
+    "wipe:preview": "KEEP_USERNAMES=admin,pm npx tsx scripts/production-wipe.ts",
+    "wipe:go": "CONFIRM_WIPE=WIPE KEEP_USERNAMES=admin,pm npx tsx scripts/production-wipe.ts",
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate dev",
     "cron": "node cron-runner.mjs",

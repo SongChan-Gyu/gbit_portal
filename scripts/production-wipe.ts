@@ -3,8 +3,10 @@
  *
  * 목표:
  * - 마스터/기초 데이터(휴가유형, 공휴일, 팀, 시스템설정 등)는 유지
- * - 계정/사원은 "관리자 + PM(이사님)"만 남기고 나머지 삭제
- * - 테스트 사원들과 엮인 신청/내역/로그/토큰 등 트랜잭션 데이터는 전부 삭제
+ * - **공지사항·유동 양식(정의·제출)** 은 삭제하지 않음 (직접 편집/삭제 가능)
+ * - 공지 작성자가 삭제 대상 사원이면, 삭제 전 작성자를 유지 계정(기본 admin 사원)으로 이관
+ * - 계정/사원은 KEEP_USERNAMES에 적은 로그인만 남기고 나머지 삭제
+ * - 휴가·제주·스탬프·알림·로그·토큰 등 운영 트랜잭션 데이터는 삭제 (휴가 할당 포함)
  *
  * 안전장치:
  * - 기본은 DRY RUN(삭제 안 함)
@@ -91,11 +93,9 @@ async function main() {
     schedulerLogs: await prisma.schedulerLog.count(),
     requestLogs: await prisma.requestLog.count(),
 
-    notices: await prisma.notice.count(),
-    formSubmissionAnswers: await prisma.formSubmissionAnswer.count(),
-    formSubmissions: await prisma.formSubmission.count(),
-    formFields: await prisma.formField.count(),
-    forms: await prisma.form.count(),
+    noticesReassignAuthor: await prisma.notice.count({
+      where: { authorId: { notIn: keepEmpIds } },
+    }),
 
     usersToDelete: await prisma.user.count({
       where: { employeeId: { notIn: keepEmpIds } },
@@ -158,12 +158,16 @@ async function main() {
     await tx.schedulerLog.deleteMany({});
     await tx.requestLog.deleteMany({});
 
-    // 양식/공지
-    await tx.formSubmissionAnswer.deleteMany({});
-    await tx.formSubmission.deleteMany({});
-    await tx.formField.deleteMany({});
-    await tx.form.deleteMany({});
-    await tx.notice.deleteMany({});
+    // 공지: 삭제하지 않음 — 작성자가 곧 삭제될 사원이면 유지 계정으로 이관 (Notice.authorId FK)
+    const fallbackAuthorId =
+      keepUsers.find((u) => u.username === "admin")?.employeeId ?? keepEmpIds[0];
+    const reassign = await tx.notice.updateMany({
+      where: { authorId: { notIn: keepEmpIds } },
+      data: { authorId: fallbackAuthorId },
+    });
+    if (reassign.count > 0) {
+      console.log(`[production-wipe] 공지 ${reassign.count}건 작성자 → 유지 사원(${fallbackAuthorId})`);
+    }
 
     // 계정/사원: 유지 대상만 남기고 삭제
     await tx.user.deleteMany({

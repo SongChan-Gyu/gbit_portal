@@ -60,6 +60,8 @@
 | `npm run db:studio` | Prisma Studio |
 | `npm run verify:leave` | 휴가 규정·결재·할당 정합성 검증 |
 | `npm run verify:data` | DB 연결·User/Employee/할당 usedDays 등 정합성 검증 |
+| `npm run wipe:preview` | 운영 전 테스트 데이터 정리 **미리보기** (`production-wipe`, 삭제 없음) |
+| `npm run wipe:go` | 위 스크립트 **실제 삭제** (`CONFIRM_WIPE=WIPE`, §9.1 참고) |
 | `npm run cron` | 스케줄러(월별 발생/근속 등) 실행 |
 
 ---
@@ -134,12 +136,29 @@ npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 
 오픈(예: 2026-05-01) 직전에 아래 순서로 진행하는 것을 권장합니다.
 
-1. **운영 기초데이터 시드 실행** (휴가유형/공휴일만 갱신)
-   - `npm run db:seed` 또는 `npm run db:seed:base`
-2. **테스트 데이터 정리** (관리자/PM 계정만 남기기)
-   - DRY RUN(프리뷰): `KEEP_USERNAMES="admin,pm" npx tsx scripts/production-wipe.ts`
-   - 실제 삭제: `CONFIRM_WIPE=WIPE KEEP_USERNAMES="admin,pm" npx tsx scripts/production-wipe.ts`
-   - **주의**: 이 스크립트는 **Dockerfile/배포 Start Command에 넣지 않습니다.** 오픈 직전에 **딱 1회 수동 실행**(Railway의 Run Command/railway run 등)만 하세요.
-   - 동작: 마스터(휴가유형/공휴일/팀/시스템설정)는 유지하고, 트랜잭션 데이터 및 테스트 사원/계정을 삭제합니다.
-3. 이사님이 **사원 엑셀 일괄 등록** → **2026 귀속년도 초기화** → **초대 이메일 일괄 발송**
+1. **운영 기초데이터 시드** (휴가유형·공휴일만 갱신)  
+   `npm run db:seed` 또는 `npm run db:seed:base`
+2. **테스트 데이터 정리** (`scripts/production-wipe.ts`) — 아래 표 참고  
+3. 이사님이 **사원 엑셀 일괄 등록** → **귀속연도 초기화** → **초대 이메일 일괄 발송**
+
+### 9.1 `production-wipe` — 무엇이 지워지고 무엇이 남는지
+
+| 남음 (삭제 안 함) | 지움 |
+|------------------|------|
+| 휴가 **유형**, **공휴일**, **팀**, **시스템 설정** 등 마스터 | 휴가 **신청·결재·이력·할당** 전부 (유지할 PM/관리자 것 포함) |
+| **공지사항** 본문·목록 (작성자가 테스트 사원이면 **admin 사원으로 작성자만 이관**) | 제주 **숙소 신청** 전부 |
+| **유동 양식** 정의 + **제출 내역** (이름·이메일 등 스냅샷) | **스탬프** 신청·쿠폰 |
+| | 사내 **알림**, **감사/스케줄러/요청 로그** |
+| | `KEEP_USERNAMES`에 **없는** 로그인·사원 |
+
+- 유지할 로그인 아이디는 **`KEEP_USERNAMES`** 로 지정 (쉼표, 기본값 `admin,pm`). DB에 해당 `User.username`이 있어야 함.
+- 기본은 **DRY RUN**(숫자만 출력, 삭제 없음). 실제 삭제는 **`CONFIRM_WIPE=WIPE`** 일 때만.
+- **배포 Start Command에 넣지 말 것.** 오픈 직전 **한 번** 수동 실행 (예: `railway run …`).
+
+```bash
+npm run wipe:preview   # 또는: KEEP_USERNAMES=admin,pm npx tsx scripts/production-wipe.ts
+npm run wipe:go        # 실제 삭제 (동일 스크립트 + CONFIRM_WIPE=WIPE)
+```
+
+삭제 후 유지 계정의 **연차·돌봄 등 할당은 0**이 되므로, 귀속연도 초기화 등으로 다시 부여하면 됩니다.
 
