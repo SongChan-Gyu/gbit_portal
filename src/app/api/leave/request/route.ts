@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getFiscalYear } from "@/lib/workdays";
+import { isWednesdayYMD } from "@/lib/dateUtils";
 import { sendLeaveRequestAlimtalk } from "@/lib/kakao";
 import { writeAudit, getIp } from "@/lib/audit";
 
@@ -20,6 +21,8 @@ const HOLIDAY_EXT_TYPE_CODES = new Set(["HOLIDAY_EXT"]);
 /** 생일반차 전용 풀 (스케줄러가 해당 월에 0.5일 부여) */
 const BIRTHDAY_HALF_POOL_SOURCE = "BIRTHDAY_HALF";
 const BIRTHDAY_HALF_TYPE_CODES = new Set(["BIRTHDAY_HALF"]);
+/** 하프데이: 수요일 오후만 */
+const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 
 export async function POST(req: Request) {
   try {
@@ -158,13 +161,23 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: `${lt.name}: 스탬프 ${lt.stampCount}개 필요 (현재 ${avail}개)` }, { status: 400 });
     }
 
+    if (lt.code === PM_HALF_MONTH_CODE) {
+      const ymd = it.startDate.slice(0, 10);
+      if (!isWednesdayYMD(ymd)) {
+        return NextResponse.json(
+          { error: "하프데이는 수요일에만 신청할 수 있습니다." },
+          { status: 400 },
+        );
+      }
+    }
+
     if (lt.maxPerMonth) {
       const s = new Date(it.startDate);
       const cnt = await prisma.leaveRequestItem.count({
         where: {
           leaveTypeId: lt.id,
           leaveRequest: {
-            employeeId: user.employeeId, status: { not: "CANCELLED" },
+            employeeId: user.employeeId, status: { notIn: ["CANCELLED", "WITHDRAWN"] },
             startDate: { gte: new Date(s.getFullYear(), s.getMonth(), 1), lt: new Date(s.getFullYear(), s.getMonth() + 1, 1) },
           },
         },

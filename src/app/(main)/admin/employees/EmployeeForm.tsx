@@ -151,15 +151,15 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
         </div>
       </div>
 
-      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 space-y-3">
-        <p className="text-sm font-semibold text-gray-700">알림 수신 설정</p>
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
+        <p className="text-sm font-semibold text-gray-900">초기 알림 설정</p>
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
             checked={!!form.emailEnabled}
             onChange={(e) => setBool("emailEnabled", e.target.checked)}
           />
-          <span className="text-sm text-gray-700">이메일 전송(수신) 사용</span>
+          <span className="text-sm text-gray-800">이메일 수신(초대·시스템 메일)</span>
         </label>
         <label className="flex items-center gap-2">
           <input
@@ -167,11 +167,9 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
             checked={!!form.alimtalkEnabled}
             onChange={(e) => setBool("alimtalkEnabled", e.target.checked)}
           />
-          <span className="text-sm text-gray-700">카카오 알림톡 사용</span>
+          <span className="text-sm text-gray-800">카카오 알림톡(휴가·초대 등)</span>
         </label>
-        <p className="text-xs text-gray-500">
-          기본값은 모두 미사용입니다. 운영 정책에 따라 사원 본인이 내 정보에서 켤 수 있습니다.
-        </p>
+        <p className="text-xs text-gray-500">기본은 꺼짐. 이후 본인이 내 정보에서 변경 가능.</p>
       </div>
 
       {isEdit && (

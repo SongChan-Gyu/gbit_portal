@@ -8,6 +8,7 @@ import { formatYMD } from "@/lib/dateUtils";
 const ABBR: Record<string, string> = {
   ANNUAL:"연",   AM_HALF:"오전",  PM_HALF:"오후",
   CONDOLENCE:"경조", CARE:"돌봄",  PUBLIC:"공가",
+  PUBLIC_AM:"전공", PUBLIC_PM:"후공",
   RECOGNITION:"인정", RECOGNITION_AM:"전인", RECOGNITION_PM:"후인",
   PM_HALF_MONTH:"하프", SICK:"병가", HEALING_DAY:"힐링",
   PM_RECOG_STAMP:"스탬프", TENURE_1Y:"근1", TENURE_5Y:"근5",

@@ -23,12 +23,16 @@ const STATUS_LABEL: Record<string, string> = {
   APPROVED: "승인",
   REJECTED: "반려",
   CANCELLED: "취소",
+  WITHDRAWN: "철회",
+  CANCEL_REQUESTED: "취소심사",
 };
 const STATUS_CLS: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-800",
   APPROVED: "bg-green-100 text-green-800",
   REJECTED: "bg-red-100 text-red-800",
   CANCELLED: "bg-gray-100 text-gray-600",
+  WITHDRAWN: "bg-gray-100 text-gray-600",
+  CANCEL_REQUESTED: "bg-amber-100 text-amber-800",
 };
 
 function getFiscalYear(): number {

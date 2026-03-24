@@ -86,12 +86,14 @@ export default async function ApprovePage({
   // 관리자: 전체 휴가 내역 (모든 직원, 승인/대기/취소신청) — 조회 및 직권 취소용 (페이지네이션)
   const adminTotal =
     user.role === "ADMIN"
-      ? await prisma.leaveRequest.count({ where: { status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED"] } } })
+      ? await prisma.leaveRequest.count({
+          where: { status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED", "WITHDRAWN", "CANCELLED", "REJECTED"] } },
+        })
       : 0;
   const adminAllRequests =
     user.role === "ADMIN"
       ? await prisma.leaveRequest.findMany({
-          where: { status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED"] } },
+          where: { status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED", "WITHDRAWN", "CANCELLED", "REJECTED"] } },
           include: {
             employee: { include: { team: true } },
             items: { include: { leaveType: true } },
@@ -328,9 +330,14 @@ export default async function ApprovePage({
                       </div>
                       <span className={`badge shrink-0 ${
                         req.status === "APPROVED" ? "badge-success" :
-                        req.status === "CANCEL_REQUESTED" ? "badge-warning" : "badge-default"
+                        req.status === "CANCEL_REQUESTED" ? "badge-warning" :
+                        req.status === "WITHDRAWN" ? "badge-default" :
+                        req.status === "CANCELLED" ? "badge-default" :
+                        req.status === "REJECTED" ? "badge-danger" : "badge-default"
                       }`}>
-                        {req.status === "APPROVED" ? "승인" : req.status === "CANCEL_REQUESTED" ? "취소신청" : "대기"}
+                        {req.status === "APPROVED" ? "승인" : req.status === "CANCEL_REQUESTED" ? "취소신청" :
+                          req.status === "WITHDRAWN" ? "철회" : req.status === "CANCELLED" ? "취소" :
+                          req.status === "REJECTED" ? "반려" : "대기"}
                       </span>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
@@ -376,9 +383,13 @@ export default async function ApprovePage({
                         <span className={`badge ${
                           req.status === "APPROVED" ? "badge-success" :
                           req.status === "CANCEL_REQUESTED" ? "badge-warning" :
-                          "badge-default"
+                          req.status === "WITHDRAWN" ? "badge-default" :
+                          req.status === "CANCELLED" ? "badge-default" :
+                          req.status === "REJECTED" ? "badge-danger" : "badge-default"
                         }`}>
-                          {req.status === "APPROVED" ? "승인" : req.status === "CANCEL_REQUESTED" ? "취소신청" : "대기"}
+                          {req.status === "APPROVED" ? "승인" : req.status === "CANCEL_REQUESTED" ? "취소신청" :
+                            req.status === "WITHDRAWN" ? "철회" : req.status === "CANCELLED" ? "취소" :
+                            req.status === "REJECTED" ? "반려" : "대기"}
                         </span>
                       </td>
                       <td className="request-list-td action">

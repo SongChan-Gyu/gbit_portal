@@ -38,8 +38,8 @@ async function runChecks(): Promise<AssertResult[]> {
   const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
 
   const annual = leaveTypes.find((t) => t.code === "ANNUAL");
-  if (annual?.deductFromBalance === true && annual.approvalSteps === 2) {
-    ok("연차: 연차 차감, 2단계 결재");
+  if (annual?.deductFromBalance === true && annual.approvalSteps === 1) {
+    ok("연차: 연차 차감, 1단계 결재(팀장)");
   } else {
     fail(`연차 유형: deduct=${annual?.deductFromBalance}, steps=${annual?.approvalSteps}`);
   }

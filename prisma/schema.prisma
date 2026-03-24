@@ -184,7 +184,7 @@ model LeaveRequest {
   endDate      DateTime
   totalDays    Float                          // 전체 합산 일수
   reason       String?
-  status       String    @default("PENDING")  // PENDING/APPROVED/REJECTED/CANCELLED
+  status       String    @default("PENDING")  // PENDING/APPROVED/REJECTED/CANCELLED/WITHDRAWN (+ CANCEL_REQUESTED)
   currentStep  Int       @default(1)
   totalSteps   Int       @default(2)
   cancelledAt  DateTime?

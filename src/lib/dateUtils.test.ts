@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addDaysYMD, toYMD, formatMDWithDay } from "./dateUtils";
+import { addDaysYMD, toYMD, formatMDWithDay, isWednesdayYMD, weekdayIndexFromYMD } from "./dateUtils";
 
 describe("addDaysYMD", () => {
   it("n일을 더한 날짜를 반환한다", () => {
@@ -24,5 +24,13 @@ describe("toYMD", () => {
 describe("formatMDWithDay", () => {
   it("월/일(요일) 형식", () => {
     expect(formatMDWithDay("2025-05-01")).toMatch(/\d{1,2}\/\d{1,2}\([일월화수목금토]\)/);
+  });
+});
+
+describe("isWednesdayYMD", () => {
+  it("수요일만 true", () => {
+    expect(isWednesdayYMD("2025-03-05")).toBe(true); // 수
+    expect(isWednesdayYMD("2025-03-04")).toBe(false); // 화
+    expect(weekdayIndexFromYMD("2025-03-05")).toBe(3);
   });
 });

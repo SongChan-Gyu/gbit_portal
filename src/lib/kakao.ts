@@ -54,6 +54,17 @@ async function sendAlimtalk(
 GBIT Portal에서 확인 후 처리 부탁드립니다.
 본 메시지는 발신 전용입니다.`,
     },
+    LEAVE_WITHDRAWN: {
+      subject: "휴가 신청 철회 안내",
+      body:
+`[GBIT Portal]
+#{결재자명}님, #{신청자명}님이 휴가 신청을 철회했습니다.
+
+#{요약}
+
+결재함에서 해당 건은 더 이상 처리할 필요가 없습니다.
+본 메시지는 발신 전용입니다.`,
+    },
     LEAVE_RESULT: {
       subject: "휴가 처리 결과",
       body:
@@ -220,6 +231,22 @@ export async function sendLeaveRequestAlimtalk(
     시작요일: dowLabel(startDate),
     종료일: endDate,
     종료요일: dowLabel(endDate),
+  });
+}
+
+/** 승인 전 신청자 철회 시 결재자에게 (알리고 템플릿 LEAVE_WITHDRAWN 별도 등록) */
+export async function sendLeaveWithdrawAlimtalk(
+  prisma: PrismaClient,
+  approverId: string,
+  phone: string,
+  approverName: string,
+  applicantName: string,
+  summary: string,
+) {
+  await sendAlimtalk(prisma, approverId, phone, "LEAVE_WITHDRAWN", {
+    결재자명: approverName,
+    신청자명: applicantName,
+    요약: summary,
   });
 }
 

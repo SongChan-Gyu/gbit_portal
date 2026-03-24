@@ -5,9 +5,8 @@ import prisma from "@/lib/db";
 /**
  * POST /api/leave/request/[id]/cancel-request
  * 승인된 휴가에 대해 취소 신청을 올립니다.
- * - status: APPROVED → CANCEL_REQUESTED
- * - cancelReason 저장
- * - 기존 결재자들에게 새 LeaveApproval(CANCEL 타입) 생성
+ * - 일반: APPROVED → CANCEL_REQUESTED, 원 결재선에 CANCEL_PENDING 생성
+ * - 자동승인(결재 행 없음)·신청자가 ADMIN/PM: 취소 심사 없이 즉시 CANCELLED (할당·스탬프 복원)
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,11 +31,59 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (request.status !== "APPROVED")
     return NextResponse.json({ error: "승인된 휴가만 취소 신청 가능합니다." }, { status: 400 });
 
-  // 동일한 결재 단계로 취소 결재 생성
+  const applicant = await prisma.employee.findUnique({
+    where: { id: request.employeeId },
+    select: { role: true },
+  });
+
+  const originalApprovals = request.approvals
+    .filter((a, i, arr) => arr.findIndex((x) => x.step === a.step) === i)
+    .sort((a, b) => a.step - b.step);
+
+  /** 자동승인 건은 LeaveApproval 행이 없어 취소 결재자가 비어 멈춤 → 즉시 취소. ADMIN/PM은 상위 결재 없음 가정으로 즉시 취소. */
+  const skipCancelWorkflow =
+    applicant?.role === "ADMIN" ||
+    applicant?.role === "PM" ||
+    originalApprovals.length === 0;
+
+  if (skipCancelWorkflow) {
+    await prisma.$transaction(async (tx) => {
+      await tx.leaveRequest.update({
+        where: { id },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+          cancelReason: reason,
+          currentStep: request.totalSteps,
+        },
+      });
+      for (const item of request.items) {
+        if (item.allocationId) {
+          await tx.leaveAllocation.update({
+            where: { id: item.allocationId },
+            data: { usedDays: { decrement: item.days } },
+          });
+        }
+      }
+      await tx.stampCoupon.updateMany({
+        where: { usedRequestId: id },
+        data: { isUsed: false, usedForType: null, usedAt: null, usedRequestId: null },
+      });
+      await tx.leaveHistory.create({
+        data: {
+          leaveRequestId: id,
+          action: "CANCEL_APPROVED",
+          actorId: user.employeeId,
+          comment: reason,
+        },
+      });
+    });
+    return NextResponse.json({ ok: true, directCancel: true });
+  }
+
   const totalSteps = request.totalSteps;
 
   await prisma.$transaction(async (tx) => {
-    // 상태 변경
     await tx.leaveRequest.update({
       where: { id },
       data: {
@@ -46,15 +93,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     });
 
-    // 기존 취소 결재 기록 삭제(재신청 대비)
     await tx.leaveApproval.deleteMany({
       where: { leaveRequestId: id, status: "CANCEL_PENDING" },
     });
-
-    // 취소 결재 레코드 생성 (status = "CANCEL_PENDING")
-    const originalApprovals = request.approvals
-      .filter((a, i, arr) => arr.findIndex((x) => x.step === a.step) === i)
-      .sort((a, b) => a.step - b.step);
 
     for (const ap of originalApprovals.slice(0, totalSteps)) {
       await tx.leaveApproval.create({

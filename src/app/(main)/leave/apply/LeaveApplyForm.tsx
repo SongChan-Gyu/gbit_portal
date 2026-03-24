@@ -2,7 +2,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
-import { formatYMD } from "@/lib/dateUtils";
+import { formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
 
 // ── 타입 ──────────────────────────────────────────────────────
@@ -39,6 +39,7 @@ const ANNUAL_ONLY_SOURCES = new Set([
 const CARE_TYPE_CODES = new Set(["CARE", "CARE_AM", "CARE_PM"]);
 const HOLIDAY_EXT_TYPE_CODES = new Set(["HOLIDAY_EXT"]);
 const BIRTHDAY_HALF_TYPE_CODES = new Set(["BIRTHDAY_HALF"]);
+const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 const HIDDEN_LT_CODES = new Set(["TENURE_1Y", "TENURE_5Y", "TENURE_10Y", "DEPT_BONUS"]);
 
 // ── 휴가 그룹 정의 ────────────────────────────────────────────
@@ -56,6 +57,15 @@ const LEAVE_GROUPS: GroupDef[] = [
       { label: "종일",    code: "ANNUAL" },
       { label: "오전반차", code: "AM_HALF",  desc: "" },
       { label: "오후반차", code: "PM_HALF",  desc: "" },
+    ],
+  },
+  {
+    key: "public", label: "공가", meta: "연차 미차감",
+    color: "#64748b", borderClass: "border-slate-600",
+    subs: [
+      { label: "종일", code: "PUBLIC" },
+      { label: "오전", code: "PUBLIC_AM" },
+      { label: "오후", code: "PUBLIC_PM" },
     ],
   },
   {
@@ -293,6 +303,10 @@ export default function LeaveApplyForm({
     if (calendarStep === "start") {
       setCalendarPickedStart(dateStr);
       if (isHalf) {
+        if (lt?.code === PM_HALF_MONTH_CODE && !isWednesdayYMD(dateStr)) {
+          setError("하프데이는 수요일을 선택해 주세요.");
+          return;
+        }
         changeDate(calendarItemIdx, "startDate", dateStr);
         closeCalendar();
         return;
@@ -424,7 +438,7 @@ export default function LeaveApplyForm({
                   <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                     01. 휴가 종류
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
                     {LEAVE_GROUPS.map((g) => {
                       const isSelected = item._groupKey === g.key;
                       return (

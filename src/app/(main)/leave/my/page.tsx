@@ -10,11 +10,12 @@ import MyLeaveMonthlyTable from "./MyLeaveMonthlyTable";
 const STATUS_BADGE: Record<string,string> = {
   PENDING:"badge-warning",  APPROVED:"badge-success",
   REJECTED:"badge-danger",  CANCELLED:"badge-default",
+  WITHDRAWN:"badge-default",
   CANCEL_REQUESTED:"badge-warning",
 };
 const STATUS_KO: Record<string,string> = {
   PENDING:"대기", APPROVED:"승인", REJECTED:"반려",
-  CANCELLED:"취소", CANCEL_REQUESTED:"취소심사",
+  CANCELLED:"취소", WITHDRAWN:"철회", CANCEL_REQUESTED:"취소심사",
 };
 
 export default async function MyLeavePage({ searchParams }: { searchParams: Promise<{ fy?: string; tab?:string }> }) {

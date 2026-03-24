@@ -44,7 +44,7 @@ export default async function LeaveApplyPage() {
           leaveTypeId: halfDayType.id,
           leaveRequest: {
             employeeId: user.employeeId,
-            status: { not: "CANCELLED" },
+            status: { notIn: ["CANCELLED", "WITHDRAWN"] },
             startDate: {
               gte: new Date(now.getFullYear(), now.getMonth(), 1),
               lt:  new Date(now.getFullYear(), now.getMonth() + 1, 1),

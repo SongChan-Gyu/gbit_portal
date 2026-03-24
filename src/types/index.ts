@@ -1,6 +1,12 @@
 export type Role = "STAFF" | "TEAM_LEAD" | "PM" | "ADMIN";
 export type EmployeeStatus = "PENDING" | "INVITED" | "ACTIVE" | "INACTIVE";
-export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
+export type LeaveStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "WITHDRAWN"
+  | "CANCEL_REQUESTED";
 
 export interface SessionUser {
   id: string;

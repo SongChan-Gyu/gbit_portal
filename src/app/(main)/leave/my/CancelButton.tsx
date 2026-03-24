@@ -7,7 +7,7 @@ export default function CancelButton({ requestId }: { requestId: string }) {
   const router = useRouter();
 
   async function cancel() {
-    if (!confirm("이 휴가 신청을 취소하시겠습니까?")) return;
+    if (!confirm("승인 전 신청을 철회합니다. 계속할까요?")) return;
     setLoading(true);
     await fetch(`/api/leave/request/${requestId}/cancel`, { method: "POST" });
     setLoading(false);
@@ -17,7 +17,7 @@ export default function CancelButton({ requestId }: { requestId: string }) {
   return (
     <button onClick={cancel} disabled={loading}
       className="btn-ghost btn-sm text-red-500 hover:bg-red-50 hover:text-red-600">
-      {loading ? "취소중…" : "취소"}
+      {loading ? "철회 중…" : "철회"}
     </button>
   );
 }

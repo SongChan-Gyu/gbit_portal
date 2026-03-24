@@ -11,9 +11,10 @@ import DashboardMonthCalendar from "./DashboardMonthCalendar";
 const STATUS_BADGE: Record<string, string> = {
   PENDING: "badge-warning", APPROVED: "badge-success",
   REJECTED: "badge-danger", CANCELLED: "badge-default",
+  WITHDRAWN: "badge-default",
 };
 const STATUS_KO: Record<string, string> = {
-  PENDING: "대기", APPROVED: "승인", REJECTED: "반려", CANCELLED: "취소",
+  PENDING: "대기", APPROVED: "승인", REJECTED: "반려", CANCELLED: "취소", WITHDRAWN: "철회",
 };
 
 function getMonthDates(year: number, month: number): string[] {

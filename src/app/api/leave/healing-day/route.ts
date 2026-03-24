@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const dup = await prisma.leaveRequest.findFirst({
     where: {
       employeeId: user.employeeId,
-      status: { not: "CANCELLED" },
+      status: { notIn: ["CANCELLED", "WITHDRAWN"] },
       items: { some: { leaveTypeId: lt.id } },
       startDate: {
         gte: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()),

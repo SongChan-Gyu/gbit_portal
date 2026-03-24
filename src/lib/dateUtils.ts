@@ -80,6 +80,18 @@ export function formatMDWithDay(dateStr: string | Date): string {
   return `${m}/${day}(${w})`;
 }
 
+/** YYYY-MM-DD의 요일 인덱스 (0=일 … 3=수 … 6=토), 로컬 달력 기준 */
+export function weekdayIndexFromYMD(ymd: string): number {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return NaN;
+  return new Date(y, m - 1, d).getDay();
+}
+
+/** 하프데이 등: 수요일(3) 여부 */
+export function isWednesdayYMD(ymd: string): boolean {
+  return weekdayIndexFromYMD(ymd) === 3;
+}
+
 /** 연도 포함 (요일 없음): 2025/4/30 — 유효기간 등 */
 export function formatYMD(dateStr: string | Date): string {
   const d = typeof dateStr === "string" ? new Date(dateStr) : dateStr;

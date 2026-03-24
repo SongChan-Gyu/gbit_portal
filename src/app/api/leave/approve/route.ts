@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { sendLeaveResultAlimtalk } from "@/lib/kakao";
+import { sendLeaveRequestAlimtalk, sendLeaveResultAlimtalk } from "@/lib/kakao";
 import { writeAudit } from "@/lib/audit";
 
 /** 연차 = 기본연차 + 근속가산 + 이월연차만 (특별휴가·부서추가 제외) */
@@ -136,6 +136,32 @@ export async function POST(req: Request) {
       actorId, note:`${emp.name} 휴가 최종 승인 (총 ${request.totalDays}일)` });
     if (emp.phone && emp.alimtalkEnabled !== false) {
       await sendLeaveResultAlimtalk(prisma, emp.id, emp.phone, emp.name, "승인", "");
+    }
+  } else {
+    // 다음 단계(예: PM) 결재 요청 알림톡
+    const pm = await prisma.employee.findFirst({
+      where: { role: "PM", status: "ACTIVE" },
+    });
+    if (pm?.phone && pm.alimtalkEnabled !== false) {
+      const typeNames = request.items.map((i) => i.leaveType.name).join("+");
+      const first = request.items[0];
+      const last = request.items[request.items.length - 1];
+      const startStr = first?.startDate.toISOString().slice(0, 10);
+      const endStr = last?.endDate.toISOString().slice(0, 10);
+      try {
+        await sendLeaveRequestAlimtalk(
+          prisma,
+          pm.id,
+          pm.phone,
+          pm.name,
+          emp.name,
+          typeNames,
+          startStr,
+          endStr,
+        );
+      } catch (e) {
+        console.warn("[leave/approve] 2차 결재 알림톡 실패 (결재는 반영됨)", e);
+      }
     }
   }
 
