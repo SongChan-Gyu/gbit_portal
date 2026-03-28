@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 
 /**
  * POST /api/leave/cancel-approve
@@ -83,11 +84,7 @@ export async function POST(req: Request) {
           }
         }
 
-        // 스탬프 복원 (힐링데이/스탬프 사용 휴가)
-        await tx.stampCoupon.updateMany({
-          where: { usedRequestId: requestId },
-          data: { isUsed: false, usedForType: null, usedAt: null, usedRequestId: null },
-        });
+        await releaseStampSlotsForLeaveRequest(tx, requestId);
 
         await tx.leaveHistory.create({
           data: { leaveRequestId: requestId, action: "CANCEL_APPROVED", actorId, comment },

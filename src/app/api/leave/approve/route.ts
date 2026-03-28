@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { sendLeaveRequestAlimtalk, sendLeaveResultAlimtalk } from "@/lib/kakao";
 import { writeAudit } from "@/lib/audit";
+import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 
 /** 연차 = 기본연차 + 근속가산 + 이월연차만 (특별휴가·부서추가 제외) */
 const ANNUAL_ONLY_SOURCES = ["CARRYOVER", "TENURE_BONUS", "BASE_ANNUAL"];
@@ -45,15 +46,9 @@ export async function POST(req: Request) {
       await tx.leaveApproval.update({ where:{id:approvalId}, data:{status:"REJECTED", comment, approvedAt:new Date()} });
       await tx.leaveRequest.update({ where:{id:request.id}, data:{status:"REJECTED"} });
 
-      // 스탬프 복원
-      for (const item of request.items) {
-        if (item.leaveType.requiresStamp) {
-          await tx.stampCoupon.updateMany({
-            where:{ usedRequestId:request.id },
-            data:{ isUsed:false, usedForType:null, usedAt:null, usedRequestId:null },
-          });
-        }
-      }
+      // 스탬프·스탬프 장 권한 복원
+      const needsStampRelease = request.items.some((i) => i.leaveType.requiresStamp);
+      if (needsStampRelease) await releaseStampSlotsForLeaveRequest(tx, request.id);
       await tx.leaveHistory.create({
         data:{ leaveRequestId:request.id, action:"REJECTED", actorId, comment: comment ?? null },
       });
@@ -77,24 +72,28 @@ export async function POST(req: Request) {
     if (isLastStep) {
       await tx.leaveRequest.update({ where:{id:request.id}, data:{status:"APPROVED"} });
 
-      // 연차·돌봄 할당 차감 (allocationId 있는 항목만; 만료된 연차풀은 fallback)
+      // 할당 차감: 연차 풀만 만료 시 다른 연차로 대체. 전용 부여 풀(CARE·포상 등)은 대체 없음.
       const now = new Date();
-      const CARE_SOURCE = "CARE";
       for (const item of request.items) {
         let allocId = item.allocationId;
         if (!allocId) continue;
         const alloc = await tx.leaveAllocation.findUnique({ where: { id: allocId } });
-        if (alloc?.sourceCode !== CARE_SOURCE && alloc?.sourceCode !== "HOLIDAY_EXT" && alloc?.sourceCode !== "BIRTHDAY_HALF" && (!alloc?.isActive || new Date(alloc.validUntil) < now)) {
-          const fallback = await tx.leaveAllocation.findFirst({
-            where: {
-              employeeId: request.employeeId,
-              sourceCode: { in: ANNUAL_ONLY_SOURCES },
-              isActive: true, validUntil: { gte: now },
-            },
-            orderBy: { validUntil: "asc" },
-          });
-          allocId = fallback?.id ?? null;
-        } else if (!alloc?.isActive) {
+        if (!alloc) continue;
+        const expired = new Date(alloc.validUntil) < now;
+        if (ANNUAL_ONLY_SOURCES.includes(alloc.sourceCode)) {
+          if (!alloc.isActive || expired) {
+            const fallback = await tx.leaveAllocation.findFirst({
+              where: {
+                employeeId: request.employeeId,
+                sourceCode: { in: ANNUAL_ONLY_SOURCES },
+                isActive: true,
+                validUntil: { gte: now },
+              },
+              orderBy: { validUntil: "asc" },
+            });
+            allocId = fallback?.id ?? null;
+          }
+        } else if (!alloc.isActive || expired) {
           allocId = null;
         }
         if (allocId) {

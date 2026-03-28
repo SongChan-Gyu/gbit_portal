@@ -47,6 +47,7 @@ model Employee {
   leaveRequests     LeaveRequest[]
   leaveAllocations  LeaveAllocation[]
   stampCoupons      StampCoupon[]
+  stampCards        StampCard[]
   stampRequests     StampRequest[]    @relation("StampRequester")
   stampApprovals    StampRequest[]    @relation("StampApprover")
   approvals         LeaveApproval[]
@@ -125,6 +126,8 @@ model LeaveType {
   // 스탬프 필요 여부
   requiresStamp    Boolean @default(false)
   stampCount       Int?
+  // 전용 부여 풀: LeaveAllocation.sourceCode와 동일하면 신청 시 해당 풀에서만 차감 (null = 연차/스탬프/무제한 등 기존 규칙)
+  allocationSourceCode String?
   // 같은 날 중복 허용 (오전반차+오후인정 등)
   allowSameDay     Boolean @default(true)
   // 반차 여부 (AM or PM 선택)
@@ -266,18 +269,44 @@ model StampRequest {
 }
 
 // ─────────────────────────────────────────
-// 스탬프 쿠폰
+// 스탬프 장(10칸): 칸마다 StampCoupon 1개. 힐링·오후인정 권한은 장 단위(소모해도 ★은 유지).
+// ─────────────────────────────────────────
+model StampCard {
+  id                      String        @id @default(cuid())
+  employeeId              String
+  employee                Employee      @relation(fields: [employeeId], references: [id])
+  sortOrder               Int           // 적립 순서 (오래된 장부터 권한 탐색)
+  filledCount             Int           @default(0) // 1~10, 해당 장에 찍힌 스탬프 수
+  healingUsed             Boolean       @default(false)
+  afternoonUsed           Boolean       @default(false)
+  healingLeaveRequestId   String?
+  afternoonLeaveRequestId String?
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+  stamps                  StampCoupon[]
+
+  @@index([employeeId])
+  @@index([healingLeaveRequestId])
+  @@index([afternoonLeaveRequestId])
+}
+
+// ─────────────────────────────────────────
+// 스탬프 쿠폰 (1칸 = 1행, 표시용)
 // ─────────────────────────────────────────
 model StampCoupon {
-  id             String    @id @default(cuid())
+  id             String     @id @default(cuid())
   employeeId     String
-  employee       Employee  @relation(fields: [employeeId], references: [id])
+  employee       Employee   @relation(fields: [employeeId], references: [id])
+  stampCardId    String?
+  stampCard      StampCard? @relation(fields: [stampCardId], references: [id], onDelete: SetNull)
   stampDate      DateTime
-  isUsed         Boolean   @default(false)
+  isUsed         Boolean    @default(false)
   usedForType    String?
   usedAt         DateTime?
   usedRequestId  String?
-  createdAt      DateTime  @default(now())
+  createdAt      DateTime   @default(now())
+
+  @@index([stampCardId])
 }
 
 // ─────────────────────────────────────────

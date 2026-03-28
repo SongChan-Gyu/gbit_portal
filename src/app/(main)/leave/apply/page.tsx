@@ -4,6 +4,7 @@ import { getFiscalYear } from "@/lib/workdays";
 import { formatYMD } from "@/lib/dateUtils";
 import LeaveApplyForm from "./LeaveApplyForm";
 import { serializeDates } from "@/lib/serialize";
+import { countAfternoonEligible, countHealingEligible } from "@/lib/stampCard";
 
 export default async function LeaveApplyPage() {
   const session = await auth();
@@ -11,24 +12,24 @@ export default async function LeaveApplyPage() {
   const fy = getFiscalYear();
   const now = new Date();
 
-  const [leaveTypes, allocations, employee, stamps, holidays] = await Promise.all([
-    prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
-    prisma.leaveAllocation.findMany({
-      where: {
-        employeeId: user.employeeId,
-        isActive: true,
-        validFrom:  { lte: now },
-        validUntil: { gte: now },
-      },
-      orderBy: [{ fiscalYear: "desc" }, { sourceCode: "asc" }],
-    }),
-    prisma.employee.findUnique({ where: { id: user.employeeId }, include: { team: true } }),
-    prisma.stampCoupon.findMany({
-      where: { employeeId: user.employeeId, isUsed: false },
-      orderBy: { stampDate: "asc" },
-    }),
-    prisma.holiday.findMany({ orderBy: { date: "asc" } }),
-  ]);
+  const [leaveTypes, allocations, employee, holidays, totalStamps, afternoonStampSlots, healingStampSlots] =
+    await Promise.all([
+      prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+      prisma.leaveAllocation.findMany({
+        where: {
+          employeeId: user.employeeId,
+          isActive: true,
+          validFrom:  { lte: now },
+          validUntil: { gte: now },
+        },
+        orderBy: [{ fiscalYear: "desc" }, { sourceCode: "asc" }],
+      }),
+      prisma.employee.findUnique({ where: { id: user.employeeId }, include: { team: true } }),
+      prisma.holiday.findMany({ orderBy: { date: "asc" } }),
+      prisma.stampCoupon.count({ where: { employeeId: user.employeeId } }),
+      countAfternoonEligible(prisma, user.employeeId),
+      countHealingEligible(prisma, user.employeeId),
+    ]);
 
   // 잔여 연차 = 연차(기본+근속가산+이월)만. 특별휴가·경조·돌봄 등 제외
   const ANNUAL_ONLY_SOURCES = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"]);
@@ -72,8 +73,8 @@ export default async function LeaveApplyPage() {
             </div>
             <div className="w-px h-8 bg-gray-200" />
             <div className="text-center">
-              <p className="text-xl font-black text-amber-500">{stamps.length}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">보유 스탬프</p>
+              <p className="text-xl font-black text-amber-500">{totalStamps}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">누적 스탬프 칸</p>
             </div>
             <div className="w-px h-8 bg-gray-200" />
             <div className="text-center">
@@ -92,10 +93,11 @@ export default async function LeaveApplyPage() {
       <LeaveApplyForm
         leaveTypes={serializeDates(leaveTypes) as any}
         allocations={serializeDates(allocations) as any}
-        stamps={serializeDates(stamps) as any}
+        totalStamps={totalStamps}
+        afternoonStampSlots={afternoonStampSlots}
+        healingStampSlots={healingStampSlots}
         halfDayUsed={halfDayUsed}
         holidays={holidays.map((h) => h.date.toISOString().slice(0, 10))}
-        employeeId={user.employeeId}
       />
     </div>
   );

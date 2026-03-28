@@ -9,6 +9,8 @@ interface LT {
   requiresStamp:boolean; stampCount:number|null; isHalf:boolean;
   isAmOnly:boolean; isPmOnly:boolean; validityBasis:string; validityMonths:number|null;
   isActive:boolean; sortOrder:number; color:string;
+  /** LeaveAllocation.sourceCode 와 동일하면 그 부여 풀에서만 차감 */
+  allocationSourceCode:string|null;
 }
 
 const VALIDITY_OPTIONS = [
@@ -321,6 +323,19 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
                     <option value="false">차감 안함 (별도 휴가)</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="label">전용 부여 풀 (allocationSourceCode)</label>
+                <input className="input font-mono text-sm" placeholder="비움 = 연차만 또는 미차감만"
+                  value={editing.allocationSourceCode ?? ""}
+                  onChange={(e)=>{
+                    const v = e.target.value.trim();
+                    set("allocationSourceCode", v ? v.toUpperCase() : null);
+                  }} />
+                <p className="text-xs text-gray-400 mt-1">
+                  돌봄 CARE, 포상 AWARD 등 관리자 부여의 sourceCode와 동일하게 넣으면 신청 시 그 잔여만큼만 사용됩니다.
+                </p>
               </div>
 
               {/* 유효기간 */}

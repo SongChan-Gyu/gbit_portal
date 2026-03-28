@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { appendStampCouponToCard } from "@/lib/stampCard";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -27,21 +28,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // APPROVE: 스탬프 쿠폰 자동 생성
+  // APPROVE: 스탬프 칸(쿠폰)을 현재 장에 추가
   await prisma.$transaction(async (tx) => {
-    const stamp = await tx.stampCoupon.create({
-      data: {
-        employeeId: sr.employeeId,
-        stampDate: sr.stampDate,
-      },
-    });
+    const { stampId } = await appendStampCouponToCard(tx, sr.employeeId, sr.stampDate);
     await tx.stampRequest.update({
       where: { id },
       data: {
         status: "APPROVED",
         approvedAt: new Date(),
         approverId: user.employeeId,
-        stampId: stamp.id,
+        stampId,
         comment: comment ?? null,
       },
     });

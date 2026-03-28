@@ -3,6 +3,8 @@ import type { PrismaClient } from "@prisma/client";
 /**
  * 카카오 알림톡 발송 (Aligo 연동)
  *
+ * 템플릿 코드·본문·변수 목록: docs/alimtalk-templates.md
+ *
  * 필요 환경변수
  * - KAKAO_API_KEY: 알리고 API Key
  * - KAKAO_USER_ID: 알리고 userid
@@ -138,6 +140,17 @@ GBIT Portal에서 확인 후 처리 부탁드립니다.
 - 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
 
 GBIT Portal에서 상세내역을 확인해 주세요.
+본 메시지는 발신 전용입니다.`,
+    },
+    INVITE_REGISTER: {
+      subject: "GBIT Portal 가입 안내",
+      body:
+`[GBIT Portal]
+#{수신자명}님, GBIT Portal 회원가입 초대입니다.
+
+아래 링크에서 가입을 완료해 주세요.
+#{가입링크}
+
 본 메시지는 발신 전용입니다.`,
     },
   };

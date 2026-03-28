@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 
 /**
  * POST /api/leave/request/[id]/cancel-request
@@ -65,10 +66,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
           });
         }
       }
-      await tx.stampCoupon.updateMany({
-        where: { usedRequestId: id },
-        data: { isUsed: false, usedForType: null, usedAt: null, usedRequestId: null },
-      });
+      await releaseStampSlotsForLeaveRequest(tx, id);
       await tx.leaveHistory.create({
         data: {
           leaveRequestId: id,

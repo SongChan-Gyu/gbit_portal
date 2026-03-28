@@ -124,6 +124,7 @@ async function main() {
     { sourceCode: "CARE", label: "돌봄휴가", sortOrder: 3, defaultDays: 2, note: "전원 2일" },
     { sourceCode: "HOLIDAY_EXT", label: "연휴연장휴가", sortOrder: 4, defaultDays: 1, note: "전원 1일, 1일 단위만 사용" },
     { sourceCode: "DUTY_DEPT", label: "직무부서휴가", sortOrder: 5, defaultDays: 2, note: "운영부/교육부/복지부 2일" },
+    { sourceCode: "AWARD", label: "포상휴가", sortOrder: 6, defaultDays: null, note: "PM·관리자가 사원별 부여, LeaveType.allocationSourceCode=AWARD" },
   ];
   for (const s of initSources) {
     if (await prisma.allocationSourceConfig.findUnique({ where: { sourceCode: s.sourceCode } })) continue;
@@ -224,13 +225,31 @@ async function main() {
   // ── 샘플 휴가 신청 내역 (정합성 있는 데이터)
   await seedLeaveRequests(empMap);
 
-  // ── 스탬프 (E003: 7개, 없을 때만 생성)
+  // ── 스탬프 (E003: 7칸 1장, 없을 때만 생성)
+  const e3 = empMap["E003"].id;
   for (let i = 0; i < 7; i++) {
     const id = `seed-stamp-${i}`;
     if (await prisma.stampCoupon.findUnique({ where: { id } })) continue;
     const d = new Date(2025, i, 6);
+    let card = await prisma.stampCard.findFirst({
+      where: { employeeId: e3, filledCount: { lt: 10 } },
+      orderBy: { sortOrder: "desc" },
+    });
+    if (!card) {
+      const agg = await prisma.stampCard.aggregate({
+        where: { employeeId: e3 },
+        _max: { sortOrder: true },
+      });
+      card = await prisma.stampCard.create({
+        data: { employeeId: e3, sortOrder: (agg._max.sortOrder ?? -1) + 1, filledCount: 0 },
+      });
+    }
     await prisma.stampCoupon.create({
-      data: { id, employeeId: empMap["E003"].id, stampDate: d },
+      data: { id, employeeId: e3, stampDate: d, stampCardId: card.id },
+    });
+    await prisma.stampCard.update({
+      where: { id: card.id },
+      data: { filledCount: { increment: 1 } },
     });
   }
 
@@ -528,6 +547,14 @@ async function seedLeaveTypes() {
     ["BIRTHDAY_HALF",  "생일반차",          0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 12,   "#ec4899", 22],
   ] as const;
 
+  function allocationSourceForCode(lc: string): string | null {
+    if (["CARE", "CARE_AM", "CARE_PM"].includes(lc)) return "CARE";
+    if (lc === "HOLIDAY_EXT") return "HOLIDAY_EXT";
+    if (lc === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
+    if (lc === "AWARD") return "AWARD";
+    return null;
+  }
+
   for (const [code,name,dpu,deduct,steps,maxMon,maxYr,stamp,stampCnt,isHalf,amOnly,pmOnly,vBasis,vMon,color,sort] of types) {
     if (await prisma.leaveType.findUnique({ where: { code } })) continue;
     const data = {
@@ -539,6 +566,7 @@ async function seedLeaveTypes() {
       maxPerYear:maxYr as number|null,
       requiresStamp:stamp as boolean,
       stampCount:stampCnt as number|null,
+      allocationSourceCode: allocationSourceForCode(code),
       isHalf:isHalf as boolean, isAmOnly:amOnly as boolean, isPmOnly:pmOnly as boolean,
       validityBasis:vBasis as string,
       validityMonths:vMon as number|null,

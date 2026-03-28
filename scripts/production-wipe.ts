@@ -84,6 +84,7 @@ async function main() {
     jeju: await prisma.jejuAccommodation.count(),
 
     stampCoupons: await prisma.stampCoupon.count(),
+    stampCards: await prisma.stampCard.count(),
     stampRequests: await prisma.stampRequest.count(),
 
     notifications: await prisma.notification.count(),
@@ -148,6 +149,7 @@ async function main() {
     // 스탬프
     await tx.stampRequest.deleteMany({});
     await tx.stampCoupon.deleteMany({});
+    await tx.stampCard.deleteMany({});
 
     // 알림
     await tx.notification.deleteMany({});

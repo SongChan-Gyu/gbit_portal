@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 import { sendLeaveWithdrawAlimtalk } from "@/lib/kakao";
 
 function withdrawAlimtalkEnabled() {
@@ -73,10 +74,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       where: { id: request.id },
       data: { status: "WITHDRAWN", cancelledAt: new Date() },
     });
-    await tx.stampCoupon.updateMany({
-      where: { usedRequestId: request.id },
-      data: { isUsed: false, usedForType: null, usedAt: null, usedRequestId: null },
-    });
+    await releaseStampSlotsForLeaveRequest(tx, request.id);
     await tx.leaveHistory.create({
       data: { leaveRequestId: request.id, action: "WITHDRAWN", actorId: user.employeeId },
     });

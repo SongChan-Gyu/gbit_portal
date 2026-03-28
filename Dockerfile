@@ -11,5 +11,5 @@ FROM base AS prod
 COPY . .
 RUN npm run build
 EXPOSE 3000
-# 컨테이너 시작 시 마이그레이션·시드 후 앱 실행 (Pre-deploy가 빌드 단계에서 돌아가는 경우 대비)
+# 컨테이너 시작: migrate → 스탬프 장 백필(쿠폰만 있는 기존 DB 정합, 이미 장 있으면 스킵) → seed → next
 CMD ["npm", "run", "start:prod"]

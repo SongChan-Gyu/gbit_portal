@@ -115,7 +115,7 @@ npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 
 **운영(클라우드) 이메일:** Railway 등 Variables에 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` 입력. 회사 메일 서버(smtp.gmail.com / smtp.office365.com / smtp.naver.com 등)와 발신용 계정·비밀번호만 맞추면 됨. 자세한 예시는 `.env.example` 주석 참고.
 
-**카카오 알림톡:** 카카오 비즈니스 채널 개설 후 알리고(Aligo)·비즈고 등 중계 서비스에서 연동·템플릿 검수 후 API 키 발급. `.env.example` 하단 주석에 설정 흐름 정리됨. 미설정 시 알림톡은 스킵되고 로그만 남음.
+**카카오 알림톡:** 카카오 비즈니스 채널 개설 후 알리고(Aligo)·비즈고 등 중계 서비스에서 연동·템플릿 검수 후 API 키 발급. **템플릿 코드·본문:** `docs/alimtalk-templates.md`. `.env.example` 하단에 설정 흐름. 미설정 시 알림톡은 스킵되고 로그만 남음.
 
 **요청(접속) 로그:** 운영 시 IP·메서드·URL 기록이 필요하면 `REQUEST_LOG_SECRET`을 설정. 미설정 시 API 요청 로그를 남기지 않음. 기록된 로그는 관리 > 시스템 설정 > 데이터에서 "요청(접속) 로그" 테이블로 조회 가능.
 

@@ -56,7 +56,7 @@ export default async function DashboardPage({
       orderBy: [{ fiscalYear: "desc" }, { sourceCode: "asc" }],
     }),
     prisma.leaveRequest.count({ where: { employeeId: user.employeeId, status: "PENDING" } }),
-    prisma.stampCoupon.count({ where: { employeeId: user.employeeId, isUsed: false } }),
+    prisma.stampCoupon.count({ where: { employeeId: user.employeeId } }),
     prisma.employee.findUnique({ where: { id: user.employeeId }, include: { team: { include: { employees: true } } } }),
     prisma.leaveRequest.findMany({
       where: { employeeId: user.employeeId },

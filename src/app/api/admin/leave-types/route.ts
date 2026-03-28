@@ -13,6 +13,11 @@ export async function POST(req: Request) {
   const dup = await prisma.leaveType.findUnique({ where:{code:body.code} });
   if (dup) return NextResponse.json({ error:"이미 존재하는 코드입니다." }, { status:400 });
 
+  const allocSrc =
+    typeof body.allocationSourceCode === "string" && body.allocationSourceCode.trim()
+      ? body.allocationSourceCode.trim()
+      : null;
+
   const lt = await prisma.leaveType.create({
     data:{
       code:body.code, name:body.name, daysPerUnit:body.daysPerUnit??1,
@@ -22,6 +27,7 @@ export async function POST(req: Request) {
       isHalf:body.isHalf??false, isAmOnly:body.isAmOnly??false, isPmOnly:body.isPmOnly??false,
       validityBasis:body.validityBasis??"FISCAL", validityMonths:body.validityMonths??null,
       isActive:body.isActive??true, sortOrder:body.sortOrder??99, color:body.color??"#3b82f6",
+      allocationSourceCode: allocSrc,
     },
   });
   return NextResponse.json({ ok:true, id:lt.id });

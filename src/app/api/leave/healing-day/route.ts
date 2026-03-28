@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { findHealingStampCard } from "@/lib/stampCard";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -10,14 +11,6 @@ export async function POST(req: Request) {
 
   const lt = await prisma.leaveType.findUnique({ where: { code: "HEALING_DAY" } });
   if (!lt) return NextResponse.json({ error: "힐링데이 유형이 없습니다." }, { status: 404 });
-
-  const stamps = await prisma.stampCoupon.findMany({
-    where: { employeeId: user.employeeId, isUsed: false },
-    orderBy: { stampDate: "asc" },
-    take: 5,
-  });
-  if (stamps.length < 5)
-    return NextResponse.json({ error: `스탬프 5개 필요 (현재 ${stamps.length}개)` }, { status: 400 });
 
   const targetDate = date ? new Date(date) : new Date();
 
@@ -35,13 +28,17 @@ export async function POST(req: Request) {
   });
   if (dup) return NextResponse.json({ error: "해당 날짜에 이미 힐링데이가 신청되어 있습니다." }, { status: 400 });
 
+  try {
   await prisma.$transaction(async (tx) => {
+    const healCard = await findHealingStampCard(tx, user.employeeId);
+    if (!healCard) throw new Error("NO_HEALING_SLOT");
+
     const reqRec = await tx.leaveRequest.create({
       data: {
         employeeId: user.employeeId,
         startDate: targetDate, endDate: targetDate,
         totalDays: 0,   // 휴가 일수 미차감
-        reason: "힐링데이 (스탬프 5개 사용)",
+        reason: "힐링데이 (스탬프 장·힐링 권한 1회)",
         status: "APPROVED",  // 자동 승인
         currentStep: 0, totalSteps: 0,
       },
@@ -60,17 +57,28 @@ export async function POST(req: Request) {
         leaveRequestId: reqRec.id,
         action: "HEALING_DAY_APPLIED",
         actorId: user.employeeId,
-        snapshot: JSON.stringify({ date: targetDate.toISOString().slice(0, 10), stampsUsed: 5 }),
+        snapshot: JSON.stringify({
+          date: targetDate.toISOString().slice(0, 10),
+          stampCardId: healCard.id,
+          healingSlot: true,
+        }),
       },
     });
-    // 스탬프 5개 사용 처리
-    for (const s of stamps) {
-      await tx.stampCoupon.update({
-        where: { id: s.id },
-        data: { isUsed: true, usedForType: "HEALING_DAY", usedAt: new Date(), usedRequestId: reqRec.id },
-      });
-    }
+    const consumed = await tx.stampCard.updateMany({
+      where: { id: healCard.id, healingUsed: false },
+      data: { healingUsed: true, healingLeaveRequestId: reqRec.id },
+    });
+    if (consumed.count === 0) throw new Error("NO_HEALING_SLOT");
   });
+  } catch (e) {
+    if (e instanceof Error && e.message === "NO_HEALING_SLOT") {
+      return NextResponse.json(
+        { error: "사용 가능한 힐링데이 권한이 없습니다. (같은 장에 스탬프 5칸 이상·힐링 미사용)" },
+        { status: 400 },
+      );
+    }
+    throw e;
+  }
 
   return NextResponse.json({ ok: true });
 }

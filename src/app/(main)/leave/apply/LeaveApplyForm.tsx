@@ -3,6 +3,7 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
 import { formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
+import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
 
 // ── 타입 ──────────────────────────────────────────────────────
@@ -11,13 +12,12 @@ interface LT {
   deductFromBalance: boolean; approvalSteps: number;
   maxPerMonth: number | null; requiresStamp: boolean; stampCount: number | null;
   isHalf: boolean; isAmOnly: boolean; isPmOnly: boolean; color: string;
+  allocationSourceCode: string | null;
 }
 interface Alloc {
   id: string; sourceCode: string; label: string; totalDays: number; usedDays: number;
   validFrom: string; validUntil: string;
 }
-interface Stamp { id: string; stampDate: string; }
-
 interface LeaveItem {
   leaveTypeId: string;
   startDate: string;
@@ -36,9 +36,6 @@ function initItem(startDate = todayStr()): LeaveItem {
 const ANNUAL_ONLY_SOURCES = new Set([
   "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER",
 ]);
-const CARE_TYPE_CODES = new Set(["CARE", "CARE_AM", "CARE_PM"]);
-const HOLIDAY_EXT_TYPE_CODES = new Set(["HOLIDAY_EXT"]);
-const BIRTHDAY_HALF_TYPE_CODES = new Set(["BIRTHDAY_HALF"]);
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 const HIDDEN_LT_CODES = new Set(["TENURE_1Y", "TENURE_5Y", "TENURE_10Y", "DEPT_BONUS"]);
 
@@ -95,8 +92,8 @@ const LEAVE_GROUPS: GroupDef[] = [
     key: "stamp", label: "스탬프", meta: "힐링데이·오후인정",
     color: "#d97706", borderClass: "border-amber-500",
     subs: [
-      { label: "힐링데이",   code: "HEALING", desc: "스탬프 5개" },
-      { label: "오후 인정", code: "PM_RECOG_STAMP", desc: "스탬프 10개" },
+      { label: "힐링데이",   code: "HEALING", desc: "스탬프 메뉴에서 신청 (장당 1회)" },
+      { label: "오후 인정", code: "PM_RECOG_STAMP", desc: "10칸 완성 장당 1회" },
     ],
   },
   {
@@ -132,6 +129,32 @@ function ymdWithDay(ymd: string): string {
   return `${ymd}(${w})`;
 }
 
+/**
+ * 휴가 신청(/api/leave/request) 페이로드·합계·검증에 넣을 행인지.
+ * - 힐링데이만 예외: 스탬프 메뉴에서 `/api/leave/healing-day`로만 신청. UI에서는 `HEALING` 선택 시
+ *   `_healingSelected` + `leaveTypeId` 비움.
+ * - 오후인정(스탬프) `PM_RECOG_STAMP` 등 나머지는 전부 일반 `leaveTypeId`로 이 API 사용.
+ */
+function includeInLeaveRequestPayload(it: LeaveItem): boolean {
+  if (it._healingSelected) return false;
+  return Boolean(it.leaveTypeId?.trim());
+}
+
+/** 항목 추가만 하고 아무 것도 고르지 않은 행 */
+function isBlankLeaveRow(it: LeaveItem): boolean {
+  if (it._healingSelected) return false;
+  if (it.leaveTypeId?.trim()) return false;
+  if (it._groupKey) return false;
+  if ((it.days || 0) > 0) return false;
+  return true;
+}
+
+function needsLeaveRowValidation(it: LeaveItem): boolean {
+  if (isBlankLeaveRow(it)) return false;
+  if (it._healingSelected) return false;
+  return true;
+}
+
 // ── 중복 체크 ─────────────────────────────────────────────────
 function detectOverlap(items: LeaveItem[], leaveTypes: LT[]): string | null {
   const byDate: Record<string, { am: boolean; pm: boolean; full: boolean }> = {};
@@ -163,14 +186,21 @@ function detectOverlap(items: LeaveItem[], leaveTypes: LT[]): string | null {
 
 // ── 컴포넌트 ──────────────────────────────────────────────────
 export default function LeaveApplyForm({
-  leaveTypes, allocations, stamps, halfDayUsed, holidays,
+  leaveTypes,
+  allocations,
+  totalStamps,
+  afternoonStampSlots,
+  healingStampSlots,
+  halfDayUsed,
+  holidays,
 }: {
   leaveTypes: LT[];
   allocations: Alloc[];
-  stamps: Stamp[];
+  totalStamps: number;
+  afternoonStampSlots: number;
+  healingStampSlots: number;
   halfDayUsed: number;
   holidays: string[];
-  employeeId: string;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<LeaveItem[]>([initItem()]);
@@ -194,24 +224,15 @@ export default function LeaveApplyForm({
     () => annualPoolAllocs.reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0),
     [annualPoolAllocs]
   );
-  const carePoolRemaining = useMemo(
-    () => allocations
-      .filter((a) => a.sourceCode === "CARE" && a.validUntil >= now)
-      .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0),
-    [allocations, now]
-  );
-  const holidayExtPoolRemaining = useMemo(
-    () => allocations
-      .filter((a) => a.sourceCode === "HOLIDAY_EXT" && a.validUntil >= now)
-      .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0),
-    [allocations, now]
-  );
-  const birthdayHalfPoolRemaining = useMemo(
-    () => allocations
-      .filter((a) => a.sourceCode === "BIRTHDAY_HALF" && a.validUntil >= now)
-      .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0),
-    [allocations, now]
-  );
+  /** 관리자 부여 풀별 잔여 (LeaveAllocation.sourceCode 합산, 유효 기간 내) */
+  const poolRemainingBySource = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const a of allocations) {
+      if (a.validUntil < now) continue;
+      m[a.sourceCode] = (m[a.sourceCode] ?? 0) + Math.max(0, a.totalDays - a.usedDays);
+    }
+    return m;
+  }, [allocations, now]);
 
   // ── 아이템 조작 ───────────────────────────────────────────
   function selectGroup(idx: number, groupKey: string) {
@@ -328,24 +349,39 @@ export default function LeaveApplyForm({
     closeCalendar();
   }
 
-  const totalDays = items.reduce((s, it) => s + (it.days || 0), 0);
-  const maxSteps  = items.reduce((m, it) => {
+  /** 일수·결재 요약·API payload — includeInLeaveRequestPayload 와 동일 기준 */
+  const effectiveSubmitItems = items.filter(includeInLeaveRequestPayload);
+  const totalDays = effectiveSubmitItems.reduce((s, it) => {
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-    return Math.max(m, lt?.approvalSteps ?? 1);
-  }, 1);
+    const d = lt?.isHalf ? 0.5 : (it.days || 0);
+    return s + d;
+  }, 0);
+  const approvalStepVals = effectiveSubmitItems.map((it) => {
+    const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
+    return lt?.approvalSteps ?? 1;
+  });
+  const maxSteps = approvalStepVals.length ? Math.max(...approvalStepVals) : 1;
+  const minSteps = approvalStepVals.length ? Math.min(...approvalStepVals) : 1;
 
   // ── 제출 ──────────────────────────────────────────────────
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     for (const it of items) {
-      if (it._healingSelected) continue; // 힐링데이는 스탬프 쿠폰에서만 신청
-      if (!it.leaveTypeId) { setError("모든 항목의 휴가 유형을 선택해 주세요."); return; }
+      if (!needsLeaveRowValidation(it)) continue;
+      if (!it.leaveTypeId?.trim()) { setError("작성 중인 항목에 휴가 유형을 선택해 주세요."); return; }
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       const actualDays = lt?.isHalf ? 0.5 : it.days;
       if (actualDays <= 0) { setError("휴가 일수를 확인해 주세요."); return; }
-      if (lt?.requiresStamp && lt.stampCount && stamps.length < lt.stampCount) {
-        setError(`${lt.name}: 스탬프 ${lt.stampCount}개 필요 (현재 ${stamps.length}개)`); return;
+      if (lt?.code === "PM_RECOG_STAMP" && afternoonStampSlots < 1) {
+        setError(`${lt.name}: 10칸 완성·오후 미사용인 스탬프 장이 없습니다.`);
+        return;
+      }
+      if (lt?.requiresStamp && lt.stampCount && lt.code !== "PM_RECOG_STAMP") {
+        if (totalStamps < (lt.stampCount ?? 0)) {
+          setError(`${lt.name}: 스탬프 ${lt.stampCount}개 필요 (현재 ${totalStamps}개)`);
+          return;
+        }
       }
       if (lt?.code === "PM_HALF_MONTH" && halfDayUsed >= 1) {
         setError("하프데이는 이번 달 이미 사용하셨습니다."); return;
@@ -353,35 +389,35 @@ export default function LeaveApplyForm({
       if (lt?.deductFromBalance && annualPoolRemaining < actualDays) {
         setError(`잔여 연차 부족 — 신청 ${actualDays}일, 잔여 ${annualPoolRemaining.toFixed(1)}일`); return;
       }
-      if (lt && CARE_TYPE_CODES.has(lt.code) && carePoolRemaining < actualDays) {
-        setError(`돌봄휴가 잔여 부족 — 연 2일 한도, 잔여 ${carePoolRemaining.toFixed(1)}일`); return;
+      const allocSrc = lt?.allocationSourceCode?.trim();
+      if (allocSrc === "HOLIDAY_EXT" && lt && !lt.isHalf && actualDays !== 1) {
+        const rem = poolRemainingBySource["HOLIDAY_EXT"] ?? 0;
+        setError(`연휴연장휴가는 1일 단위만 사용 가능하며, 잔여 ${rem.toFixed(1)}일입니다.`); return;
       }
-      if (lt && HOLIDAY_EXT_TYPE_CODES.has(lt.code) && (actualDays !== 1 || holidayExtPoolRemaining < 1)) {
-        setError(`연휴연장휴가는 1일 단위만 사용 가능하며, 잔여 ${holidayExtPoolRemaining.toFixed(1)}일입니다.`); return;
-      }
-      if (lt && BIRTHDAY_HALF_TYPE_CODES.has(lt.code) && (actualDays !== 0.5 || birthdayHalfPoolRemaining < 0.5)) {
-        setError(`생일반차 잔여 부족 (0.5일, 잔여 ${birthdayHalfPoolRemaining.toFixed(1)}일)`); return;
+      if (allocSrc === "BIRTHDAY_HALF" && actualDays !== 0.5) {
+        setError("생일반차는 0.5일(오후 반차)만 신청할 수 있습니다."); return;
       }
     }
-    const careDaysSum = items.reduce((s, it) => {
+    const dedicatedTotals: Record<string, number> = {};
+    for (const it of items) {
+      if (!needsLeaveRowValidation(it)) continue;
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-      return lt && CARE_TYPE_CODES.has(lt.code) ? s + (lt.isHalf ? 0.5 : (it.days || 0)) : s;
-    }, 0);
-    if (careDaysSum > 0 && careDaysSum > carePoolRemaining) {
-      setError(`돌봄휴가 잔여 부족 — 신청 ${careDaysSum.toFixed(1)}일, 잔여 ${carePoolRemaining.toFixed(1)}일`); return;
+      const src = lt?.allocationSourceCode?.trim();
+      if (!lt || !src) continue;
+      const d = leaveItemDeductDays(it, lt);
+      dedicatedTotals[src] = (dedicatedTotals[src] ?? 0) + d;
     }
-    const holidayExtDaysSum = items.reduce((s, it) => {
-      const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-      return lt && HOLIDAY_EXT_TYPE_CODES.has(lt.code) ? s + 1 : s;
-    }, 0);
-    if (holidayExtDaysSum > 0 && holidayExtDaysSum > holidayExtPoolRemaining) {
-      setError(`연휴연장휴가 잔여 부족 — 신청 ${holidayExtDaysSum}일, 잔여 ${holidayExtPoolRemaining.toFixed(1)}일`); return;
+    for (const [src, need] of Object.entries(dedicatedTotals)) {
+      const rem = poolRemainingBySource[src] ?? 0;
+      if (need > rem) {
+        setError(`「${src}」부여 잔여 부족 — 신청 ${need.toFixed(1)}일, 잔여 ${rem.toFixed(1)}일`); return;
+      }
     }
     const overlap = detectOverlap(items, leaveTypes);
     if (overlap) { setError(overlap); return; }
 
     setLoading(true);
-    const payload = items.map((it) => {
+    const payload = items.filter(includeInLeaveRequestPayload).map((it) => {
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       return { ...it, allocationId: "", days: lt?.isHalf ? 0.5 : it.days };
     });
@@ -621,30 +657,28 @@ export default function LeaveApplyForm({
                   </section>
                 )}
 
-                {/* 스탬프 현황 */}
-                {lt?.requiresStamp && item.leaveTypeId && (
+                {/* 스탬프: 오후인정(스탬프) */}
+                {lt?.code === "PM_RECOG_STAMP" && item.leaveTypeId && (
                   <section className="rounded-lg border border-purple-100 bg-purple-50/60 p-3">
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-semibold text-purple-800">스탬프 현황</span>
-                      <span className={`text-xs font-semibold ${
-                        stamps.length >= (lt.stampCount ?? 0) ? "text-emerald-600" : "text-purple-600"
-                      }`}>
-                        {stamps.length} / {lt.stampCount}개
-                        {stamps.length >= (lt.stampCount ?? 0)
-                          ? <span className="ml-1">✓ 사용 가능</span>
-                          : <span className="ml-1">— {(lt.stampCount ?? 0) - stamps.length}개 부족</span>
-                        }
+                      <span className="text-xs font-semibold text-purple-800">오후 인정(스탬프)</span>
+                      <span
+                        className={`text-xs font-semibold ${
+                          afternoonStampSlots >= 1 ? "text-emerald-600" : "text-purple-600"
+                        }`}
+                      >
+                        사용 가능 {afternoonStampSlots}회
+                        {afternoonStampSlots >= 1 ? (
+                          <span className="ml-1">✓</span>
+                        ) : (
+                          <span className="ml-1">(10칸 완성 장 필요)</span>
+                        )}
                       </span>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {Array.from({ length: lt.stampCount ?? 10 }).map((_, i) => (
-                        <span key={i} className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                          i < stamps.length ? "bg-amber-400 text-white" : "bg-gray-200 text-gray-300"
-                        }`}>
-                          {i < stamps.length ? "★" : "☆"}
-                        </span>
-                      ))}
-                    </div>
+                    <p className="text-[11px] text-purple-900/80">
+                      누적 스탬프 {totalStamps}칸 · 힐링 사용 가능 장 {healingStampSlots}개(참고) · 오후인정은
+                      완성된 장마다 1회입니다.
+                    </p>
                   </section>
                 )}
 
@@ -711,7 +745,11 @@ export default function LeaveApplyForm({
               <span className="text-sm font-semibold text-gray-800">신청 요약</span>
             </div>
             <span className="text-xs text-gray-500">
-              {maxSteps === 0 ? "즉시 처리" : maxSteps === 1 ? "팀장 1단계" : "팀장 → PM 2단계"} 결재
+              {maxSteps === 0
+                ? "즉시 처리"
+                : minSteps === maxSteps
+                  ? (maxSteps === 1 ? "팀장 1단계" : "팀장 → PM 2단계")
+                  : `결재 단계가 항목마다 다름 (최대 ${maxSteps}단) · 한 번에 제출해도 단계별로 신청이 나뉨`}
             </span>
           </div>
           <div className="divide-y divide-slate-200">

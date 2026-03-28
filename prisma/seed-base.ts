@@ -41,6 +41,14 @@ async function seedLeaveTypes() {
     ["BIRTHDAY_HALF", "생일반차", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 12, "#ec4899", 22],
   ] as const;
 
+  function allocationSourceForCode(code: string): string | null {
+    if (["CARE", "CARE_AM", "CARE_PM"].includes(code)) return "CARE";
+    if (code === "HOLIDAY_EXT") return "HOLIDAY_EXT";
+    if (code === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
+    if (code === "AWARD") return "AWARD";
+    return null;
+  }
+
   for (const [code, name, dpu, deduct, steps, maxMon, maxYr, stamp, stampCnt, isHalf, amOnly, pmOnly, vBasis, vMon, color, sort] of types) {
     const data = {
       name,
@@ -51,6 +59,7 @@ async function seedLeaveTypes() {
       maxPerYear: maxYr as number | null,
       requiresStamp: stamp as boolean,
       stampCount: stampCnt as number | null,
+      allocationSourceCode: allocationSourceForCode(code),
       isHalf: isHalf as boolean,
       isAmOnly: amOnly as boolean,
       isPmOnly: pmOnly as boolean,
