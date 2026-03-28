@@ -145,6 +145,14 @@ const LEAVE_GROUPS: GroupDef[] = [
 const CODE_TO_GROUP: Record<string, string> = {};
 LEAVE_GROUPS.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP[s.code] = g.key; }));
 
+/** UI: 자산형(소모 가능 부여) vs 사유형 — 섹션 분리 */
+const ASSET_GROUP_KEYS = new Set([
+  "annual", "care", "holidayExt", "stamp", "halfday", "award", "birthday",
+]);
+const REASON_GROUP_KEYS = new Set(["public", "recognition", "sick"]);
+const LEAVE_GROUPS_ASSET = LEAVE_GROUPS.filter((g) => ASSET_GROUP_KEYS.has(g.key));
+const LEAVE_GROUPS_REASON = LEAVE_GROUPS.filter((g) => REASON_GROUP_KEYS.has(g.key));
+
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
 function ymdWithDay(ymd: string): string {
   const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
@@ -529,31 +537,65 @@ export default function LeaveApplyForm({
 
               <div className="panel-body space-y-5">
                 {/* STEP 1: 휴가 종류 */}
-                <section>
-                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                <section className="space-y-4">
+                  <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                     01. 휴가 종류
                   </p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
-                    {LEAVE_GROUPS.map((g) => {
-                      const isSelected = item._groupKey === g.key;
-                      return (
-                        <button key={g.key} type="button"
-                          onClick={() => selectGroup(idx, g.key)}
-                          className={`flex flex-col items-center justify-center p-3.5 rounded-lg border text-center transition-all ${
-                            isSelected
-                              ? "border-2 bg-white shadow-sm"
-                              : "border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50"
-                          }`}
-                          style={isSelected ? { borderColor: g.color } : {}}>
-                          <span className={`text-sm font-semibold leading-tight ${
-                            isSelected ? "" : "text-gray-600"
-                          }`} style={isSelected ? { color: g.color } : {}}>
-                            {g.label}
-                          </span>
-                          <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span>
-                        </button>
-                      );
-                    })}
+                  <div>
+                    <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" aria-hidden />
+                      자산형 (연차·돌봄·이벤트 등 부여 일수)
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                      {LEAVE_GROUPS_ASSET.map((g) => {
+                        const isSelected = item._groupKey === g.key;
+                        return (
+                          <button key={g.key} type="button"
+                            onClick={() => selectGroup(idx, g.key)}
+                            className={`flex flex-col items-center justify-center p-3.5 rounded-lg border text-center transition-all ${
+                              isSelected
+                                ? "border-2 bg-white shadow-sm"
+                                : "border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50"
+                            }`}
+                            style={isSelected ? { borderColor: g.color } : {}}>
+                            <span className={`text-sm font-semibold leading-tight ${
+                              isSelected ? "" : "text-gray-600"
+                            }`} style={isSelected ? { color: g.color } : {}}>
+                              {g.label}
+                            </span>
+                            <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5">
+                      <span className="inline-block w-2 h-2 rounded-full bg-amber-400" aria-hidden />
+                      사유형 (공가·병가·인정 등)
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {LEAVE_GROUPS_REASON.map((g) => {
+                        const isSelected = item._groupKey === g.key;
+                        return (
+                          <button key={g.key} type="button"
+                            onClick={() => selectGroup(idx, g.key)}
+                            className={`flex flex-col items-center justify-center p-3.5 rounded-lg border text-center transition-all ${
+                              isSelected
+                                ? "border-2 bg-white shadow-sm"
+                                : "border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50"
+                            }`}
+                            style={isSelected ? { borderColor: g.color } : {}}>
+                            <span className={`text-sm font-semibold leading-tight ${
+                              isSelected ? "" : "text-gray-600"
+                            }`} style={isSelected ? { color: g.color } : {}}>
+                              {g.label}
+                            </span>
+                            <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </section>
 

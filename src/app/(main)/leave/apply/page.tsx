@@ -31,10 +31,15 @@ export default async function LeaveApplyPage() {
       countHealingEligible(prisma, user.employeeId),
     ]);
 
-  // 잔여 연차 = 연차(기본+근속가산+이월)만. 특별휴가·경조·돌봄 등 제외
-  const ANNUAL_ONLY_SOURCES = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"]);
-  const totalRemain = allocations
-    .filter((a) => ANNUAL_ONLY_SOURCES.has(a.sourceCode))
+  /** 상단 KPI: 소모 가능 자산 잔여 (연차 풀 + 돌봄·연휴연장·포상·근속특별 등). 공가·병가 부여는 제외 */
+  const KPI_ASSET_SOURCES = new Set([
+    "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER",
+    "CARE", "HOLIDAY_EXT", "AWARD", "BIRTHDAY_HALF", "DUTY_DEPT",
+    "TENURE_1Y", "TENURE_5Y", "TENURE_10Y",
+  ]);
+  const totalAssetRemain = allocations
+    .filter((a) => KPI_ASSET_SOURCES.has(a.sourceCode))
+    .filter((a) => new Date(a.validFrom) <= now && new Date(a.validUntil) >= now)
     .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0);
 
   // 이번 달 하프데이 사용 횟수
@@ -63,13 +68,14 @@ export default async function LeaveApplyPage() {
         <p className="page-subtitle">{fy}년도 귀속 · {employee?.name} · {employee?.team?.name}</p>
       </div>
 
-      {/* 잔여 연차 요약 바 */}
+      {/* 사용 가능 자산 요약 (공가·병가 미포함) */}
       <div className="panel mb-5">
         <div className="panel-body">
           <div className="flex items-center gap-6">
-            <div className="text-center">
-              <p className="text-xl font-black text-blue-600">{totalRemain.toFixed(1)}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">잔여 연차</p>
+            <div className="text-center min-w-[7rem]">
+              <p className="text-xl font-black text-blue-600">{totalAssetRemain.toFixed(1)}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">사용 가능 휴가</p>
+              <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">연차·돌봄·이벤트 등</p>
             </div>
             <div className="w-px h-8 bg-gray-200" />
             <div className="text-center">

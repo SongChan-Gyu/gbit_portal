@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { XCircle } from "lucide-react";
 
-export default function CancelRequestButton({ requestId }: { requestId: string }) {
+export default function CancelRequestButton({ requestId, className }: { requestId: string; className?: string }) {
   const router = useRouter();
   const [open, setOpen]     = useState(false);
   const [reason, setReason] = useState("");
@@ -28,8 +28,9 @@ export default function CancelRequestButton({ requestId }: { requestId: string }
   return (
     <>
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 text-xs text-orange-600 hover:text-orange-800 px-2 py-1 rounded border border-orange-200 hover:bg-orange-50 transition"
+        className={`inline-flex items-center justify-center gap-1 text-xs text-orange-600 hover:text-orange-800 px-2 py-1 rounded border border-orange-200 hover:bg-orange-50 transition ${className ?? ""}`}
       >
         <XCircle size={11} /> 취소신청
       </button>

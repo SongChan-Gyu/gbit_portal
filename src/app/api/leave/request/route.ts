@@ -104,21 +104,27 @@ export async function POST(req: Request) {
       where: { date: { gte: startOnly, lte: endOnly } },
     });
     const holidaySet = new Set(rangeHolidays.map((h) => h.date.toISOString().slice(0, 10)));
+    /** 각 신청 항목의 start~end 구간만 검사 (전체 최소~최대 사이의 ‘빈’ 주말·공휴일은 제외) */
     const invalidDays: string[] = [];
-    const cur = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
     const toYmd = (d: Date) =>
       `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    while (cur <= end) {
-      const ds = toYmd(cur);
-      const dow = cur.getDay();
-      if (dow === 0 || dow === 6 || holidaySet.has(ds)) invalidDays.push(ds);
-      cur.setDate(cur.getDate() + 1);
+    for (const it of items) {
+      const s = new Date(it.startDate);
+      const e = new Date(it.endDate);
+      const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+      const endItem = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+      while (cur <= endItem) {
+        const ds = toYmd(cur);
+        const dow = cur.getDay();
+        if (dow === 0 || dow === 6 || holidaySet.has(ds)) invalidDays.push(ds);
+        cur.setDate(cur.getDate() + 1);
+      }
     }
-    if (invalidDays.length > 0) {
+    const uniqueInvalid = [...new Set(invalidDays)].sort();
+    if (uniqueInvalid.length > 0) {
       return NextResponse.json(
         {
-          error: `선택한 기간에 공휴일 또는 주말이 포함되어 있습니다. (${invalidDays.slice(0, 5).join(", ")}${invalidDays.length > 5 ? " 외 " + (invalidDays.length - 5) + "일" : ""})`,
+          error: `선택한 기간에 공휴일 또는 주말이 포함되어 있습니다. (${uniqueInvalid.slice(0, 5).join(", ")}${uniqueInvalid.length > 5 ? " 외 " + (uniqueInvalid.length - 5) + "일" : ""})`,
         },
         { status: 400 },
       );

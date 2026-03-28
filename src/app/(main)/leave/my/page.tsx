@@ -93,10 +93,17 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   fyAllocs.push(...annualMerged);
   byTenureSource.forEach((a) => fyAllocs.push(a));
 
-  // 총 부여/사용/잔여는 오늘 기준 유효한 할당만 (validFrom <= now <= validUntil)
+  // 총 부여/사용/잔여: 소모 가능 자산만 (공가·병가 성격의 부여는 합계에서 제외 — 혼동 방지)
+  const KPI_ASSET_SOURCE_CODES = new Set([
+    "ANNUAL",
+    "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER",
+    "CARE", "HOLIDAY_EXT", "AWARD", "BIRTHDAY_HALF", "DUTY_DEPT",
+    "TENURE_1Y", "TENURE_5Y", "TENURE_10Y",
+  ]);
   const validAllocs = fyAllocs.filter((a) => now >= new Date(a.validFrom) && now <= new Date(a.validUntil));
-  const granted  = validAllocs.reduce((s,a)=>s+a.totalDays, 0);
-  const used     = validAllocs.reduce((s,a)=>s+a.usedDays,  0);
+  const kpiAllocs = validAllocs.filter((a) => KPI_ASSET_SOURCE_CODES.has(a.sourceCode));
+  const granted  = kpiAllocs.reduce((s,a)=>s+a.totalDays, 0);
+  const used     = kpiAllocs.reduce((s,a)=>s+a.usedDays,  0);
   const remain   = granted - used;
 
   // 월별 사용 집계 (귀속연도 인덱스 기준)
@@ -128,20 +135,25 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
         ))}
       </div>
 
-      {/* 요약 카드 */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="stat-card">
-          <div className="stat-num">{granted.toFixed(0)}</div>
-          <div className="stat-label">총 부여</div>
+      {/* 요약 카드 (자산형 부여만 합산) */}
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-3 gap-3">
+          <div className="stat-card">
+            <div className="stat-num">{granted.toFixed(0)}</div>
+            <div className="stat-label">총 부여</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-num text-red-600">{used.toFixed(1)}</div>
+            <div className="stat-label">사용</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-num text-blue-700">{remain.toFixed(1)}</div>
+            <div className="stat-label">잔여</div>
+          </div>
         </div>
-        <div className="stat-card">
-          <div className="stat-num text-red-600">{used.toFixed(1)}</div>
-          <div className="stat-label">사용</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-num text-blue-700">{remain.toFixed(1)}</div>
-          <div className="stat-label">잔여</div>
-        </div>
+        <p className="text-[11px] text-gray-400 px-0.5">
+          연차·돌봄·이벤트 등 소모 자산만 집계합니다. 공가·병가는 유형별 상세에서 확인하세요.
+        </p>
       </div>
 
       {/* 유형별 잔여 */}
@@ -327,63 +339,96 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
             <p>신청 내역이 없습니다.</p>
           </div>
         ) : (
-          <ul className="divide-y divide-gray-100">
+          <ul className="p-3 space-y-3 md:p-0 md:space-y-0 md:divide-y md:divide-gray-100">
             {requests.map((req) => (
-              <li key={req.id} className="px-4 py-3 hover:bg-gray-50/50">
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <span className="font-medium text-gray-800 whitespace-nowrap">
-                    {req.items.length === 1
-                      ? req.items[0].leaveType.name
-                      : `복합 신청 (${req.items.length}건)`}
-                  </span>
-                  <span className="text-gray-500 text-sm whitespace-nowrap">
-                    {formatMDWithDay(req.startDate)}
-                    {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
-                    <span className="text-slate-700 font-semibold ml-0.5">{req.totalDays}일</span>
-                  </span>
-                  <span className={`badge shrink-0 whitespace-nowrap ${STATUS_BADGE[req.status]}`}>
-                    {STATUS_KO[req.status]}
-                  </span>
-                  <span className="ml-auto flex items-center gap-2 shrink-0 pl-2 border-l border-gray-200">
-                    {req.status === "PENDING" && <CancelButton requestId={req.id} />}
-                    {req.status === "APPROVED" && <CancelRequestButton requestId={req.id} />}
-                    {req.status === "CANCEL_REQUESTED" && (
-                      <span className="text-xs text-orange-600 bg-orange-50 px-2 py-0.5 rounded">취소심사</span>
-                    )}
-                  </span>
+              <li key={req.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm md:rounded-none md:border-0 md:shadow-none md:px-4 md:py-3 md:hover:bg-gray-50/50">
+                <div className="p-4 md:p-0">
+                  <div className="flex justify-between items-start gap-3 mb-2">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="font-medium text-gray-900 leading-snug">
+                        {req.items.length === 1
+                          ? req.items[0].leaveType.name
+                          : `복합 신청 (${req.items.length}건)`}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {formatMDWithDay(req.startDate)}
+                        {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
+                        <span className="text-slate-800 font-semibold ml-1 tabular-nums">· {req.totalDays}일</span>
+                      </p>
+                    </div>
+                    <span className={`badge shrink-0 whitespace-nowrap ${STATUS_BADGE[req.status]}`}>
+                      {STATUS_KO[req.status]}
+                    </span>
+                  </div>
+                  {req.items.length > 1 && (
+                    <ul className="mt-3 space-y-2 text-sm border-t border-gray-100 pt-3">
+                      {req.items.map((it) => (
+                        <li key={it.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <span className="font-medium text-gray-800 shrink-0" style={{ color: it.leaveType.color }}>
+                            {it.leaveType.name}
+                          </span>
+                          <span className="text-gray-500 text-xs">
+                            {formatMDWithDay(it.startDate)}
+                            {it.startDate.toDateString() !== it.endDate.toDateString() &&
+                              ` ~ ${formatMDWithDay(it.endDate)}`}
+                          </span>
+                          <span className="text-slate-600 tabular-nums text-xs font-semibold">{it.days}일</span>
+                          {it.reason?.trim() && it.reason.trim().length >= 2 && (
+                            <span className="text-gray-400 text-xs w-full">사유: {it.reason.trim()}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
-                {req.items.length > 1 && (
-                  <ul className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
-                    {req.items.map((it) => (
-                      <li key={it.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
-                        <span className="font-medium text-gray-800 shrink-0" style={{ color: it.leaveType.color }}>
-                          {it.leaveType.name}
-                        </span>
-                        <span className="text-gray-500 text-xs">
-                          {formatMDWithDay(it.startDate)}
-                          {it.startDate.toDateString() !== it.endDate.toDateString() &&
-                            ` ~ ${formatMDWithDay(it.endDate)}`}
-                        </span>
-                        <span className="text-slate-600 tabular-nums text-xs font-semibold">{it.days}일</span>
-                        {it.reason?.trim() && it.reason.trim().length >= 2 && (
-                          <span className="text-gray-400 text-xs w-full sm:w-auto">사유: {it.reason.trim()}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {(req.approvals.some((a) => a.status !== "PENDING") || req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2)) && (
-                  <div className="mt-1.5 pl-0 text-xs text-gray-500">
-                    {req.approvals.length > 0 && (
-                      <span className="mr-3">
-                        결재: {req.approvals.map((a) => `${a.approver.name}${a.status==="APPROVED"?" ✓":a.status==="REJECTED"?" ✗":""}`).join(" → ")}
-                      </span>
+                {(() => {
+                  const hasItemReason = req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2);
+                  const hasMeta = req.approvals.length > 0 || hasItemReason;
+                  const detailBlock = hasMeta ? (
+                    <div className="space-y-1 text-xs text-gray-600 leading-relaxed">
+                      {req.approvals.length > 0 && (
+                        <p>
+                          <span className="text-gray-400">결재</span>{" "}
+                          {req.approvals.map((a) => `${a.approver.name}${a.status==="APPROVED"?" ✓":a.status==="REJECTED"?" ✗":""}`).join(" → ")}
+                        </p>
+                      )}
+                      {hasItemReason && (
+                        <p>
+                          <span className="text-gray-400">사유</span>{" "}
+                          {req.items.filter((it) => it.reason?.trim() && it.reason.trim().length >= 2).map((it) => it.reason!.trim()).join(" / ")}
+                        </p>
+                      )}
+                    </div>
+                  ) : null;
+                  return (
+                <div className="grid grid-cols-2 border-t border-gray-100 divide-x divide-gray-100 bg-gray-50/90 md:bg-gray-50/30">
+                  <div className="flex min-h-[48px] items-stretch">
+                    {req.status === "PENDING" && (
+                      <CancelButton requestId={req.id} className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 bg-transparent hover:bg-red-50 text-sm font-medium" />
                     )}
-                    {req.items.length === 1 && req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2) && (
-                      <span>사유: {req.items.filter((it) => it.reason?.trim() && it.reason.trim().length >= 2).map((it) => it.reason!.trim()).join(" / ")}</span>
+                    {req.status === "APPROVED" && (
+                      <CancelRequestButton requestId={req.id} className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 border-transparent bg-transparent hover:bg-orange-50 text-sm font-medium" />
+                    )}
+                    {req.status === "CANCEL_REQUESTED" && (
+                      <span className="flex flex-1 items-center justify-center text-xs text-orange-800 bg-orange-50/90">취소심사 중</span>
+                    )}
+                    {!["PENDING", "APPROVED", "CANCEL_REQUESTED"].includes(req.status) && (
+                      <span className="flex flex-1 items-center justify-center text-xs text-gray-400">—</span>
                     )}
                   </div>
-                )}
+                  {detailBlock ? (
+                    <details className="group min-h-[48px] flex flex-col justify-center bg-white/80 open:bg-white">
+                      <summary className="list-none cursor-pointer select-none min-h-[48px] flex items-center justify-center text-sm font-medium text-slate-700 hover:bg-slate-50 px-2">
+                        상세보기
+                      </summary>
+                      <div className="px-3 pb-3 border-t border-gray-100 bg-white text-left">{detailBlock}</div>
+                    </details>
+                  ) : (
+                    <div className="flex min-h-[48px] items-center justify-center text-xs text-gray-300">—</div>
+                  )}
+                </div>
+                  );
+                })()}
               </li>
             ))}
           </ul>
