@@ -1,13 +1,11 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
-import ApproveActions from "./ApproveActions";
-import CancelApproveActions from "./CancelApproveActions";
 import AdminCancelButton from "./AdminCancelButton";
-import ExpandablePanel from "./ExpandablePanel";
+import LeaveApprovePendingClient from "./LeaveApprovePendingClient";
 import StampApproveClient from "@/app/(main)/stamp/approve/StampApproveClient";
 import { serializeDates } from "@/lib/serialize";
-import { formatMDWithDay, formatYMD } from "@/lib/dateUtils";
+import { formatMDWithDay } from "@/lib/dateUtils";
 
 export default async function ApprovePage({
   searchParams,
@@ -178,134 +176,12 @@ export default async function ApprovePage({
                 </div>
               )}
 
-              {actionable.map((ap) => {
-                const req = ap.leaveRequest;
-                return (
-                  <ExpandablePanel
-                    key={ap.id}
-                    borderColor="slate"
-                    summary={
-                      <>
-                        <div className="min-w-0">
-                          <span className="text-xs md:text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-medium mr-2">휴가신청</span>
-                          <span className="font-semibold text-gray-800">{req.employee.name}</span>
-                          <span className="text-gray-500 text-sm ml-1.5">{req.items.map((i) => `${i.leaveType.name} ${i.days}일`).join(" ")}</span>
-                        </div>
-                        <span className="text-xs text-gray-500 shrink-0">{ap.step}단계/{req.totalSteps}단계</span>
-                      </>
-                    }
-                    detail={
-                      <div className="panel-body">
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {req.items.map((it) => (
-                            <span key={it.id} className="text-sm px-2 py-0.5 rounded border font-medium"
-                              style={{ color: it.leaveType.color, borderColor: `${it.leaveType.color}40`, background: `${it.leaveType.color}10` }}>
-                              {it.leaveType.name} {it.days}일{it.reason?.trim() && it.reason.trim().length >= 2 ? ` — ${it.reason.trim()}` : ""}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                        <div>
-                          <span className="text-gray-500 text-xs">기간</span>
-                          <p className="font-medium text-[15px]">
-                            {formatMDWithDay(req.startDate)}
-                            {req.startDate.toDateString() !== req.endDate.toDateString() &&
-                              ` ~ ${formatMDWithDay(req.endDate)}`}
-                            <span className="ml-1 text-slate-700 font-bold">{req.totalDays}일</span>
-                          </p>
-                        </div>
-                          <div>
-                            <span className="text-gray-500 text-xs">신청일</span>
-                            <p className="font-medium text-[15px]">{formatYMD(req.createdAt)}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
-                          {req.approvals
-                            .filter((a,i,arr) => arr.findIndex(x => x.step===a.step && ["PENDING","APPROVED","REJECTED"].includes(x.status))===i)
-                            .map((a, i) => (
-                            <span key={a.id} className="flex items-center gap-1.5">
-                              {i > 0 && <span className="text-gray-300">→</span>}
-                              <span className={`px-2 py-0.5 rounded border text-xs ${
-                                a.status==="APPROVED" ? "bg-slate-100 text-slate-700 border-slate-300"
-                                  : a.id===ap.id ? "bg-slate-100 text-slate-800 border-slate-400"
-                                  : "bg-gray-50 text-gray-500 border-gray-200"
-                              }`}>
-                                {a.approver.name}{a.status==="APPROVED"?" ✓":a.id===ap.id?" ◉":""}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                        <ApproveActions approvalId={ap.id} />
-                      </div>
-                    }
-                  />
-                );
-              })}
-
-              {cancelActionable.map((ap) => {
-                const req = ap.leaveRequest;
-                return (
-                  <ExpandablePanel
-                    key={ap.id}
-                    borderColor="amber"
-                    summary={
-                      <>
-                        <div className="min-w-0">
-                          <span className="text-xs bg-amber-50 text-amber-800 px-2 py-0.5 rounded font-medium mr-2">취소신청</span>
-                          <span className="font-semibold text-gray-800">{req.employee.name}</span>
-                          <span className="text-gray-500 text-sm ml-1.5">{req.items.map((i) => `${i.leaveType.name} ${i.days}일`).join(" ")}</span>
-                        </div>
-                        <span className="text-xs text-gray-500 shrink-0">{ap.step}단계/{req.totalSteps}단계</span>
-                      </>
-                    }
-                    detail={
-                      <div className="panel-body">
-                        <div className="flex flex-wrap gap-1.5 mb-3">
-                          {req.items.map((it) => (
-                            <span key={it.id} className="text-sm px-2 py-0.5 rounded border font-medium"
-                              style={{ color: it.leaveType.color, borderColor: `${it.leaveType.color}40`, background: `${it.leaveType.color}10` }}>
-                              {it.leaveType.name} {it.days}일
-                            </span>
-                          ))}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
-                        <div>
-                          <span className="text-gray-500 text-xs">원래 휴가 기간</span>
-                          <p className="font-medium text-[15px]">
-                            {formatMDWithDay(req.startDate)}
-                            {req.startDate.toDateString() !== req.endDate.toDateString() &&
-                              ` ~ ${formatMDWithDay(req.endDate)}`}
-                            <span className="ml-1 text-slate-700 font-bold">{req.totalDays}일</span>
-                          </p>
-                        </div>
-                          <div>
-                            <span className="text-gray-500 text-xs">취소 사유</span>
-                            <p className="font-medium text-[15px] text-amber-800">{req.cancelReason ?? "-"}</p>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 mb-4 text-sm">
-                          {req.approvals
-                            .filter(a => ["CANCEL_PENDING","CANCEL_APPROVED","CANCEL_REJECTED"].includes(a.status))
-                            .map((a, i) => (
-                            <span key={a.id} className="flex items-center gap-1.5">
-                              {i > 0 && <span className="text-gray-300">→</span>}
-                              <span className={`px-2 py-0.5 rounded border text-xs ${
-                                a.status==="CANCEL_APPROVED" ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  : a.status==="CANCEL_REJECTED" ? "bg-rose-50 text-rose-700 border-rose-200"
-                                  : a.id===ap.id ? "bg-orange-50 text-orange-700 border-orange-300"
-                                  : "bg-gray-50 text-gray-500 border-gray-200"
-                              }`}>
-                                {a.approver.name}{a.status==="CANCEL_APPROVED"?" ✓":a.status==="CANCEL_REJECTED"?" ✗":a.id===ap.id?" ◉":""}
-                              </span>
-                            </span>
-                          ))}
-                        </div>
-                        <CancelApproveActions requestId={req.id} />
-                      </div>
-                    }
-                  />
-                );
-              })}
+              {leavePending > 0 && (
+                <LeaveApprovePendingClient
+                  actionable={serializeDates(actionable) as any}
+                  cancelActionable={serializeDates(cancelActionable) as any}
+                />
+              )}
             </div>
           )}
 

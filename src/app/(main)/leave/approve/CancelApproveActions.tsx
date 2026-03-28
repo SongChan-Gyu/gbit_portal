@@ -33,9 +33,11 @@ export default function CancelApproveActions({
 
   return (
     <div className="space-y-2">
-      <input
-        className="input text-sm"
-        placeholder="코멘트 (선택)"
+      <label className="block text-xs font-medium text-gray-600">의견 입력</label>
+      <textarea
+        className="input text-sm resize-none"
+        rows={3}
+        placeholder="취소 승인·반려 시 메모 (선택)"
         value={comment}
         onChange={(e) => setComment(e.target.value)}
       />

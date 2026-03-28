@@ -29,8 +29,9 @@ export default function ApproveActions({
 
   return (
     <div className="space-y-2">
-      <textarea className="input resize-none text-[13px]" rows={2}
-        placeholder="의견 입력 (반려 시 필수)"
+      <label className="block text-xs font-medium text-gray-600">의견 입력</label>
+      <textarea className="input resize-none text-[13px]" rows={3}
+        placeholder="반려 시 사유를 입력하세요."
         value={comment} onChange={(e) => setComment(e.target.value)} />
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex gap-2">
