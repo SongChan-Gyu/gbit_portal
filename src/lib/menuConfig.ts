@@ -34,7 +34,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     ],
   },
   { key: "attendance", label: "근태 현황", icon: "📅", href: "/attendance", section: "main" },
-  { key: "stamp", label: "스탬프 쿠폰", icon: "⭐", href: "/stamp", section: "main" },
+  { key: "stamp", label: "스탬프 쿠폰", icon: "🎫", href: "/stamp", section: "main" },
   {
     key: "jeju",
     label: "제주도 숙소",

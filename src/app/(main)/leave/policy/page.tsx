@@ -1,4 +1,4 @@
-import { BookOpen, Info, AlertCircle, Calendar, Clock, Award, Heart, Stethoscope, Baby, Star } from "lucide-react";
+import { BookOpen, Info, AlertCircle, Calendar, Clock, Award, Heart, Stethoscope, Baby } from "lucide-react";
 
 export const metadata = { title: "휴가 규정 안내 | GBIT Portal" };
 
@@ -57,14 +57,12 @@ const SPECIAL_LEAVES = [
   },
   {
     name:"스탬프 쿠폰",
-    icon:"Star",
+    icon:"Stamp",
     days:"운영반영일 기준",
     color:"amber",
     rules:[
-      "운영반영일(오전 6시) 참석 시 스탬프 1개 적립",
-      "5개 적립 → 힐링데이 사용 가능 (4시 조기퇴근, 이력만 기록)",
-      "10개 적립 → 오후인정 추가 사용 가능 (팀장 승인 필요)",
-      "스탬프 적립은 팀장 서명(승인) 필요",
+      "반영일 출근 시 스탬프 1칸 (팀장 승인)",
+      "5칸: 힐링데이 · 10칸: 오후 인정(장당 각 1회)",
     ],
   },
   {
