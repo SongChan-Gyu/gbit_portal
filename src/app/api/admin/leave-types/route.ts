@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { deriveLegacyHalfFlags } from "@/lib/leaveTimeSlot";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -18,13 +19,27 @@ export async function POST(req: Request) {
       ? body.allocationSourceCode.trim()
       : null;
 
+  const allowsFullDay =
+    typeof body.allowsFullDay === "boolean" ? body.allowsFullDay : !(body.isHalf ?? false);
+  const allowsHalfDay =
+    typeof body.allowsHalfDay === "boolean" ? body.allowsHalfDay : !!(body.isHalf ?? false);
+  const halfDayRaw = typeof body.halfDayAmPm === "string" ? body.halfDayAmPm : "BOTH";
+  const halfDayAmPm = ["AM_ONLY", "PM_ONLY", "BOTH"].includes(halfDayRaw) ? halfDayRaw : "BOTH";
+  const applyGroupKey =
+    typeof body.applyGroupKey === "string" && body.applyGroupKey.trim()
+      ? body.applyGroupKey.trim()
+      : null;
+  const legacy = deriveLegacyHalfFlags({ allowsFullDay, allowsHalfDay, halfDayAmPm });
+
   const lt = await prisma.leaveType.create({
     data:{
       code:body.code, name:body.name, daysPerUnit:body.daysPerUnit??1,
       deductFromBalance:body.deductFromBalance??true, approvalSteps:body.approvalSteps??2,
       maxPerMonth:body.maxPerMonth??null, maxPerYear:body.maxPerYear??null,
       requiresStamp:body.requiresStamp??false, stampCount:body.stampCount??null,
-      isHalf:body.isHalf??false, isAmOnly:body.isAmOnly??false, isPmOnly:body.isPmOnly??false,
+      allowsFullDay, allowsHalfDay, halfDayAmPm,
+      applyGroupKey,
+      isHalf: legacy.isHalf, isAmOnly: legacy.isAmOnly, isPmOnly: legacy.isPmOnly,
       validityBasis:body.validityBasis??"FISCAL", validityMonths:body.validityMonths??null,
       isActive:body.isActive??true, sortOrder:body.sortOrder??99, color:body.color??"#3b82f6",
       allocationSourceCode: allocSrc,

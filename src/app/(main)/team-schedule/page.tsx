@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { itemSlotForSchedule } from "@/lib/leaveTimeSlot";
 import TeamScheduleClient from "./TeamScheduleClient";
 
 /** 이번 주 월~일 날짜 배열 반환 */
@@ -59,10 +60,7 @@ function buildSchedule(
         const dateStr = cur.toISOString().slice(0, 10);
         if (dateSet.has(dateStr)) {
           const lt = item.leaveType;
-          let status: DayStatus;
-          if (lt.isHalf && lt.isAmOnly) status = "AM";
-          else if (lt.isHalf && !lt.isAmOnly) status = "PM";
-          else status = "FULL";
+          const status: DayStatus = itemSlotForSchedule(item, lt);
 
           const prev = schedule[empId][dateStr];
           if (prev === "AM" && status === "PM") schedule[empId][dateStr] = "FULL";

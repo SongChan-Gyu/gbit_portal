@@ -332,7 +332,9 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
               <li key={req.id} className="px-4 py-3 hover:bg-gray-50/50">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <span className="font-medium text-gray-800 whitespace-nowrap">
-                    {req.items.map((i) => i.leaveType.name).join("·")}
+                    {req.items.length === 1
+                      ? req.items[0].leaveType.name
+                      : `복합 신청 (${req.items.length}건)`}
                   </span>
                   <span className="text-gray-500 text-sm whitespace-nowrap">
                     {formatMDWithDay(req.startDate)}
@@ -350,6 +352,26 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                     )}
                   </span>
                 </div>
+                {req.items.length > 1 && (
+                  <ul className="mt-2 space-y-1.5 border-t border-gray-100 pt-2">
+                    {req.items.map((it) => (
+                      <li key={it.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+                        <span className="font-medium text-gray-800 shrink-0" style={{ color: it.leaveType.color }}>
+                          {it.leaveType.name}
+                        </span>
+                        <span className="text-gray-500 text-xs">
+                          {formatMDWithDay(it.startDate)}
+                          {it.startDate.toDateString() !== it.endDate.toDateString() &&
+                            ` ~ ${formatMDWithDay(it.endDate)}`}
+                        </span>
+                        <span className="text-slate-600 tabular-nums text-xs font-semibold">{it.days}일</span>
+                        {it.reason?.trim() && it.reason.trim().length >= 2 && (
+                          <span className="text-gray-400 text-xs w-full sm:w-auto">사유: {it.reason.trim()}</span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {(req.approvals.some((a) => a.status !== "PENDING") || req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2)) && (
                   <div className="mt-1.5 pl-0 text-xs text-gray-500">
                     {req.approvals.length > 0 && (
@@ -357,7 +379,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                         결재: {req.approvals.map((a) => `${a.approver.name}${a.status==="APPROVED"?" ✓":a.status==="REJECTED"?" ✗":""}`).join(" → ")}
                       </span>
                     )}
-                    {req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2) && (
+                    {req.items.length === 1 && req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2) && (
                       <span>사유: {req.items.filter((it) => it.reason?.trim() && it.reason.trim().length >= 2).map((it) => it.reason!.trim()).join(" / ")}</span>
                     )}
                   </div>

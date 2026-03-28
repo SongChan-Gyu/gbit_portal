@@ -7,7 +7,10 @@ interface LT {
   id:string; code:string; name:string; daysPerUnit:number; deductFromBalance:boolean;
   approvalSteps:number; maxPerMonth:number|null; maxPerYear:number|null;
   requiresStamp:boolean; stampCount:number|null; isHalf:boolean;
-  isAmOnly:boolean; isPmOnly:boolean; validityBasis:string; validityMonths:number|null;
+  isAmOnly:boolean; isPmOnly:boolean;
+  allowsFullDay:boolean; allowsHalfDay:boolean; halfDayAmPm:string;
+  applyGroupKey:string|null;
+  validityBasis:string; validityMonths:number|null;
   isActive:boolean; sortOrder:number; color:string;
   /** LeaveAllocation.sourceCode 와 동일하면 그 부여 풀에서만 차감 */
   allocationSourceCode:string|null;
@@ -35,6 +38,7 @@ function newBlank(): Partial<LT> {
   return {
     code:"", name:"", daysPerUnit:1, deductFromBalance:true, approvalSteps:2,
     maxPerMonth:null, maxPerYear:null, requiresStamp:false, stampCount:null,
+    allowsFullDay:true, allowsHalfDay:false, halfDayAmPm:"BOTH", applyGroupKey:null,
     isHalf:false, isAmOnly:false, isPmOnly:false,
     validityBasis:"귀속연도", validityMonths:null, isActive:true, sortOrder:99, color:"#3b82f6",
   };
@@ -48,7 +52,16 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
   const [showInactive, setShowInactive] = useState(false);
 
   function openNew()      { setEditing({ ...newBlank(), isNew:true }); setErr(""); }
-  function openEdit(lt:LT){ setEditing({ ...lt }); setErr(""); }
+  function openEdit(lt:LT){
+    setEditing({
+      ...lt,
+      allowsFullDay: lt.allowsFullDay ?? !lt.isHalf,
+      allowsHalfDay: lt.allowsHalfDay ?? lt.isHalf,
+      halfDayAmPm: lt.halfDayAmPm ?? "BOTH",
+      applyGroupKey: lt.applyGroupKey ?? null,
+    });
+    setErr("");
+  }
   function set<K extends keyof LT>(k:K, v:unknown) {
     setEditing((p) => p ? { ...p, [k]:v } : null);
   }
@@ -56,6 +69,9 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
   async function save() {
     if (!editing) return;
     if (!editing.code || !editing.name) { setErr("코드와 이름은 필수입니다."); return; }
+    if (!editing.allowsFullDay && !editing.allowsHalfDay) {
+      setErr("종일·반차 중 하나 이상은 허용해야 합니다."); return;
+    }
     setSaving(true); setErr("");
     const url    = editing.isNew ? "/api/admin/leave-types" : `/api/admin/leave-types/${editing.id}`;
     const method = editing.isNew ? "POST" : "PATCH";
@@ -91,7 +107,8 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
           <div className="flex items-center gap-2.5">
             <span className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white shadow-sm" style={{background:lt.color}}/>
             <span className="font-medium text-gray-800 text-sm">{lt.name}</span>
-            {lt.isHalf && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">반차</span>}
+            {(lt.allowsHalfDay && !lt.allowsFullDay) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">반차만</span>}
+            {(lt.allowsFullDay && lt.allowsHalfDay) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 font-medium">종일+반차</span>}
             {lt.requiresStamp && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium">스탬프</span>}
           </div>
           <div className="text-[11px] text-gray-400 mt-0.5 ml-5 font-mono">{lt.code}</div>
@@ -161,7 +178,8 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
               <p className="font-medium text-gray-800 truncate">{lt.name}</p>
               <p className="text-xs text-gray-400 font-mono">{lt.code}</p>
             </div>
-            {lt.isHalf && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium shrink-0">반차</span>}
+            {(lt.allowsHalfDay && !lt.allowsFullDay) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium shrink-0">반차만</span>}
+            {(lt.allowsFullDay && lt.allowsHalfDay) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-600 font-medium shrink-0">종일+반차</span>}
             {lt.requiresStamp && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 font-medium shrink-0">스탬프</span>}
           </div>
           <button onClick={()=>toggleActive(lt)} title={lt.isActive ? "비활성화" : "활성화"}
@@ -338,6 +356,17 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
                 </p>
               </div>
 
+              <div>
+                <label className="label">신청 화면 그룹 키 (선택)</label>
+                <input className="input font-mono text-sm" placeholder="예: annual, care, holidayExt — 비우면 기타"
+                  value={editing.applyGroupKey ?? ""}
+                  onChange={(e)=>{
+                    const v = e.target.value.trim();
+                    set("applyGroupKey", v || null);
+                  }} />
+                <p className="text-xs text-gray-400 mt-1">휴가 신청 카테고리 탭을 나눕니다. 시드 기본값은 코드별로 정해져 있습니다.</p>
+              </div>
+
               {/* 유효기간 */}
               <fieldset className="rounded-lg bg-blue-50/40 border border-blue-100 p-4 space-y-3">
                 <legend className="text-xs font-semibold text-blue-800 px-1">유효기간 설정</legend>
@@ -377,14 +406,43 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
                 </div>
               </div>
 
-              {/* 속성 체크박스 */}
+              {/* 신청 방식 */}
               <fieldset className="rounded-lg bg-gray-50 border border-gray-200 p-4">
-                <legend className="text-xs font-semibold text-gray-600 px-1">속성</legend>
+                <legend className="text-xs font-semibold text-gray-600 px-1">신청 방식</legend>
+                <p className="text-xs text-gray-500 mb-2">직원 신청 화면에서 종일(기간)·반차를 허용할 범위입니다.</p>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 accent-blue-600"
+                      checked={!!editing.allowsFullDay}
+                      onChange={(e)=>set("allowsFullDay", e.target.checked)} />
+                    <span className="text-gray-700">종일(시작~종료일) 신청 가능</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" className="w-4 h-4 accent-blue-600"
+                      checked={!!editing.allowsHalfDay}
+                      onChange={(e)=>set("allowsHalfDay", e.target.checked)} />
+                    <span className="text-gray-700">반차(0.5일) 신청 가능</span>
+                  </label>
+                  {editing.allowsHalfDay && (
+                    <div>
+                      <label className="label">반차 옵션</label>
+                      <select className="input" value={editing.halfDayAmPm ?? "BOTH"}
+                        onChange={(e)=>set("halfDayAmPm", e.target.value)}>
+                        <option value="BOTH">오전 또는 오후 선택</option>
+                        <option value="AM_ONLY">오전만</option>
+                        <option value="PM_ONLY">오후만</option>
+                      </select>
+                      <p className="text-xs text-gray-400 mt-1">종일+반차를 모두 허용하면 신청 시 종일·오전·오후 중 택일합니다.</p>
+                    </div>
+                  )}
+                </div>
+              </fieldset>
+
+              {/* 기타 속성 */}
+              <fieldset className="rounded-lg bg-gray-50 border border-gray-200 p-4">
+                <legend className="text-xs font-semibold text-gray-600 px-1">기타</legend>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   {([
-                    ["isHalf",        "반차 (0.5일 처리)"],
-                    ["isAmOnly",      "오전 반차 전용"],
-                    ["isPmOnly",      "오후 반차 전용"],
                     ["requiresStamp", "스탬프 쿠폰 필요"],
                     ["isActive",      "활성화"],
                   ] as [keyof LT, string][]).map(([k,l]) => (

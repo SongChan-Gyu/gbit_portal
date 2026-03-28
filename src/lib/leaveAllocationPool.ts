@@ -1,13 +1,26 @@
 import type { LeaveType } from "@prisma/client";
+import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
+import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
 
-/** 신청 1행의 차감 일수 (연휴연장은 1일 고정, 반차 0.5) */
+/** 클라이언트 LT 등 allows* 가 비어 있을 수 있음 → leaveTypeWithPolicy 로 보완 */
 export function leaveItemDeductDays(
-  it: { days: number },
-  lt: Pick<LeaveType, "allocationSourceCode" | "code" | "isHalf" | "daysPerUnit"> | null | undefined,
+  it: { days: number; timeSlot?: string | null },
+  lt:
+    | (Pick<
+        LeaveType,
+        "allocationSourceCode" | "code" | "isHalf" | "daysPerUnit" | "isAmOnly" | "isPmOnly"
+      > & {
+        allowsFullDay?: boolean | null;
+        allowsHalfDay?: boolean | null;
+        halfDayAmPm?: string | null;
+      })
+    | null
+    | undefined,
 ): number {
   if (!lt) return it.days;
-  if (lt.allocationSourceCode === "HOLIDAY_EXT" && !lt.isHalf) return 1;
-  if (lt.isHalf) return 0.5;
+  const slot = resolveItemTimeSlot(it, leaveTypeWithPolicy(lt));
+  if (lt.allocationSourceCode === "HOLIDAY_EXT" && slot === "FULL") return 1;
+  if (slot === "AM" || slot === "PM") return 0.5;
   return it.days;
 }
 

@@ -60,7 +60,7 @@ async function runChecks(): Promise<AssertResult[]> {
 
   const holidayExt = leaveTypes.find((t) => t.code === "HOLIDAY_EXT");
   if (holidayExt?.deductFromBalance === false) {
-    ok("연휴연장휴가: 미차감, 1일 단위");
+    ok("연휴연장휴가(종일 유형): 미차감, 전용 풀 1일");
   } else {
     fail(`연휴연장: deduct=${holidayExt?.deductFromBalance}`);
   }

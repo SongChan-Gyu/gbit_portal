@@ -130,7 +130,14 @@ model LeaveType {
   allocationSourceCode String?
   // 같은 날 중복 허용 (오전반차+오후인정 등)
   allowSameDay     Boolean @default(true)
-  // 반차 여부 (AM or PM 선택)
+  // 신청 방식: 종일(기간) / 반차(오전·오후) 허용 범위 (관리자 설정). 둘 다 true면 신청 시 종일·오전·오후 선택.
+  allowsFullDay    Boolean @default(true)
+  allowsHalfDay    Boolean @default(false)
+  // 반차만 허용할 때: 오전만 / 오후만 / 둘 다 (BOTH). 종일+반차 동시 허용이면 BOTH로 오전·오후 택일.
+  halfDayAmPm      String  @default("BOTH") // BOTH | AM_ONLY | PM_ONLY
+  // 휴가 신청 화면 카테고리 키 (annual, care …). null이면 "기타"
+  applyGroupKey    String?
+  // 반차 여부 (AM or PM 선택) — 기존 데이터·간편 조회용. allows* 로부터 저장 시 동기화 권장.
   isHalf           Boolean @default(false)
   isAmOnly         Boolean @default(false)
   isPmOnly         Boolean @default(false)
@@ -214,6 +221,8 @@ model LeaveRequestItem {
   days           Float
   startDate      DateTime
   endDate        DateTime
+  // FULL | AM | PM — 유형이 종일+반차 겸용이거나 항목별 구분 필요 시
+  timeSlot       String?
   reason         String?          // 항목별 사유
   createdAt      DateTime         @default(now())
 }

@@ -6,6 +6,7 @@ import { getFiscalYear } from "@/lib/workdays";
 import { Bell, Calendar, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { isWelfareDept } from "@/lib/jeju";
 import { formatMDWithDay } from "@/lib/dateUtils";
+import { itemSlotLabelKo } from "@/lib/leaveTimeSlot";
 import DashboardMonthCalendar from "./DashboardMonthCalendar";
 
 const STATUS_BADGE: Record<string, string> = {
@@ -140,7 +141,7 @@ export default async function DashboardPage({
         while (cur <= e) {
           const ds = cur.toISOString().slice(0, 10);
           if (dates.includes(ds)) {
-            const status = item.leaveType.isHalf && item.leaveType.isAmOnly ? "오전" : item.leaveType.isHalf && item.leaveType.isPmOnly ? "오후" : "휴가";
+            const status = itemSlotLabelKo(item, item.leaveType);
             if (!byDay[ds]) byDay[ds] = [];
             const name = req.employee?.name ?? "";
             const ex = byDay[ds].find((x) => x.name === name);

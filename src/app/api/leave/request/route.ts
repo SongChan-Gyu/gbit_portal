@@ -6,6 +6,8 @@ import { sendLeaveRequestAlimtalk } from "@/lib/kakao";
 import { writeAudit, getIp } from "@/lib/audit";
 import { countAfternoonEligible, findAfternoonStampCard } from "@/lib/stampCard";
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
+import { calcWorkingDays } from "@/lib/workdays";
+import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
 
 /** 연차 = 기본연차 + 근속가산 + 이월연차만. 특별휴가(근속1/5/10년)·부서추가는 별도 풀 */
 const ANNUAL_ONLY_SOURCES = [
@@ -36,6 +38,7 @@ export async function POST(req: Request) {
         endDate: string;
         days: number;
         reason?: string;
+        timeSlot?: string | null;
       }[];
     };
 
@@ -121,6 +124,67 @@ export async function POST(req: Request) {
       );
     }
 
+    const holidayList = Array.from(holidaySet);
+
+    type WorkItem = {
+      leaveTypeId: string;
+      allocationId: string;
+      startDate: string;
+      endDate: string;
+      days: number;
+      reason?: string;
+      timeSlot: LeaveTimeSlot;
+    };
+
+    const workItems: WorkItem[] = [];
+    for (const it of items) {
+      const lt = ltMap[it.leaveTypeId];
+      if (!lt) {
+        return NextResponse.json(
+          {
+            error: it.leaveTypeId
+              ? `휴가 유형을 찾을 수 없습니다. 페이지를 새로고침한 뒤 다시 선택해 주세요. (ID 일부: ${String(it.leaveTypeId).slice(0, 8)}…)`
+              : "휴가 유형이 비어 있습니다. 모든 항목에서 유형을 선택해 주세요.",
+          },
+          { status: 400 },
+        );
+      }
+      const { slot, error } = normalizeTimeSlotInput(it.timeSlot, lt);
+      if (error || slot == null) {
+        return NextResponse.json({ error: error ?? "시간대를 확인해 주세요." }, { status: 400 });
+      }
+
+      const s = it.startDate.slice(0, 10);
+      const e = it.endDate.slice(0, 10);
+      let days = 0;
+      if (slot === "FULL") {
+        days = calcWorkingDays(s, e, holidayList);
+        if (days <= 0) {
+          return NextResponse.json(
+            { error: `${lt.name}: 신청 기간에 포함된 영업일이 없습니다.` },
+            { status: 400 },
+          );
+        }
+      } else {
+        if (s !== e) {
+          return NextResponse.json(
+            { error: `${lt.name}: 반차는 하루만 선택할 수 있습니다.` },
+            { status: 400 },
+          );
+        }
+        days = 0.5;
+      }
+      workItems.push({
+        leaveTypeId: it.leaveTypeId,
+        allocationId: it.allocationId,
+        startDate: s,
+        endDate: slot === "FULL" ? e : s,
+        days,
+        reason: it.reason,
+        timeSlot: slot,
+      });
+    }
+
     const overlapping = await prisma.leaveRequest.findFirst({
       where: {
         employeeId: user.employeeId,
@@ -137,18 +201,9 @@ export async function POST(req: Request) {
       );
     }
 
-    for (const it of items) {
-      const lt = ltMap[it.leaveTypeId];
-      if (!lt) {
-        return NextResponse.json(
-          {
-            error: it.leaveTypeId
-              ? `휴가 유형을 찾을 수 없습니다. 페이지를 새로고침한 뒤 다시 선택해 주세요. (ID 일부: ${String(it.leaveTypeId).slice(0, 8)}…)`
-              : "휴가 유형이 비어 있습니다. 모든 항목에서 유형을 선택해 주세요.",
-          },
-          { status: 400 },
-        );
-      }
+    for (const it of workItems) {
+      const lt = ltMap[it.leaveTypeId]!;
+
       if (!lt.isActive) {
         return NextResponse.json({ error: `비활성 처리된 휴가 유형입니다: ${lt.name}` }, { status: 400 });
       }
@@ -201,10 +256,10 @@ export async function POST(req: Request) {
       }
 
       if (lt.deductFromBalance) {
-        const days = lt.isHalf ? 0.5 : it.days;
-        if (totalPoolRemaining < days) {
+        const d = leaveItemDeductDays(it, lt);
+        if (totalPoolRemaining < d) {
           return NextResponse.json(
-            { error: `잔여 연차 부족 (잔여 ${totalPoolRemaining.toFixed(1)}일, 신청 ${days}일)` },
+            { error: `잔여 연차 부족 (잔여 ${totalPoolRemaining.toFixed(1)}일, 신청 ${d}일)` },
             { status: 400 },
           );
         }
@@ -212,7 +267,7 @@ export async function POST(req: Request) {
     }
 
     for (const src of poolSources) {
-      const requested = items.reduce((sum, it) => {
+      const requested = workItems.reduce((sum, it) => {
         const lt = ltMap[it.leaveTypeId];
         if (!lt || lt.allocationSourceCode !== src) return sum;
         return sum + leaveItemDeductDays(it, lt);
@@ -236,7 +291,7 @@ export async function POST(req: Request) {
     const teamLeader = employee?.team?.leader;
     const pm = await prisma.employee.findFirst({ where: { role: "PM", status: "ACTIVE" } });
     const isPmOrAdmin = employee?.role === "PM" || employee?.role === "ADMIN";
-    const mainReason = items[0]?.reason ?? null;
+    const mainReason = workItems[0]?.reason ?? null;
 
     const poolRemaining = Object.fromEntries(poolAllocs.map((a) => [a.id, a.totalDays - a.usedDays]));
     const dedicatedRemainBySource = new Map<string, Record<string, number>>();
@@ -284,7 +339,7 @@ export async function POST(req: Request) {
       return null;
     }
 
-    const resolvedItems = items.map((it) => {
+    const resolvedItems = workItems.map((it) => {
       const lt = ltMap[it.leaveTypeId];
       const days = leaveItemDeductDays(it, lt);
       let allocationId = it.allocationId || null;
@@ -372,6 +427,7 @@ export async function POST(req: Request) {
               days: it.days,
               startDate: new Date(it.startDate),
               endDate: new Date(it.endDate),
+              timeSlot: it.timeSlot,
               reason: it.reason ?? null,
             },
           });

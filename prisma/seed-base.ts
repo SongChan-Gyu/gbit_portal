@@ -15,6 +15,7 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function seedLeaveTypes() {
+  const { APPLY_GROUP_BY_CODE } = await import("../src/lib/leaveApplyGroups");
   const types = [
     ["ANNUAL", "연차", 1, true, 1, null, null, false, null, false, false, false, "귀속연도", null, "#3b82f6", 0],
     ["AM_HALF", "연차(오전반차)", 0.5, true, 1, null, null, false, null, true, true, false, "귀속연도", null, "#6366f1", 1],
@@ -38,18 +39,31 @@ async function seedLeaveTypes() {
     ["TENURE_10Y", "10년근속휴가", 1, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 19],
     ["AWARD", "포상휴가", 1, false, 2, null, null, false, null, false, false, false, "부여일기준", 12, "#f59e0b", 20],
     ["HOLIDAY_EXT", "연휴연장휴가", 1, false, 1, null, null, false, null, false, false, false, "귀속연도", null, "#0ea5e9", 21],
-    ["BIRTHDAY_HALF", "생일반차", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 12, "#ec4899", 22],
+    ["HOLIDAY_EXT_AM", "연휴연장휴가(오전)", 0.5, false, 1, null, null, false, null, true, true, false, "귀속연도", null, "#0ea5e9", 22],
+    ["HOLIDAY_EXT_PM", "연휴연장휴가(오후)", 0.5, false, 1, null, null, false, null, true, false, true, "귀속연도", null, "#0ea5e9", 23],
+    ["BIRTHDAY_HALF_AM", "생일반차(오전)", 0.5, false, 1, null, null, false, null, true, true, false, "부여일기준", 12, "#ec4899", 24],
+    ["BIRTHDAY_HALF", "생일반차(오후)", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 12, "#ec4899", 25],
   ] as const;
 
   function allocationSourceForCode(code: string): string | null {
     if (["CARE", "CARE_AM", "CARE_PM"].includes(code)) return "CARE";
-    if (code === "HOLIDAY_EXT") return "HOLIDAY_EXT";
-    if (code === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
+    if (["HOLIDAY_EXT", "HOLIDAY_EXT_AM", "HOLIDAY_EXT_PM"].includes(code)) return "HOLIDAY_EXT";
+    if (["BIRTHDAY_HALF", "BIRTHDAY_HALF_AM"].includes(code)) return "BIRTHDAY_HALF";
     if (code === "AWARD") return "AWARD";
     return null;
   }
 
   for (const [code, name, dpu, deduct, steps, maxMon, maxYr, stamp, stampCnt, isHalf, amOnly, pmOnly, vBasis, vMon, color, sort] of types) {
+    const half = !!(isHalf as boolean);
+    const allowsFullDay = !half;
+    const allowsHalfDay = half;
+    const halfDayAmPm = !half
+      ? "BOTH"
+      : (amOnly as boolean)
+        ? "AM_ONLY"
+        : (pmOnly as boolean)
+          ? "PM_ONLY"
+          : "BOTH";
     const data = {
       name,
       daysPerUnit: dpu as number,
@@ -60,6 +74,10 @@ async function seedLeaveTypes() {
       requiresStamp: stamp as boolean,
       stampCount: stampCnt as number | null,
       allocationSourceCode: allocationSourceForCode(code),
+      allowsFullDay,
+      allowsHalfDay,
+      halfDayAmPm,
+      applyGroupKey: APPLY_GROUP_BY_CODE[code] ?? null,
       isHalf: isHalf as boolean,
       isAmOnly: amOnly as boolean,
       isPmOnly: pmOnly as boolean,

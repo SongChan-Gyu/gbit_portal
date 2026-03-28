@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
 import { formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
+import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
+import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
 
 // ── 타입 ──────────────────────────────────────────────────────
@@ -11,7 +13,11 @@ interface LT {
   id: string; code: string; name: string; daysPerUnit: number;
   deductFromBalance: boolean; approvalSteps: number;
   maxPerMonth: number | null; requiresStamp: boolean; stampCount: number | null;
-  isHalf: boolean; isAmOnly: boolean; isPmOnly: boolean; color: string;
+  isHalf: boolean; isAmOnly: boolean; isPmOnly: boolean;
+  allowsFullDay?: boolean | null;
+  allowsHalfDay?: boolean | null;
+  halfDayAmPm?: string | null;
+  color: string;
   allocationSourceCode: string | null;
 }
 interface Alloc {
@@ -26,10 +32,21 @@ interface LeaveItem {
   reason: string;
   _groupKey: string;
   _healingSelected?: boolean;
+  /** FULL | AM | PM — 종일+반차 겸용 유형에서 필수 */
+  timeSlot?: string;
 }
 
 function initItem(startDate = todayStr()): LeaveItem {
-  return { leaveTypeId: "", startDate, endDate: startDate, days: 0, reason: "", _groupKey: "", _healingSelected: false };
+  return { leaveTypeId: "", startDate, endDate: startDate, days: 0, reason: "", _groupKey: "", _healingSelected: false, timeSlot: "" };
+}
+
+function rowUsesSingleDayOnly(it: LeaveItem, lt: LT | undefined): boolean {
+  if (!lt) return false;
+  const pol = leaveTypeWithPolicy(lt);
+  if (pol.allowsFullDay && pol.allowsHalfDay) {
+    return it.timeSlot === "AM" || it.timeSlot === "PM";
+  }
+  return pol.allowsHalfDay && !pol.allowsFullDay;
 }
 
 // ── 연차 = 기본연차 + 근속가산 + 이월연차만 (특별휴가·부서추가 제외) ──
@@ -84,9 +101,13 @@ const LEAVE_GROUPS: GroupDef[] = [
     ],
   },
   {
-    key: "holidayExt", label: "연휴연장휴가", meta: "귀속연도 1일 (1일 단위만)",
+    key: "holidayExt", label: "연휴연장휴가", meta: "귀속연도 1일 (오전·오후·종일)",
     color: "#0ea5e9", borderClass: "border-sky-500",
-    subs: [{ label: "1일", code: "HOLIDAY_EXT", desc: "연휴 3일 이상 시 앞뒤 연속일 사용 가능" }],
+    subs: [
+      { label: "종일", code: "HOLIDAY_EXT", desc: "연휴 3일 이상 시 앞뒤 연속일 사용 가능" },
+      { label: "오전", code: "HOLIDAY_EXT_AM" },
+      { label: "오후", code: "HOLIDAY_EXT_PM" },
+    ],
   },
   {
     key: "stamp", label: "스탬프", meta: "힐링데이·오후인정",
@@ -112,9 +133,12 @@ const LEAVE_GROUPS: GroupDef[] = [
     subs: [{ label: "신청", code: "AWARD" }],
   },
   {
-    key: "birthday", label: "생일반차", meta: "생일 해당 월 자동 부여",
+    key: "birthday", label: "생일반차", meta: "생일 해당 월 자동 부여 0.5일",
     color: "#ec4899", borderClass: "border-pink-500",
-    subs: [{ label: "오후 반차", code: "BIRTHDAY_HALF", desc: "0.5일" }],
+    subs: [
+      { label: "오전 반차", code: "BIRTHDAY_HALF_AM", desc: "0.5일" },
+      { label: "오후 반차", code: "BIRTHDAY_HALF", desc: "0.5일" },
+    ],
   },
 ];
 
@@ -162,21 +186,22 @@ function detectOverlap(items: LeaveItem[], leaveTypes: LT[]): string | null {
     if (!item.leaveTypeId || !item.startDate) continue;
     const lt = leaveTypes.find((t) => t.id === item.leaveTypeId);
     if (!lt) continue;
+    const slot = resolveItemTimeSlot(item, leaveTypeWithPolicy(lt));
     const cur = new Date(item.startDate);
     const end = new Date(item.endDate);
     while (cur <= end) {
       const key = cur.toISOString().slice(0, 10);
       if (!byDate[key]) byDate[key] = { am: false, pm: false, full: false };
-      const slot = byDate[key];
-      if (!lt.isHalf) {
-        if (slot.full || slot.am || slot.pm) return `${key}: 날짜 중복 신청입니다.`;
-        slot.full = true;
-      } else if (lt.isAmOnly) {
-        if (slot.full || slot.am) return `${key}: 오전 시간대 중복입니다.`;
-        slot.am = true;
+      const d = byDate[key];
+      if (slot === "FULL") {
+        if (d.full || d.am || d.pm) return `${key}: 날짜 중복 신청입니다.`;
+        d.full = true;
+      } else if (slot === "AM") {
+        if (d.full || d.am) return `${key}: 오전 시간대 중복입니다.`;
+        d.am = true;
       } else {
-        if (slot.full || slot.pm) return `${key}: 오후 시간대 중복입니다.`;
-        slot.pm = true;
+        if (d.full || d.pm) return `${key}: 오후 시간대 중복입니다.`;
+        d.pm = true;
       }
       cur.setDate(cur.getDate() + 1);
     }
@@ -263,14 +288,41 @@ export default function LeaveApplyForm({
     if (!lt) return;
     setItems((prev) => prev.map((it, i) => {
       if (i !== idx) return it;
-      const days = lt.isHalf ? 0.5 : calcWorkingDays(it.startDate, it.endDate, holidays);
+      const pol = leaveTypeWithPolicy(lt);
+      let timeSlot = "";
+      if (pol.allowsFullDay && pol.allowsHalfDay) timeSlot = "";
+      else if (pol.allowsFullDay && !pol.allowsHalfDay) timeSlot = "FULL";
+      else if (pol.halfDayAmPm === "AM_ONLY") timeSlot = "AM";
+      else if (pol.halfDayAmPm === "PM_ONLY") timeSlot = "PM";
+      else timeSlot = "";
+      const single = pol.allowsHalfDay && !pol.allowsFullDay;
+      const isHalfDay = timeSlot === "AM" || timeSlot === "PM";
+      const days = single || isHalfDay
+        ? (timeSlot ? 0.5 : 0)
+        : timeSlot === "FULL" || (pol.allowsFullDay && !pol.allowsHalfDay)
+          ? calcWorkingDays(it.startDate, it.endDate, holidays)
+          : 0;
       return {
         ...it, leaveTypeId: lt.id,
         _groupKey: groupKey ?? CODE_TO_GROUP[code] ?? it._groupKey,
+        timeSlot,
         days,
-        endDate: lt.isHalf ? it.startDate : it.endDate,
+        endDate: single || isHalfDay ? it.startDate : it.endDate,
         _healingSelected: false,
       };
+    }));
+  }
+
+  function setTimeSlotForItem(idx: number, slot: "FULL" | "AM" | "PM") {
+    setItems((prev) => prev.map((it, i) => {
+      if (i !== idx) return it;
+      const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
+      if (!lt) return it;
+      const days = slot === "FULL"
+        ? calcWorkingDays(it.startDate, it.endDate, holidays)
+        : 0.5;
+      const endDate = slot === "FULL" ? it.endDate : it.startDate;
+      return { ...it, timeSlot: slot, days, endDate };
     }));
   }
 
@@ -279,8 +331,20 @@ export default function LeaveApplyForm({
       if (i !== idx) return it;
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       const newStart = field === "startDate" ? value : it.startDate;
-      const newEnd   = field === "endDate"   ? value : (lt?.isHalf ? newStart : it.endDate);
-      const days     = lt?.isHalf ? 0.5 : calcWorkingDays(newStart, newEnd, holidays);
+      const single = rowUsesSingleDayOnly(it, lt);
+      const newEnd = field === "endDate" ? value : (single ? newStart : it.endDate);
+      const pol = lt ? leaveTypeWithPolicy(lt) : null;
+      const ts = it.timeSlot;
+      let days = 0;
+      if (ts === "AM" || ts === "PM" || (pol && pol.allowsHalfDay && !pol.allowsFullDay && (pol.halfDayAmPm === "AM_ONLY" || pol.halfDayAmPm === "PM_ONLY"))) {
+        days = 0.5;
+      } else if (ts === "FULL" || (pol && pol.allowsFullDay && !pol.allowsHalfDay)) {
+        days = calcWorkingDays(newStart, newEnd, holidays);
+      } else if (pol && pol.allowsHalfDay && !pol.allowsFullDay && pol.halfDayAmPm === "BOTH") {
+        days = ts === "AM" || ts === "PM" ? 0.5 : 0;
+      } else if (pol && pol.allowsFullDay && pol.allowsHalfDay) {
+        days = ts === "FULL" ? calcWorkingDays(newStart, newEnd, holidays) : (ts === "AM" || ts === "PM" ? 0.5 : 0);
+      }
       return { ...it, startDate: newStart, endDate: newEnd, days };
     }));
   }
@@ -319,7 +383,7 @@ export default function LeaveApplyForm({
     if (calendarItemIdx == null) return;
     const it = items[calendarItemIdx];
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-    const isHalf = lt?.isHalf ?? false;
+    const isHalf = lt ? rowUsesSingleDayOnly(it, lt) || (leaveTypeWithPolicy(lt).allowsHalfDay && !leaveTypeWithPolicy(lt).allowsFullDay) : false;
 
     if (calendarStep === "start") {
       setCalendarPickedStart(dateStr);
@@ -353,8 +417,8 @@ export default function LeaveApplyForm({
   const effectiveSubmitItems = items.filter(includeInLeaveRequestPayload);
   const totalDays = effectiveSubmitItems.reduce((s, it) => {
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-    const d = lt?.isHalf ? 0.5 : (it.days || 0);
-    return s + d;
+    if (!lt) return s;
+    return s + leaveItemDeductDays({ days: it.days, timeSlot: it.timeSlot }, lt);
   }, 0);
   const approvalStepVals = effectiveSubmitItems.map((it) => {
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
@@ -389,14 +453,6 @@ export default function LeaveApplyForm({
       if (lt?.deductFromBalance && annualPoolRemaining < actualDays) {
         setError(`잔여 연차 부족 — 신청 ${actualDays}일, 잔여 ${annualPoolRemaining.toFixed(1)}일`); return;
       }
-      const allocSrc = lt?.allocationSourceCode?.trim();
-      if (allocSrc === "HOLIDAY_EXT" && lt && !lt.isHalf && actualDays !== 1) {
-        const rem = poolRemainingBySource["HOLIDAY_EXT"] ?? 0;
-        setError(`연휴연장휴가는 1일 단위만 사용 가능하며, 잔여 ${rem.toFixed(1)}일입니다.`); return;
-      }
-      if (allocSrc === "BIRTHDAY_HALF" && actualDays !== 0.5) {
-        setError("생일반차는 0.5일(오후 반차)만 신청할 수 있습니다."); return;
-      }
     }
     const dedicatedTotals: Record<string, number> = {};
     for (const it of items) {
@@ -418,8 +474,10 @@ export default function LeaveApplyForm({
 
     setLoading(true);
     const payload = items.filter(includeInLeaveRequestPayload).map((it) => {
-      const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-      return { ...it, allocationId: "", days: lt?.isHalf ? 0.5 : it.days };
+      const lt = leaveTypes.find((t) => t.id === it.leaveTypeId)!;
+      const days = leaveItemDeductDays({ days: it.days, timeSlot: it.timeSlot }, lt);
+      const timeSlot = resolveItemTimeSlot({ timeSlot: it.timeSlot }, leaveTypeWithPolicy(lt));
+      return { ...it, allocationId: "", days, timeSlot };
     });
     const res  = await fetch("/api/leave/request", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -436,7 +494,8 @@ export default function LeaveApplyForm({
       {items.map((item, idx) => {
         const lt        = leaveTypes.find((t) => t.id === item.leaveTypeId);
         const grp       = LEAVE_GROUPS.find((g) => g.key === item._groupKey);
-        const actualDays = lt?.isHalf ? 0.5 : item.days;
+        const actualDays = lt ? leaveItemDeductDays({ days: item.days, timeSlot: item.timeSlot }, lt) : 0;
+        const polUi     = lt ? leaveTypeWithPolicy(lt) : null;
         const isAnnualDeduct = lt?.deductFromBalance ?? false;
 
         return (
@@ -527,7 +586,37 @@ export default function LeaveApplyForm({
                 )}
 
                 {/* STEP 2: 시간대 (서브 옵션이 여러 개인 경우) */}
-                {item._groupKey && grp && grp.subs.length > 1 && (
+                {/* 종일+반차 겸용 유형(코드 하나): 신청 시 택일 */}
+                {item.leaveTypeId && lt && polUi?.allowsFullDay && polUi?.allowsHalfDay && (
+                  <section>
+                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      02. 신청 단위
+                    </p>
+                    <div className="flex gap-2">
+                      {([
+                        { k: "FULL" as const, label: "종일(기간)" },
+                        { k: "AM" as const, label: "오전 반차" },
+                        { k: "PM" as const, label: "오후 반차" },
+                      ]).map(({ k, label }) => (
+                        <button key={k} type="button"
+                          onClick={() => setTimeSlotForItem(idx, k)}
+                          className={`flex-1 flex flex-col items-center py-3 rounded-lg border transition-all ${
+                            item.timeSlot === k
+                              ? "border-2 bg-white shadow-sm"
+                              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                          }`}
+                          style={item.timeSlot === k ? { borderColor: grp?.color ?? "#3b82f6" } : {}}>
+                          <span className={`text-sm font-semibold ${item.timeSlot === k ? "" : "text-gray-700"}`}
+                            style={item.timeSlot === k ? { color: grp?.color ?? "#3b82f6" } : {}}>
+                            {label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {item._groupKey && grp && grp.subs.length > 1 && !(item.leaveTypeId && lt && polUi?.allowsFullDay && polUi?.allowsHalfDay) && (
                   <section>
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       02. 시간대
@@ -562,22 +651,30 @@ export default function LeaveApplyForm({
                 )}
 
                 {/* STEP 3: 신청 기간 */}
-                {item.leaveTypeId && (
+                {item.leaveTypeId && (!polUi?.allowsFullDay || !polUi?.allowsHalfDay || ["FULL", "AM", "PM"].includes(item.timeSlot ?? "")) && (() => {
+                  const dual = !!(polUi?.allowsFullDay && polUi?.allowsHalfDay);
+                  const pol = lt ? leaveTypeWithPolicy(lt) : null;
+                  const singleDayField = lt
+                    ? rowUsesSingleDayOnly(item, lt)
+                    || !!(pol?.allowsHalfDay && !pol.allowsFullDay)
+                    || (dual && item.timeSlot !== "FULL" && (item.timeSlot === "AM" || item.timeSlot === "PM"))
+                    : false;
+                  return (
                   <section>
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       {grp && grp.subs.length > 1 ? "03." : "02."} 신청 기간
                     </p>
-                    <div className={`grid gap-3 ${lt?.isHalf ? "grid-cols-1" : "grid-cols-2"}`}>
+                    <div className={`grid gap-3 ${singleDayField ? "grid-cols-1" : "grid-cols-2"}`}>
                       <div>
                         <label className="block text-sm text-gray-500 mb-1">
-                          {lt?.isHalf ? "날짜" : "시작일"}
+                          {singleDayField ? "날짜" : "시작일"}
                         </label>
                         <input type="date" className="input"
                           value={item.startDate}
                           onChange={(e) => changeDate(idx, "startDate", e.target.value)}
                           required />
                       </div>
-                      {!lt?.isHalf && (
+                      {!singleDayField && (
                         <div>
                           <label className="block text-sm text-gray-500 mb-1">종료일</label>
                           <input type="date" className="input"
@@ -607,9 +704,10 @@ export default function LeaveApplyForm({
                         ? "bg-blue-50 border border-blue-100 text-blue-700"
                         : "bg-gray-50 border border-gray-200 text-gray-400"
                     }`}>
-                      {lt?.isHalf ? (
+                      {lt && (resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "AM" || resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "PM") ? (
                         <span>
-                          {lt.isAmOnly ? "오전" : "오후"} <strong>0.5일</strong>
+                          {resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "AM" ? "오전" : "오후"}{" "}
+                          <strong>0.5일</strong>
                           <span className="ml-2 text-xs opacity-70">(반일 근무)</span>
                         </span>
                       ) : actualDays > 0 ? (
@@ -622,7 +720,8 @@ export default function LeaveApplyForm({
                       )}
                     </div>
                   </section>
-                )}
+                  );
+                })()}
 
                 {/* 연차 가용 현황 */}
                 {isAnnualDeduct && item.leaveTypeId && (
@@ -757,7 +856,9 @@ export default function LeaveApplyForm({
               const t = leaveTypes.find((t) => t.id === it.leaveTypeId);
               if (!t) return null;
               const g = LEAVE_GROUPS.find((g) => g.key === it._groupKey);
-              const d = t.isHalf ? 0.5 : it.days;
+              const slot = resolveItemTimeSlot({ timeSlot: it.timeSlot }, leaveTypeWithPolicy(t));
+              const slotLabel = slot === "FULL" ? "종일" : slot === "AM" ? "오전" : "오후";
+              const d = leaveItemDeductDays({ days: it.days, timeSlot: it.timeSlot }, t);
               return (
                 <div key={i} className="px-4 py-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -765,11 +866,7 @@ export default function LeaveApplyForm({
                       style={{ background: g?.color ?? "#94a3b8" }} />
                     <div>
                       <span className="text-[13px] font-medium text-gray-800">
-                        {g?.label} · {t.isHalf
-                          ? (g?.key === "annual"
-                              ? (t.isAmOnly ? "오전반차" : "오후반차")
-                              : (t.isAmOnly ? "오전" : "오후"))
-                          : "종일"}
+                        {g?.label} · {slotLabel}
                       </span>
                       <span className="text-xs text-gray-400 ml-2">
                         {it.startDate === it.endDate
@@ -820,7 +917,9 @@ export default function LeaveApplyForm({
       {calendarItemIdx != null && (() => {
         const it = items[calendarItemIdx];
         const lt = leaveTypes.find((t) => t.id === it?.leaveTypeId);
-        const isHalf = lt?.isHalf ?? false;
+        const isHalf = it && lt
+          ? rowUsesSingleDayOnly(it, lt) || (leaveTypeWithPolicy(lt).allowsHalfDay && !leaveTypeWithPolicy(lt).allowsFullDay)
+          : false;
         const start = calendarPickedStart ?? it?.startDate ?? null;
         const firstDay = new Date(calendarYear, calendarMonth - 1, 1);
         const lastDay = new Date(calendarYear, calendarMonth, 0);

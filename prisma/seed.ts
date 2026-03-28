@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { APPLY_GROUP_BY_CODE } from "@/lib/leaveApplyGroups";
 
 // ── 인라인 유틸 (src/lib/leaveCalc 대신)
 /** 기본연차 일수 (항상 15, 근속가산 별도) */
@@ -122,7 +123,7 @@ async function main() {
     { sourceCode: "BASE_ANNUAL", label: "기본연차", sortOrder: 1, defaultDays: null, note: "1년 이상 15일, 미만 시 월별 발생" },
     { sourceCode: "TENURE_BONUS", label: "근속가산", sortOrder: 2, defaultDays: null, note: "2년마다 +1일, 최대 10일" },
     { sourceCode: "CARE", label: "돌봄휴가", sortOrder: 3, defaultDays: 2, note: "전원 2일" },
-    { sourceCode: "HOLIDAY_EXT", label: "연휴연장휴가", sortOrder: 4, defaultDays: 1, note: "전원 1일, 1일 단위만 사용" },
+    { sourceCode: "HOLIDAY_EXT", label: "연휴연장휴가", sortOrder: 4, defaultDays: 1, note: "전원 1일, 오전·오후·종일 조합 가능" },
     { sourceCode: "DUTY_DEPT", label: "직무부서휴가", sortOrder: 5, defaultDays: 2, note: "운영부/교육부/복지부 2일" },
     { sourceCode: "AWARD", label: "포상휴가", sortOrder: 6, defaultDays: null, note: "PM·관리자가 사원별 부여, LeaveType.allocationSourceCode=AWARD" },
   ];
@@ -543,20 +544,33 @@ async function seedLeaveTypes() {
     ["TENURE_5Y",      "5년근속휴가",       1,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 18],
     ["TENURE_10Y",     "10년근속휴가",      1,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 19],
     ["AWARD",          "포상휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  12,    "#f59e0b", 20],
-    ["HOLIDAY_EXT",    "연휴연장휴가",      1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 21],
-    ["BIRTHDAY_HALF",  "생일반차",          0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 12,   "#ec4899", 22],
+    ["HOLIDAY_EXT",       "연휴연장휴가",        1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 21],
+    ["HOLIDAY_EXT_AM",    "연휴연장휴가(오전)",  0.5, false, 1, null, null, false, null, true, true, false,"귀속연도",    null,  "#0ea5e9", 22],
+    ["HOLIDAY_EXT_PM",    "연휴연장휴가(오후)",  0.5, false, 1, null, null, false, null, true, false,true, "귀속연도",    null,  "#0ea5e9", 23],
+    ["BIRTHDAY_HALF_AM",  "생일반차(오전)",      0.5, false, 1, null, null, false, null, true, true, false,"부여일기준", 12,   "#ec4899", 24],
+    ["BIRTHDAY_HALF",     "생일반차(오후)",      0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 12,   "#ec4899", 25],
   ] as const;
 
   function allocationSourceForCode(lc: string): string | null {
     if (["CARE", "CARE_AM", "CARE_PM"].includes(lc)) return "CARE";
-    if (lc === "HOLIDAY_EXT") return "HOLIDAY_EXT";
-    if (lc === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
+    if (["HOLIDAY_EXT", "HOLIDAY_EXT_AM", "HOLIDAY_EXT_PM"].includes(lc)) return "HOLIDAY_EXT";
+    if (["BIRTHDAY_HALF", "BIRTHDAY_HALF_AM"].includes(lc)) return "BIRTHDAY_HALF";
     if (lc === "AWARD") return "AWARD";
     return null;
   }
 
   for (const [code,name,dpu,deduct,steps,maxMon,maxYr,stamp,stampCnt,isHalf,amOnly,pmOnly,vBasis,vMon,color,sort] of types) {
     if (await prisma.leaveType.findUnique({ where: { code } })) continue;
+    const half = !!(isHalf as boolean);
+    const allowsFullDay = !half;
+    const allowsHalfDay = half;
+    const halfDayAmPm = !half
+      ? "BOTH"
+      : (amOnly as boolean)
+        ? "AM_ONLY"
+        : (pmOnly as boolean)
+          ? "PM_ONLY"
+          : "BOTH";
     const data = {
       code,
       name, daysPerUnit:dpu as number,
@@ -567,6 +581,10 @@ async function seedLeaveTypes() {
       requiresStamp:stamp as boolean,
       stampCount:stampCnt as number|null,
       allocationSourceCode: allocationSourceForCode(code),
+      allowsFullDay,
+      allowsHalfDay,
+      halfDayAmPm,
+      applyGroupKey: APPLY_GROUP_BY_CODE[code] ?? null,
       isHalf:isHalf as boolean, isAmOnly:amOnly as boolean, isPmOnly:pmOnly as boolean,
       validityBasis:vBasis as string,
       validityMonths:vMon as number|null,
