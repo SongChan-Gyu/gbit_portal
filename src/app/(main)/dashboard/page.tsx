@@ -87,7 +87,13 @@ export default async function DashboardPage({
   }
 
   const welfare = isWelfareDept(employee);
-  const jejuPendingCount = welfare ? await prisma.jejuAccommodation.count({ where: { status: "PENDING" } }) : 0;
+  const [jejuApplyPendingCount, jejuCancelPendingCount] = welfare
+    ? await Promise.all([
+        prisma.jejuAccommodation.count({ where: { status: "PENDING" } }),
+        prisma.jejuAccommodation.count({ where: { status: "CANCEL_REQUESTED" } }),
+      ])
+    : [0, 0];
+  const jejuPendingCount = jejuApplyPendingCount + jejuCancelPendingCount;
 
   // 부여 = 전체 부여(연차+특별휴가+돌봄 등). 잔여 연차 = 연차(기본+근속가산+이월)만
   const ANNUAL_ONLY_SOURCES = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"]);
@@ -112,11 +118,13 @@ export default async function DashboardPage({
   ];
 
   let approvalPending = 0;
+  let cancelApprovalPending = 0;
   let stampPending = 0;
   let pendingStamps: any[] = [];
   if (!isExternal && ["TEAM_LEAD","PM","ADMIN"].includes(user.role)) {
-    [approvalPending, stampPending] = await Promise.all([
+    [approvalPending, cancelApprovalPending, stampPending] = await Promise.all([
       prisma.leaveApproval.count({ where: { approverId: user.employeeId, status: "PENDING" } }),
+      prisma.leaveApproval.count({ where: { approverId: user.employeeId, status: "CANCEL_PENDING" } }),
       prisma.stampRequest.count({ where: { approverId: user.employeeId, status: "PENDING" } }),
     ]);
     if (stampPending > 0) {
@@ -217,8 +225,8 @@ export default async function DashboardPage({
             </div>
             {["TEAM_LEAD","PM","ADMIN"].includes(user.role) && (
               <div className="stat-card col-span-1">
-                <div className={`stat-num ${(approvalPending + stampPending) > 0 ? "text-red-600" : "text-gray-400"}`}>
-                  {approvalPending + stampPending}
+                <div className={`stat-num ${(approvalPending + cancelApprovalPending + stampPending) > 0 ? "text-red-600" : "text-gray-400"}`}>
+                  {approvalPending + cancelApprovalPending + stampPending}
                 </div>
                 <div className="stat-label">결재 대기</div>
               </div>
@@ -228,7 +236,7 @@ export default async function DashboardPage({
       </div>
 
       {/* 결재 대기 알림 */}
-      {(approvalPending > 0 || stampPending > 0 || (welfare && jejuPendingCount > 0)) && (
+      {(approvalPending > 0 || cancelApprovalPending > 0 || stampPending > 0 || (welfare && jejuPendingCount > 0)) && (
         <div className="panel">
           <div className="panel-header">
             <div className="flex items-center gap-2">
@@ -246,8 +254,17 @@ export default async function DashboardPage({
                 <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
               </Link>
             )}
+            {cancelApprovalPending > 0 && (
+              <Link href="/leave/approve?tab=leave"
+                className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors text-[15px] md:text-[13px] touch-manipulation">
+                <span className="text-gray-700">
+                  휴가 취소 결재 대기 <span className="font-semibold text-orange-600">{cancelApprovalPending}건</span> 처리가 필요합니다
+                </span>
+                <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
+              </Link>
+            )}
             {pendingStamps.length > 0 && (
-              <Link href="/leave/approve?tab=stamp"
+              <Link href="/stamp/approve?view=pending"
                 className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors text-[15px] md:text-[13px] touch-manipulation">
                 <span className="text-gray-700">
                   스탬프 승인 대기 <span className="font-semibold text-amber-600">{stampPending}건</span> 처리가 필요합니다
@@ -256,10 +273,11 @@ export default async function DashboardPage({
               </Link>
             )}
             {welfare && jejuPendingCount > 0 && (
-              <Link href="/jeju"
+              <Link href="/jeju/approve"
                 className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors text-[15px] md:text-[13px] touch-manipulation">
                 <span className="text-gray-700">
-                  제주도 숙소 신청 대기 <span className="font-semibold text-teal-600">{jejuPendingCount}건</span> 처리가 필요합니다
+                  제주도 숙소 결재 대기 <span className="font-semibold text-teal-600">{jejuPendingCount}건</span>
+                  <span className="ml-1 text-xs text-gray-500">(신청 {jejuApplyPendingCount} · 취소요청 {jejuCancelPendingCount})</span>
                 </span>
                 <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
               </Link>
