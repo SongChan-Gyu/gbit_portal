@@ -22,7 +22,11 @@ export async function GET() {
     },
   });
   if (!emp) return NextResponse.json({ error: "사원 정보를 찾을 수 없습니다." }, { status: 404 });
-  return NextResponse.json({ ok: true, employee: emp });
+  const me = await prisma.user.findUnique({
+    where: { employeeId: u.employeeId },
+    select: { mustChangePassword: true },
+  });
+  return NextResponse.json({ ok: true, employee: emp, mustChangePassword: !!me?.mustChangePassword });
 }
 
 export async function PATCH(req: Request) {

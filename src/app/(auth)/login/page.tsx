@@ -17,7 +17,17 @@ export default function LoginPage() {
     const res = await signIn("credentials", { username, password, redirect: false });
     setLoading(false);
     if (res?.error) setError("아이디 또는 비밀번호가 올바르지 않습니다.");
-    else router.push("/dashboard");
+    else {
+      try {
+        const meRes = await fetch("/api/me");
+        const me = await meRes.json().catch(() => ({}));
+        if (meRes.ok && me?.mustChangePassword) {
+          router.push("/first-setup");
+          return;
+        }
+      } catch {}
+      router.push("/dashboard");
+    }
   }
 
   return (

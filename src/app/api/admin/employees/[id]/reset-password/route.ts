@@ -35,7 +35,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   const hash = await bcrypt.hash(temporaryPassword, 10);
   await prisma.user.update({
     where: { id: employee.user.id },
-    data: { passwordHash: hash },
+    data: { passwordHash: hash, mustChangePassword: true },
   });
 
   if (sendEmail) {

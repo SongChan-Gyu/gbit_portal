@@ -24,11 +24,11 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "새 비밀번호가 현재 비밀번호와 같습니다." }, { status: 400 });
   }
 
-  const userId = (session.user as any)?.id as string | undefined;
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const employeeId = (session.user as any)?.employeeId as string | undefined;
+  if (!employeeId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: { employeeId },
     select: { id: true, passwordHash: true },
   });
   if (!user) return NextResponse.json({ error: "사용자 정보를 찾을 수 없습니다." }, { status: 404 });
@@ -39,7 +39,7 @@ export async function PATCH(req: Request) {
   const nextHash = await bcrypt.hash(newPassword, 10);
   await prisma.user.update({
     where: { id: user.id },
-    data: { passwordHash: nextHash },
+    data: { passwordHash: nextHash, mustChangePassword: false },
   });
 
   return NextResponse.json({ ok: true, message: "비밀번호가 변경되었습니다." });

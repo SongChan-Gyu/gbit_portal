@@ -14,7 +14,7 @@ type Emp = {
   alimtalkEnabled: boolean;
 };
 
-export default function MeClient({ initial }: { initial: Emp }) {
+export default function MeClient({ initial, forcePasswordChange = false }: { initial: Emp; forcePasswordChange?: boolean }) {
   const router = useRouter();
   const [form, setForm] = useState({
     phone: initial.phone ?? "",
@@ -85,10 +85,18 @@ export default function MeClient({ initial }: { initial: Emp }) {
     }
     setPw({ currentPassword: "", newPassword: "", confirmPassword: "" });
     setPwOkMsg("비밀번호가 변경되었습니다.");
+    if (forcePasswordChange) {
+      setTimeout(() => router.replace("/me"), 600);
+    }
   }
 
   return (
     <div className="space-y-5">
+      {forcePasswordChange && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          초기 발급 비밀번호로 로그인했습니다. 보안을 위해 비밀번호를 먼저 변경해 주세요.
+        </div>
+      )}
       <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm space-y-5">
       <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
@@ -154,7 +162,7 @@ export default function MeClient({ initial }: { initial: Emp }) {
       {okMsg && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{okMsg}</p>}
 
         <div className="flex gap-3 pt-1">
-          <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>뒤로</button>
+          {!forcePasswordChange && <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>뒤로</button>}
           <button type="button" className="btn-primary flex-1" onClick={save} disabled={saving}>
             {saving ? "저장 중..." : "저장"}
           </button>
