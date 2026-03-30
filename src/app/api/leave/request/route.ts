@@ -199,8 +199,8 @@ export async function POST(req: Request) {
           status: { in: ["PENDING", "APPROVED"] },
         },
         OR: workItems.map((it) => ({
-          startDate: { lte: it.endDate },
-          endDate: { gte: it.startDate },
+          startDate: { lte: new Date(it.endDate) },
+          endDate: { gte: new Date(it.startDate) },
         })),
       },
       include: { leaveRequest: true },
