@@ -212,17 +212,13 @@ export async function runTenureCheck(
       }
 
       const validFrom  = anniversary;
-      // 스케줄러는 "부여 + 만료일 세팅"만 담당:
-      // - TENURE_1Y: 귀속연도 말(4/30)까지, 2~4월 부여분은 다음 FY 말까지
-      // - TENURE_5Y/10Y: 부여일 기준 12개월
+      // 스케줄러는 "부여 + 기본 만료일 세팅"만 담당.
+      // 1년근속 특례 이월은 귀속연도 초기화(init) 정책에서 처리한다.
       let validUntil: Date;
       if (m.code === "TENURE_1Y") {
         const fiscalYearOfGrant = getFiscalYear(anniversary); // anniversary가 속한 귀속연도
         const fyEnd = new Date(fiscalYearOfGrant + 1, 3, 30, 23, 59, 59, 999); // (fy+1)-04-30 23:59:59.999
-        const nextFyEnd = new Date(fiscalYearOfGrant + 2, 3, 30, 23, 59, 59, 999); // (fy+2)-04-30
-        const grantMonth = anniversary.getMonth() + 1; // 1~12
-        const grantInLast3Months = grantMonth >= 2 && grantMonth <= 4; // Feb~Apr
-        validUntil = grantInLast3Months ? nextFyEnd : fyEnd;
+        validUntil = fyEnd;
       } else {
         const d = new Date(anniversary);
         d.setMonth(d.getMonth() + 12);

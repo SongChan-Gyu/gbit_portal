@@ -1,5 +1,6 @@
 #!/bin/sh
-set -eu
+set -e
+set -u
 
 echo "[start:prod] prisma migrate deploy"
 prisma migrate deploy

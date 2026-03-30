@@ -25,6 +25,8 @@ export async function POST(req: Request) {
   if (!fy || isNaN(fy)) return NextResponse.json({ error:"귀속연도(fy) 필요" }, { status:400 });
 
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
+  const prevFy = fy - 1;
+  const { start: prevFyStart, end: prevFyEnd } = fiscalPeriod(prevFy);
   const employees = await prisma.employee.findMany({
     where: {
       status: { in: ["ACTIVE", "INVITED"] },
@@ -50,6 +52,43 @@ export async function POST(req: Request) {
   }
 
   const BASE_ANNUAL_DAYS = 15;
+  const TENURE_1Y_CARRYOVER_LABEL = "1년근속휴가(이월)";
+  const TENURE_1Y_CARRYOVER_NOTE_KEY = "TENURE_1Y_CARRYOVER_FROM";
+
+  async function getTenure1yCarryoverDays(
+    finder: any,
+    employeeId: string,
+    targetFy: number,
+  ): Promise<number> {
+    const already = await finder.leaveAllocation.findFirst({
+      where: {
+        employeeId,
+        sourceCode: "TENURE_1Y",
+        fiscalYear: targetFy,
+        label: TENURE_1Y_CARRYOVER_LABEL,
+      },
+      select: { id: true },
+    });
+    if (already) return 0;
+
+    const prev = await finder.leaveAllocation.findMany({
+      where: {
+        employeeId,
+        sourceCode: "TENURE_1Y",
+        validFrom: { gte: prevFyStart, lte: prevFyEnd },
+      },
+      select: { id: true, totalDays: true, usedDays: true, validFrom: true },
+    });
+
+    let days = 0;
+    for (const a of prev) {
+      const month = new Date(a.validFrom).getMonth() + 1; // 1~12
+      if (month < 2 || month > 4) continue; // FY 마지막 3개월(2~4월) 부여분만 특례
+      const remaining = Number(a.totalDays) - Number(a.usedDays);
+      if (remaining > 0) days += remaining;
+    }
+    return days;
+  }
 
   /** dryRun: 미리보기만 반환 (DB 변경 없음) */
   if (dryRun === true) {
@@ -81,6 +120,10 @@ export async function POST(req: Request) {
       if (dutyDept && DUTY_DEPT_VALUES.includes(dutyDept) && !(await exists(emp.id, DUTY_SOURCE)))
         items.push({ label: "직무부서휴가", totalDays: DUTY_DEPT_DAYS });
       if (!(await exists(emp.id, "HOLIDAY_EXT"))) items.push({ label: "연휴연장휴가", totalDays: 1 });
+      const tenure1yCarry = await getTenure1yCarryoverDays(prisma, emp.id, fy);
+      if (tenure1yCarry > 0) {
+        items.push({ label: "1년근속휴가(이월)", totalDays: tenure1yCarry });
+      }
 
       if (items.length > 0) preview.push({ name: emp.name, items });
     }
@@ -210,6 +253,24 @@ export async function POST(req: Request) {
         });
         created++;
       } else { skipped++; }
+
+      const tenure1yCarry = await getTenure1yCarryoverDays(tx, emp.id, fy);
+      if (tenure1yCarry > 0) {
+        await tx.leaveAllocation.create({
+          data: {
+            employeeId: emp.id,
+            sourceCode: "TENURE_1Y",
+            label: TENURE_1Y_CARRYOVER_LABEL,
+            totalDays: tenure1yCarry,
+            usedDays: 0,
+            validFrom: fyStart,
+            validUntil: fyEnd,
+            fiscalYear: fy,
+            note: `${TENURE_1Y_CARRYOVER_NOTE_KEY}:${prevFy} (2~4월 부여분 잔여 이월)`,
+          },
+        });
+        created++;
+      }
 
       out.push({ name: emp.name, allocsCreated: created, skipped });
     }
