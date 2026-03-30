@@ -297,7 +297,7 @@ export default function StampClient({
             오후 6시 반영 시 팀장에게 스탬프 서명을 요청하세요.
           </div>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">반영 날짜</label>
                 <input

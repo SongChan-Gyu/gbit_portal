@@ -29,7 +29,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const fyEnd   = new Date(`${fy+1}-04-30`);
   const fyRangeLabel = `${formatYMD(fyStart)} ~ ${formatYMD(fyEnd)}`;
 
-  const [allocations, requests, tenureScheduleAll] = await Promise.all([
+  const [allocations, requests, tenureScheduleAll, reasonNoPoolLeaveTypes] = await Promise.all([
     prisma.leaveAllocation.findMany({
       where: {
         employeeId: user.employeeId,
@@ -51,6 +51,13 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
       orderBy: { startDate:"desc" },
     }),
     getTenureScheduleForFiscalYears(fy),
+    prisma.leaveType.findMany({
+      where: {
+        isActive: true,
+        deductFromBalance: false,
+      },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
   ]);
 
   // 이번·다음 귀속연도 중 본인 근속휴가 부여 예정 (언제부터 쓸 수 있는지 보여주기 위함)
@@ -118,6 +125,19 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
     }
   }
 
+  /** 부여 풀(LeaveAllocation) 없이 쓰는 유형 — 승인된 신청만으로 사용 일수 집계 */
+  const approvedInFy = requests.filter((r) => r.status === "APPROVED");
+  const reasonNoPoolUsage = reasonNoPoolLeaveTypes.map((t) => {
+    let used = 0;
+    for (const r of approvedInFy) {
+      for (const it of r.items) {
+        if (it.leaveTypeId === t.id) used += it.days;
+      }
+    }
+    return { id: t.id, name: t.name, code: t.code, color: t.color, used };
+  });
+  const reasonNoPoolHasAny = reasonNoPoolUsage.some((r) => r.used > 0);
+
   return (
     <div className="max-w-3xl space-y-4">
       <div>
@@ -152,7 +172,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
           </div>
         </div>
         <p className="text-[11px] text-gray-400 px-0.5">
-          연차·돌봄·이벤트 등 소모 자산만 집계합니다. 공가·병가는 유형별 상세에서 확인하세요.
+          연차·돌봄·이벤트 등 소모 자산만 집계합니다. 공가·병가·인정 등은 아래 「사유형 사용」에서 승인 일수를 확인하세요.
         </p>
       </div>
 
@@ -218,6 +238,73 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
         </table>
         </div>
       </div>
+
+      {/* 사유형: 승인 일수만 별도 집계 (공가·병가·인정·경조 등) */}
+      {reasonNoPoolLeaveTypes.length > 0 && (
+        <div className="panel">
+          <div className="panel-header flex-wrap gap-1">
+            <span className="panel-title">사유형 사용 (승인 집계)</span>
+            <span className="text-xs text-gray-500 font-normal">
+              별도 잔여 풀과 무관하게, 승인된 사용 일수만 합산해서 보여줍니다.
+            </span>
+          </div>
+          {!reasonNoPoolHasAny ? (
+            <div className="panel-body text-center py-6 text-gray-400 text-sm">
+              이 귀속연도에 해당 유형 승인 사용이 없습니다.
+            </div>
+          ) : (
+            <>
+              <div className="md:hidden divide-y divide-gray-100">
+                {reasonNoPoolUsage
+                  .filter((r) => r.used > 0)
+                  .map((r) => (
+                    <div key={r.id} className="px-4 py-3">
+                      <p className="font-medium text-gray-800" style={{ color: r.code === "SICK" ? "#dc2626" : r.color }}>
+                        {r.name}
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        부여 <span className="text-gray-400">—</span>
+                        {" · "}
+                        사용 <span className="text-red-600 font-semibold tabular-nums">{r.used.toFixed(1)}</span>일
+                      </p>
+                    </div>
+                  ))}
+              </div>
+              <div className="hidden md:block table-scroll px-0">
+                <table className="data-table allocation-table">
+                  <thead>
+                    <tr>
+                      <th>구분</th>
+                      <th className="text-right">부여</th>
+                      <th className="text-right">사용(승인)</th>
+                      <th>비고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reasonNoPoolUsage
+                      .filter((row) => row.used > 0)
+                      .map((r) => (
+                        <tr key={r.id}>
+                          <td>
+                            <span
+                              className="font-medium"
+                              style={{ color: r.code === "SICK" ? "#dc2626" : r.color }}
+                            >
+                              {r.name}
+                            </span>
+                          </td>
+                          <td className="text-right text-gray-400">—</td>
+                          <td className="text-right font-semibold text-red-600 tabular-nums">{r.used.toFixed(1)}</td>
+                          <td className="text-xs text-gray-500">부여 풀 없음</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* 이번 귀속연도 중 근속휴가 부여 예정 — 언제부터 사용 가능한지 안내 */}
       {(tenureThisFy.length > 0 || tenureNextFy.length > 0) && (

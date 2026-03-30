@@ -5,7 +5,6 @@ import { formatYMD } from "@/lib/dateUtils";
 import LeaveApplyForm from "./LeaveApplyForm";
 import { serializeDates } from "@/lib/serialize";
 import { countAfternoonEligible, countHealingEligible } from "@/lib/stampCard";
-import { StampSlotGrid } from "@/components/stamp/StampSlotGrid";
 
 export default async function LeaveApplyPage() {
   const session = await auth();
@@ -61,8 +60,6 @@ export default async function LeaveApplyPage() {
       })
     : 0;
 
-  const stampProgressOnCard = totalStamps % 10;
-
   return (
     <div className="max-w-2xl">
       {/* 페이지 헤더 */}
@@ -74,35 +71,27 @@ export default async function LeaveApplyPage() {
       {/* 사용 가능 자산 요약 (공가·병가 미포함) */}
       <div className="panel mb-3">
         <div className="panel-body py-3 px-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-            <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:gap-5 sm:flex-1 min-w-0">
-              <div className="text-center min-w-0">
-                <p className="text-lg sm:text-xl font-black text-blue-600 tabular-nums leading-none">
-                  {totalAssetRemain.toFixed(1)}
-                </p>
-                <p className="text-[10px] sm:text-[11px] text-gray-400 mt-1">사용 가능 휴가</p>
-                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 leading-tight">연차·돌봄 등</p>
-              </div>
-              <div className="hidden sm:block w-px h-10 bg-gray-200 shrink-0" aria-hidden />
-              <div className="text-center min-w-0 flex flex-col items-center">
-                <p className="text-lg sm:text-xl font-black text-amber-500 tabular-nums leading-none">{totalStamps}</p>
-                <p className="text-[10px] sm:text-[11px] text-gray-400 mt-1">누적 스탬프</p>
-                <StampSlotGrid
-                  filledCount={stampProgressOnCard}
-                  size="sm"
-                  className="justify-center mt-1.5 max-w-[6.5rem] mx-auto"
-                />
-              </div>
-              <div className="hidden sm:block w-px h-10 bg-gray-200 shrink-0" aria-hidden />
-              <div className="text-center min-w-0">
-                <p className="text-base sm:text-lg font-black text-gray-600 leading-none">
-                  {halfDayUsed > 0 ? "사용" : "미사용"}
-                </p>
-                <p className="text-[10px] sm:text-[11px] text-gray-400 mt-1">이달 하프데이</p>
-              </div>
+          <div className="flex items-center gap-6">
+            <div className="text-center min-w-[7rem]">
+              <p className="text-xl font-black text-blue-600 tabular-nums">{totalAssetRemain.toFixed(1)}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">사용 가능 휴가</p>
+              <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">연차·돌봄·이벤트 등</p>
             </div>
-            <div className="text-right text-[10px] sm:text-xs text-gray-400 shrink-0 pt-1 sm:pt-0 border-t border-gray-100 sm:border-0 sm:pl-2">
-              <p>귀속 {fy}년</p>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <p className="text-xl font-black text-amber-500 tabular-nums">{totalStamps}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">누적 스탬프 칸</p>
+            </div>
+            <div className="w-px h-8 bg-gray-200" />
+            <div className="text-center">
+              <p className="text-xl font-black text-gray-600">
+                {halfDayUsed > 0 ? "사용완료" : "미사용"}
+              </p>
+              <p className="text-[11px] text-gray-400 mt-0.5">이달 하프데이</p>
+            </div>
+            <div className="flex-1" />
+            <div className="text-right text-xs text-gray-400 hidden sm:block">
+              <p>귀속연도 {fy}년도</p>
               <p>{formatYMD(new Date())} 기준</p>
             </div>
           </div>

@@ -191,17 +191,27 @@ export async function POST(req: Request) {
       });
     }
 
-    const overlapping = await prisma.leaveRequest.findFirst({
+    // 동일한 날짜에 이미 신청/승인된 휴가가 있는지만 체크 (중간 날짜만 포함되는 넓은 구간은 허용)
+    const overlappingItem = await prisma.leaveRequestItem.findFirst({
       where: {
-        employeeId: user.employeeId,
-        status: { in: ["PENDING", "APPROVED"] },
-        OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }],
+        leaveRequest: {
+          employeeId: user.employeeId,
+          status: { in: ["PENDING", "APPROVED"] },
+        },
+        OR: workItems.map((it) => ({
+          startDate: { lte: it.endDate },
+          endDate: { gte: it.startDate },
+        })),
       },
+      include: { leaveRequest: true },
     });
-    if (overlapping) {
+    if (overlappingItem) {
+      const r = overlappingItem.leaveRequest;
       return NextResponse.json(
         {
-          error: `해당 기간에 이미 휴가가 신청/승인되어 있습니다. (${overlapping.startDate.toISOString().slice(0, 10)} ~ ${overlapping.endDate.toISOString().slice(0, 10)})`,
+          error: `해당 날짜에 이미 휴가가 신청/승인되어 있습니다. (${r.startDate.toISOString().slice(0, 10)} ~ ${r.endDate
+            .toISOString()
+            .slice(0, 10)})`,
         },
         { status: 400 },
       );

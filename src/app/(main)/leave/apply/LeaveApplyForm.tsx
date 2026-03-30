@@ -706,7 +706,7 @@ export default function LeaveApplyForm({
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       {grp && grp.subs.length > 1 ? "03." : "02."} 신청 기간
                     </p>
-                    <div className={`grid gap-3 ${singleDayField ? "grid-cols-1" : "grid-cols-2"}`}>
+                    <div className={`grid gap-3 ${singleDayField ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
                       <div>
                         <label className="block text-sm text-gray-500 mb-1">
                           {singleDayField ? "날짜" : "시작일"}
