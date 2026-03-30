@@ -162,9 +162,9 @@ export async function runMonthlyAccrual(
 // 2. 근속 기념일 체크
 // ──────────────────────────────────────────────────────
 const TENURE_MILESTONES = [
-  { years: 1,  code: "TENURE_1Y",  label: "1년근속휴가",  days: 3,  validityMonths: 12 },
-  { years: 5,  code: "TENURE_5Y",  label: "5년근속휴가",  days: 5,  validityMonths: 12 },
-  { years: 10, code: "TENURE_10Y", label: "10년근속휴가", days: 10, validityMonths: 12 },
+  { years: 1,  code: "TENURE_1Y",  label: "1년근속휴가",  days: 3 },
+  { years: 5,  code: "TENURE_5Y",  label: "5년근속휴가",  days: 5 },
+  { years: 10, code: "TENURE_10Y", label: "10년근속휴가", days: 10 },
 ] as const;
 
 export async function runTenureCheck(
@@ -212,7 +212,9 @@ export async function runTenureCheck(
       }
 
       const validFrom  = anniversary;
-      // TENURE_1Y는 "FY 종료(4/30)까지" + "마지막 3개월(2~4월) 부여분은 다음 FY까지 이월" 규칙 적용
+      // 스케줄러는 "부여 + 만료일 세팅"만 담당:
+      // - TENURE_1Y: 귀속연도 말(4/30)까지, 2~4월 부여분은 다음 FY 말까지
+      // - TENURE_5Y/10Y: 부여일 기준 12개월
       let validUntil: Date;
       if (m.code === "TENURE_1Y") {
         const fiscalYearOfGrant = getFiscalYear(anniversary); // anniversary가 속한 귀속연도
@@ -223,7 +225,7 @@ export async function runTenureCheck(
         validUntil = grantInLast3Months ? nextFyEnd : fyEnd;
       } else {
         const d = new Date(anniversary);
-        d.setMonth(d.getMonth() + m.validityMonths);
+        d.setMonth(d.getMonth() + 12);
         validUntil = d;
       }
       // 근속휴가는 입사 기념일 기준이라 귀속연도 없음 (스케줄러 전용)
