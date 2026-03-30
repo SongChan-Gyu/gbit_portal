@@ -17,6 +17,16 @@ const ANNUAL_ONLY_SOURCES = [
 ];
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 
+function ymdLocal(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function plusDays(ymd: string, delta: number): string {
+  const d = new Date(ymd);
+  d.setDate(d.getDate() + delta);
+  return ymdLocal(d);
+}
+
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -100,37 +110,45 @@ export async function POST(req: Request) {
 
     const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
     const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999);
+    const holidayLookupStart = new Date(startOnly);
+    holidayLookupStart.setDate(holidayLookupStart.getDate() - 15);
+    const holidayLookupEnd = new Date(endOnly);
+    holidayLookupEnd.setDate(holidayLookupEnd.getDate() + 15);
     const rangeHolidays = await prisma.holiday.findMany({
-      where: { date: { gte: startOnly, lte: endOnly } },
+      where: { date: { gte: holidayLookupStart, lte: holidayLookupEnd } },
     });
     const holidaySet = new Set(rangeHolidays.map((h) => h.date.toISOString().slice(0, 10)));
-    /** 각 신청 항목의 start~end 구간만 검사 (전체 최소~최대 사이의 ‘빈’ 주말·공휴일은 제외) */
-    const invalidDays: string[] = [];
-    const toYmd = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    for (const it of items) {
-      const s = new Date(it.startDate);
-      const e = new Date(it.endDate);
-      const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-      const endItem = new Date(e.getFullYear(), e.getMonth(), e.getDate());
-      while (cur <= endItem) {
-        const ds = toYmd(cur);
-        const dow = cur.getDay();
-        if (dow === 0 || dow === 6 || holidaySet.has(ds)) invalidDays.push(ds);
-        cur.setDate(cur.getDate() + 1);
-      }
-    }
-    const uniqueInvalid = [...new Set(invalidDays)].sort();
-    if (uniqueInvalid.length > 0) {
-      return NextResponse.json(
-        {
-          error: `선택한 기간에 공휴일 또는 주말이 포함되어 있습니다. (${uniqueInvalid.slice(0, 5).join(", ")}${uniqueInvalid.length > 5 ? " 외 " + (uniqueInvalid.length - 5) + "일" : ""})`,
-        },
-        { status: 400 },
-      );
-    }
-
     const holidayList = Array.from(holidaySet);
+    const isHolidayOrWeekend = (ymd: string) => {
+      const d = new Date(ymd);
+      const dow = d.getDay();
+      return dow === 0 || dow === 6 || holidaySet.has(ymd);
+    };
+    const holidayBlockLengthForward = (startYmd: string) => {
+      let n = 0;
+      let cur = startYmd;
+      while (isHolidayOrWeekend(cur)) {
+        n += 1;
+        cur = plusDays(cur, 1);
+      }
+      return n;
+    };
+    const holidayBlockLengthBackward = (endYmd: string) => {
+      let n = 0;
+      let cur = endYmd;
+      while (isHolidayOrWeekend(cur)) {
+        n += 1;
+        cur = plusDays(cur, -1);
+      }
+      return n;
+    };
+    const isValidHolidayExtDay = (targetYmd: string) => {
+      const next = plusDays(targetYmd, 1);
+      const prev = plusDays(targetYmd, -1);
+      const rightBlock = holidayBlockLengthForward(next);
+      const leftBlock = holidayBlockLengthBackward(prev);
+      return rightBlock >= 3 || leftBlock >= 3;
+    };
 
     type WorkItem = {
       leaveTypeId: string;
@@ -178,7 +196,21 @@ export async function POST(req: Request) {
             { status: 400 },
           );
         }
+        if (isHolidayOrWeekend(s)) {
+          return NextResponse.json({ error: `${lt.name}: 반차는 영업일에만 신청할 수 있습니다.` }, { status: 400 });
+        }
         days = 0.5;
+      }
+      if (lt.code === "HOLIDAY_EXT") {
+        const checkDates = slot === "FULL" ? [s, e] : [s];
+        for (const d of checkDates) {
+          if (!isValidHolidayExtDay(d)) {
+            return NextResponse.json(
+              { error: "연휴연장휴가는 공휴일/주말이 3일 이상 연속된 구간의 앞/뒤 하루에만 신청할 수 있습니다." },
+              { status: 400 },
+            );
+          }
+        }
       }
       workItems.push({
         leaveTypeId: it.leaveTypeId,

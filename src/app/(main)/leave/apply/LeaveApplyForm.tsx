@@ -167,6 +167,9 @@ function includeInLeaveRequestPayload(it: LeaveItem): boolean {
   if (it._healingSelected) return false;
   return Boolean(it.leaveTypeId?.trim());
 }
+function includeHealingPayload(it: LeaveItem): boolean {
+  return !!it._healingSelected;
+}
 
 /** 항목 추가만 하고 아무 것도 고르지 않은 행 */
 function isBlankLeaveRow(it: LeaveItem): boolean {
@@ -446,6 +449,7 @@ export default function LeaveApplyForm({
 
   /** 일수·결재 요약·API payload — includeInLeaveRequestPayload 와 동일 기준 */
   const effectiveSubmitItems = items.filter(includeInLeaveRequestPayload);
+  const healingSubmitItems = items.filter(includeHealingPayload);
   const totalDays = effectiveSubmitItems.reduce((s, it) => {
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
     if (!lt) return s;
@@ -504,19 +508,42 @@ export default function LeaveApplyForm({
     if (overlap) { setError(overlap); return; }
 
     setLoading(true);
-    const payload = items.filter(includeInLeaveRequestPayload).map((it) => {
+    for (const it of healingSubmitItems) {
+      if (!it.startDate) {
+        setLoading(false);
+        setError("힐링데이 신청 날짜를 선택해 주세요.");
+        return;
+      }
+      const hres = await fetch("/api/leave/healing-day", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ date: it.startDate }),
+      });
+      const hdata = await hres.json().catch(() => ({}));
+      if (!hres.ok) {
+        setLoading(false);
+        setError(hdata.error ?? "힐링데이 신청 중 오류가 발생했습니다.");
+        return;
+      }
+    }
+
+    const payload = effectiveSubmitItems.map((it) => {
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId)!;
       const days = leaveItemDeductDays({ days: it.days, timeSlot: it.timeSlot }, lt);
       const timeSlot = resolveItemTimeSlot({ timeSlot: it.timeSlot }, leaveTypeWithPolicy(lt));
       return { ...it, allocationId: "", days, timeSlot };
     });
-    const res  = await fetch("/api/leave/request", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: payload }),
-    });
-    const data = await res.json();
-    setLoading(false);
-    if (!res.ok) { setError(data.error ?? "신청 중 오류 발생"); return; }
+    if (payload.length > 0) {
+      const res  = await fetch("/api/leave/request", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: payload }),
+      });
+      const data = await res.json();
+      setLoading(false);
+      if (!res.ok) { setError(data.error ?? "신청 중 오류 발생"); return; }
+    } else {
+      setLoading(false);
+    }
     router.push("/leave/my?applied=1");
   }
 
@@ -647,6 +674,23 @@ export default function LeaveApplyForm({
                       <ExternalLink size={12} />
                       스탬프 쿠폰 페이지로 이동
                     </a>
+                    <div className="mt-3">
+                      <label className="block text-sm text-amber-900 mb-1">힐링데이 신청 날짜</label>
+                      <input
+                        type="date"
+                        className="input bg-white"
+                        value={item.startDate}
+                        onChange={(e) =>
+                          setItems((prev) =>
+                            prev.map((it, i) =>
+                              i === idx ? { ...it, startDate: e.target.value, endDate: e.target.value } : it,
+                            ),
+                          )
+                        }
+                        required
+                      />
+                      <p className="text-xs text-amber-700 mt-1">중복 날짜/이미 신청된 날짜는 제출 시 자동 검증됩니다.</p>
+                    </div>
                   </section>
                 )}
 
@@ -753,6 +797,10 @@ export default function LeaveApplyForm({
                 {item.leaveTypeId && (!polUi?.allowsFullDay || !polUi?.allowsHalfDay || ["FULL", "AM", "PM"].includes(item.timeSlot ?? "")) && (() => {
                   const dual = !!(polUi?.allowsFullDay && polUi?.allowsHalfDay);
                   const pol = lt ? leaveTypeWithPolicy(lt) : null;
+                  const hasTimeStep =
+                    (item.leaveTypeId && lt && polUi?.allowsFullDay && polUi?.allowsHalfDay) ||
+                    (item.leaveTypeId && lt && polUi?.allowsHalfDay && !polUi?.allowsFullDay && polUi?.halfDayAmPm === "BOTH") ||
+                    (item._groupKey && grp && grp.subs.length > 1);
                   const singleDayField = lt
                     ? rowUsesSingleDayOnly(item, lt)
                     || !!(pol?.allowsHalfDay && !pol.allowsFullDay)
@@ -761,7 +809,7 @@ export default function LeaveApplyForm({
                   return (
                   <section>
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                      {grp && grp.subs.length > 1 ? "03." : "02."} 신청 기간
+                      {hasTimeStep ? "03." : "02."} 신청 기간
                     </p>
                     <div className={`grid gap-3 ${singleDayField ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2"}`}>
                       <div>
@@ -935,7 +983,7 @@ export default function LeaveApplyForm({
       )}
 
       {/* ── 신청 요약 + 제출 ─────────────────────────────────── */}
-      {totalDays > 0 && (
+      {(totalDays > 0 || healingSubmitItems.length > 0) && (
         <div className="panel bg-slate-50 border-slate-200">
           <div className="panel-header border-b border-slate-200">
             <div className="flex items-center gap-2">
@@ -952,6 +1000,20 @@ export default function LeaveApplyForm({
           </div>
           <div className="divide-y divide-slate-200">
             {items.map((it, i) => {
+              if (it._healingSelected) {
+                return (
+                  <div key={i} className="px-4 py-2.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" />
+                      <div>
+                        <span className="text-[13px] font-medium text-gray-800">스탬프 · 힐링데이</span>
+                        <span className="text-xs text-gray-400 ml-2">{ymdWithDay(it.startDate)}</span>
+                      </div>
+                    </div>
+                    <span className="text-sm font-bold text-gray-700">시간차감</span>
+                  </div>
+                );
+              }
               const t = leaveTypes.find((t) => t.id === it.leaveTypeId);
               if (!t) return null;
               const g = LEAVE_GROUPS.find((g) => g.key === it._groupKey);
@@ -994,7 +1056,7 @@ export default function LeaveApplyForm({
                 {loading ? (
                   <><span className="spinner" /><span>신청 중…</span></>
                 ) : (
-                  `${totalDays.toFixed(1)}일 신청하기`
+                  totalDays > 0 ? `${totalDays.toFixed(1)}일 신청하기` : "신청하기"
                 )}
               </button>
             </div>
@@ -1003,7 +1065,7 @@ export default function LeaveApplyForm({
       )}
 
       {/* 신청 요약 없을 때 하단 버튼 */}
-      {totalDays <= 0 && (
+      {totalDays <= 0 && healingSubmitItems.length === 0 && (
         <div className="flex gap-3">
           <button type="button" onClick={() => router.back()} className="btn-secondary flex-1">취소</button>
           <button type="submit" disabled className="btn-primary flex-1 opacity-40 cursor-not-allowed">
