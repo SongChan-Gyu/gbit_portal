@@ -208,19 +208,27 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
       {initPreview && initPreview.length > 0 && (
         <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-4">
           <p className="text-sm font-semibold text-red-800 mb-2">아래 내용으로 저장 시 추가될 할당 (빨간색 표시)</p>
-          <div className="max-h-64 overflow-y-auto space-y-2">
-            {initPreview.map((p, i) => (
-              <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-medium text-red-700">{p.name}</span>
-                <span className="text-red-600">
-                  {p.items.map((it, j) => (
-                    <span key={j} className="inline-block mr-2 px-2 py-0.5 rounded bg-red-100 text-red-800 font-medium">
-                      {it.label} {it.totalDays}일
-                    </span>
-                  ))}
-                </span>
-              </div>
-            ))}
+          <div className="max-h-64 overflow-y-auto">
+            <table className="w-full text-sm border border-red-200 bg-white/70 rounded-lg overflow-hidden">
+              <thead className="bg-red-100">
+                <tr>
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-red-800 whitespace-nowrap">사원</th>
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-red-800">할당</th>
+                  <th className="text-right px-3 py-2 text-xs font-semibold text-red-800 whitespace-nowrap">일수</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-red-100">
+                {initPreview.flatMap((p) =>
+                  p.items.map((it, j) => (
+                    <tr key={`${p.name}-${it.label}-${j}`}>
+                      <td className="px-3 py-2 text-red-900 font-medium whitespace-nowrap">{p.name}</td>
+                      <td className="px-3 py-2 text-red-700">{it.label}</td>
+                      <td className="px-3 py-2 text-red-900 text-right font-semibold tabular-nums">{it.totalDays}일</td>
+                    </tr>
+                  )),
+                )}
+              </tbody>
+            </table>
           </div>
           <p className="text-xs text-red-600 mt-2">총 {initPreview.reduce((s, p) => s + p.items.length, 0)}건 생성 예정 · 저장(적용) 버튼을 눌러 반영하세요.</p>
         </div>

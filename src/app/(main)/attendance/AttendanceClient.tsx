@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, CalendarDays, BarChart3 } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
+import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 
 // ── 약어 매핑
 const ABBR: Record<string, string> = {
@@ -19,6 +20,11 @@ type ReqItem = {
   leaveTypeCode:string; leaveTypeName:string; leaveTypeColor:string;
   days:number; startDate:string; endDate:string;
   isHalf?:boolean; isAmOnly?:boolean; isPmOnly?:boolean;
+  allowsFullDay?: boolean | null;
+  allowsHalfDay?: boolean | null;
+  halfDayAmPm?: string | null;
+  leaveTypeApplyGroupKey?: string | null;
+  timeSlot?: string | null;
 };
 type Req = {
   id:string; employeeId:string; startDate:string; endDate:string;
@@ -153,6 +159,32 @@ export default function AttendanceClient({
     return s;
   }, [monthRequests]);
 
+  function renderMergedAbbr(it: ReqItem): string {
+    const { mergedName } = mergedLeaveTypeLabel(
+      {
+        code: it.leaveTypeCode,
+        name: it.leaveTypeName,
+        color: it.leaveTypeColor,
+        applyGroupKey: it.leaveTypeApplyGroupKey ?? null,
+        isHalf: !!it.isHalf,
+        isAmOnly: !!it.isAmOnly,
+        isPmOnly: !!it.isPmOnly,
+        allowsFullDay: it.allowsFullDay ?? null,
+        allowsHalfDay: it.allowsHalfDay ?? null,
+        halfDayAmPm: it.halfDayAmPm ?? null,
+      },
+      { timeSlot: it.timeSlot ?? null },
+    );
+    // 월간 그리드용 짧은 표기(최대 2~3글자 수준)
+    if (mergedName.startsWith("연차")) return mergedName.includes("오전") ? "오전" : mergedName.includes("오후") ? "오후" : "연";
+    if (mergedName.startsWith("공가")) return mergedName.includes("오전") ? "전공" : mergedName.includes("오후") ? "후공" : "공가";
+    if (mergedName.startsWith("인정휴가")) return mergedName.includes("오전") ? "전인" : mergedName.includes("오후") ? "후인" : "인정";
+    if (mergedName.startsWith("돌봄휴가")) return mergedName.includes("오전") ? "전돌" : mergedName.includes("오후") ? "후돌" : "돌봄";
+    if (mergedName.startsWith("연휴연장휴가")) return mergedName.includes("오전") ? "전연" : mergedName.includes("오후") ? "후연" : "연휴";
+    if (mergedName.startsWith("생일반차")) return mergedName.includes("오전") ? "전생" : mergedName.includes("오후") ? "후생" : "생일";
+    return ABBR[it.leaveTypeCode] ?? mergedName.slice(0, 2);
+  }
+
   return (
     <div className="space-y-4">
       {/* 헤더 */}
@@ -253,7 +285,7 @@ export default function AttendanceClient({
                                     className="w-full text-center rounded text-white font-medium px-0.5"
                                     style={{ background: item.leaveTypeColor || "#3b82f6", fontSize:"9px", lineHeight:"14px" }}
                                     title={item.leaveTypeName}>
-                                    {ABBR[item.leaveTypeCode] ?? item.leaveTypeName.slice(0,2)}
+                                    {renderMergedAbbr(item)}
                                   </div>
                                 ))}
                               </div>

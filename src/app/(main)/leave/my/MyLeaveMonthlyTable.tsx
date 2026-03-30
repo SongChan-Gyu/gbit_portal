@@ -1,9 +1,19 @@
 "use client";
 
 import { formatMDWithDay } from "@/lib/dateUtils";
+import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 
 interface ReqItem {
   leaveTypeName:string; leaveTypeColor:string;
+  leaveTypeApplyGroupKey?: string | null;
+  timeSlot?: string | null;
+  // 최소 정책 필드 (표시 통합용)
+  isHalf?: boolean;
+  isAmOnly?: boolean;
+  isPmOnly?: boolean;
+  allowsFullDay?: boolean | null;
+  allowsHalfDay?: boolean | null;
+  halfDayAmPm?: string | null;
   days:number; startDate:string; endDate:string;
 }
 interface Req {
@@ -83,8 +93,29 @@ export default function MyLeaveMonthlyTable({ monthlyUsage, monthLabels, request
                     <div key={r.id} className="text-xs text-gray-600 flex flex-wrap gap-1.5">
                       {r.items.map((it, ii) => (
                         <span key={ii} className="inline-flex items-center gap-1">
-                          <span className="w-2 h-2 rounded-full" style={{background:it.leaveTypeColor}}/>
-                          <span style={{color:it.leaveTypeColor}}>{it.leaveTypeName}</span>
+                          {(() => {
+                            const { mergedName, mergedColor } = mergedLeaveTypeLabel(
+                              {
+                                name: it.leaveTypeName,
+                                color: it.leaveTypeColor,
+                                applyGroupKey: it.leaveTypeApplyGroupKey ?? null,
+                                isHalf: !!it.isHalf,
+                                isAmOnly: !!it.isAmOnly,
+                                isPmOnly: !!it.isPmOnly,
+                                allowsFullDay: it.allowsFullDay ?? null,
+                                allowsHalfDay: it.allowsHalfDay ?? null,
+                                halfDayAmPm: it.halfDayAmPm ?? null,
+                              },
+                              { timeSlot: it.timeSlot ?? null },
+                            );
+                            const c = mergedColor ?? it.leaveTypeColor;
+                            return (
+                              <>
+                                <span className="w-2 h-2 rounded-full" style={{ background: c }} />
+                                <span style={{ color: c }}>{mergedName}</span>
+                              </>
+                            );
+                          })()}
                           <span className="text-gray-500">{it.days}일</span>
                           <span className="text-gray-400 text-[10px]">
                             ({formatMDWithDay(new Date(it.startDate))}

@@ -67,7 +67,9 @@ export async function POST(req: Request) {
         if (!(await exists(emp.id, "BASE_ANNUAL")))
           items.push({ label: "기본연차", totalDays: BASE_ANNUAL_DAYS });
         const bonus = Math.min(Math.floor(yearsOfService / 2), 10);
-        if (bonus > 0 && !(await exists(emp.id, "TENURE_BONUS")))
+        // 프리랜서(employeeType=FREE)는 2년 가산(TENURE_BONUS) 제외
+        const empType = (emp as any).employeeType ?? "FULL";
+        if (bonus > 0 && empType !== "FREE" && !(await exists(emp.id, "TENURE_BONUS")))
           items.push({ label: `근속가산(+${bonus}일)`, totalDays: bonus });
       } else {
         const months = Math.floor((fyEnd.getTime() - hire.getTime()) / (30 * 24 * 3600 * 1000));
@@ -114,7 +116,9 @@ export async function POST(req: Request) {
         } else { skipped++; }
 
         const bonus = Math.min(Math.floor(yearsOfService / 2), 10);
-        if (bonus > 0) {
+        // 프리랜서(employeeType=FREE)는 2년 가산(TENURE_BONUS) 제외
+        const empType = (emp as any).employeeType ?? "FULL";
+        if (bonus > 0 && empType !== "FREE") {
           const bonusExists = await allocExists(tx, emp.id, "TENURE_BONUS", fy);
           if (!bonusExists) {
             await tx.leaveAllocation.create({

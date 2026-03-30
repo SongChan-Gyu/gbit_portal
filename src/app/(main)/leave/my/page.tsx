@@ -6,6 +6,8 @@ import { getTenureScheduleForFiscalYears } from "@/lib/scheduler";
 import CancelButton from "./CancelButton";
 import CancelRequestButton from "./CancelRequestButton";
 import MyLeaveMonthlyTable from "./MyLeaveMonthlyTable";
+import { redirect } from "next/navigation";
+import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 
 const STATUS_BADGE: Record<string,string> = {
   PENDING:"badge-warning",  APPROVED:"badge-success",
@@ -21,6 +23,11 @@ const STATUS_KO: Record<string,string> = {
 export default async function MyLeavePage({ searchParams }: { searchParams: Promise<{ fy?: string; tab?:string }> }) {
   const session = await auth();
   const user    = session!.user as any;
+  const self = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
   const { fy: fyRaw, tab } = await searchParams;
   const fy       = fyRaw ? parseInt(fyRaw) : getFiscalYear();
   const activeTab = tab ?? "list"; // list | monthly
@@ -414,6 +421,14 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
               items: r.items.map((i) => ({
                 leaveTypeName:  i.leaveType.name,
                 leaveTypeColor: i.leaveType.color,
+                leaveTypeApplyGroupKey: i.leaveType.applyGroupKey ?? null,
+                timeSlot: i.timeSlot ?? null,
+                isHalf: i.leaveType.isHalf,
+                isAmOnly: i.leaveType.isAmOnly,
+                isPmOnly: i.leaveType.isPmOnly,
+                allowsFullDay: (i.leaveType as any).allowsFullDay ?? null,
+                allowsHalfDay: (i.leaveType as any).allowsHalfDay ?? null,
+                halfDayAmPm: (i.leaveType as any).halfDayAmPm ?? null,
                 days: i.days,
                 startDate: i.startDate.toISOString(),
                 endDate:   i.endDate.toISOString(),
@@ -434,7 +449,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="font-medium text-gray-900 leading-snug">
                         {req.items.length === 1
-                          ? req.items[0].leaveType.name
+                          ? mergedLeaveTypeLabel(req.items[0]!.leaveType as any, { timeSlot: req.items[0]!.timeSlot ?? null }).mergedName
                           : `복합 신청 (${req.items.length}건)`}
                       </p>
                       <p className="text-sm text-gray-600">
@@ -451,9 +466,14 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                     <ul className="mt-3 space-y-2 text-sm border-t border-gray-100 pt-3">
                       {req.items.map((it) => (
                         <li key={it.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          <span className="font-medium text-gray-800 shrink-0" style={{ color: it.leaveType.color }}>
-                            {it.leaveType.name}
-                          </span>
+                          {(() => {
+                            const { mergedName, mergedColor } = mergedLeaveTypeLabel(it.leaveType as any, { timeSlot: it.timeSlot ?? null });
+                            return (
+                              <span className="font-medium text-gray-800 shrink-0" style={{ color: mergedColor ?? it.leaveType.color }}>
+                                {mergedName}
+                              </span>
+                            );
+                          })()}
                           <span className="text-gray-500 text-xs">
                             {formatMDWithDay(it.startDate)}
                             {it.startDate.toDateString() !== it.endDate.toDateString() &&

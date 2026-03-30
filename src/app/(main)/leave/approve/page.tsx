@@ -6,6 +6,7 @@ import LeaveApprovePendingClient from "./LeaveApprovePendingClient";
 import StampApproveClient from "@/app/(main)/stamp/approve/StampApproveClient";
 import { serializeDates } from "@/lib/serialize";
 import { formatMDWithDay } from "@/lib/dateUtils";
+import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 
 export default async function ApprovePage({
   searchParams,
@@ -13,6 +14,12 @@ export default async function ApprovePage({
   const session = await auth();
   const user = session!.user as any;
   if (!["TEAM_LEAD","PM","ADMIN"].includes(user.role)) redirect("/dashboard");
+
+  const self = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
 
   const params = await searchParams;
   const viewRaw = params.view;
@@ -217,7 +224,7 @@ export default async function ApprovePage({
                       </span>
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
-                      {req.items.map((i) => i.leaveType.name).join("+")} · {formatMDWithDay(req.startDate)}
+                      {req.items.map((i) => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")} · {formatMDWithDay(req.startDate)}
                       {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
                       <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
                     </p>
@@ -248,7 +255,7 @@ export default async function ApprovePage({
                         <p className="font-medium text-[15px] md:text-base">{req.employee.name}</p>
                         <p className="text-xs text-gray-500">{req.employee.team?.name}</p>
                       </td>
-                      <td className="request-list-td type text-[15px] md:text-xs">{req.items.map((i) => i.leaveType.name).join("+")}</td>
+                      <td className="request-list-td type text-[15px] md:text-xs">{req.items.map((i) => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")}</td>
                       <td className="request-list-td period whitespace-nowrap text-[15px] md:text-xs">
                         {formatMDWithDay(req.startDate)}
                         {req.startDate.toDateString() !== req.endDate.toDateString() &&

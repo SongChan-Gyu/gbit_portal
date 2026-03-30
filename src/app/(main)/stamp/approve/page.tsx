@@ -9,6 +9,12 @@ export default async function StampApprovePage({ searchParams }:{ searchParams: 
   const user = session!.user as any;
   if (!["TEAM_LEAD","PM","ADMIN"].includes(user.role)) redirect("/dashboard");
 
+  const self = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
+
   const { view: viewRaw } = await searchParams;
   const view = viewRaw ?? "pending";
 

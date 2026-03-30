@@ -333,8 +333,6 @@ async function seedLeaveRequests(empMap: Record<string, any>) {
 
   // 휴가 유형 조회
   const ltAnnual    = await prisma.leaveType.findUnique({ where:{code:"ANNUAL"} });
-  const ltAmHalf   = await prisma.leaveType.findUnique({ where:{code:"AM_HALF"} });
-  const ltPmHalf   = await prisma.leaveType.findUnique({ where:{code:"PM_HALF"} });
   const ltCare     = await prisma.leaveType.findUnique({ where:{code:"CARE"} });
   const ltHalfDay  = await prisma.leaveType.findUnique({ where:{code:"PM_HALF_MONTH"} });
   const ltHolidayExt = await prisma.leaveType.findUnique({ where:{code:"HOLIDAY_EXT"} });
@@ -402,11 +400,18 @@ async function seedLeaveRequests(empMap: Record<string, any>) {
 
   // ── E003 (staff1, 1팀) - 3.5일 사용 샘플
   const alloc3 = await getBasicAlloc(empMap["E003"].id);
-  if (alloc3 && ltAnnual && ltAmHalf) {
+  if (alloc3 && ltAnnual) {
     await createApprovedLeave(empMap["E003"], tl1, ltAnnual.id, alloc3.id,
       "2025-06-10", "2025-06-12", 3, "개인 사유", 2);
-    await createApprovedLeave(empMap["E003"], tl1, ltAmHalf.id, alloc3.id,
+    // 반차 샘플: 통합 연차 + timeSlot=AM
+    const r = await createApprovedLeave(empMap["E003"], tl1, ltAnnual.id, alloc3.id,
       "2025-07-15", "2025-07-15", 0.5, "병원 방문", 2);
+    if (r) {
+      await prisma.leaveRequestItem.updateMany({
+        where: { leaveRequestId: r.id },
+        data: { timeSlot: "AM" },
+      });
+    }
   }
 
   // ── E002 (team1, 1팀) - 8일 사용
@@ -420,7 +425,7 @@ async function seedLeaveRequests(empMap: Record<string, any>) {
 
   // ── E004 (team2) - 10일 사용
   const alloc4 = await getBasicAlloc(empMap["E004"].id);
-  if (alloc4 && ltAnnual && ltAmHalf) {
+  if (alloc4 && ltAnnual) {
     await createApprovedLeave(empMap["E004"], pm, ltAnnual.id, alloc4.id,
       "2025-06-02", "2025-06-04", 3, "개인 사유", 2);
     await createApprovedLeave(empMap["E004"], pm, ltAnnual.id, alloc4.id,
@@ -457,7 +462,7 @@ async function seedLeaveRequests(empMap: Record<string, any>) {
 
   // ── E006 (staff3, 2팀) - 2일
   const alloc6 = await getBasicAlloc(empMap["E006"].id);
-  if (alloc6 && ltAnnual && ltPmHalf) {
+  if (alloc6 && ltAnnual) {
     await createApprovedLeave(empMap["E006"], tl2, ltAnnual.id, alloc6.id,
       "2025-09-22", "2025-09-23", 2, "개인 사유", 2);
   }
@@ -524,18 +529,10 @@ async function seedLeaveTypes() {
   const types = [
     // [code, name, dpu, deduct, steps, maxMon, maxYr, stamp, stampCnt, isHalf, amOnly, pmOnly, vBasis, vMon, color, sort]
     ["ANNUAL",         "연차",              1,   true,  1, null, null, false, null, false,false,false,"귀속연도",    null,  "#3b82f6",  0],
-    ["AM_HALF",        "연차(오전반차)",    0.5, true,  1, null, null, false, null, true, true, false,"귀속연도",    null,  "#6366f1",  1],
-    ["PM_HALF",        "연차(오후반차)",    0.5, true,  1, null, null, false, null, true, false,true, "귀속연도",    null,  "#6366f1",  2],
     ["CONDOLENCE",     "경조휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  null,  "#f59e0b",  3],
     ["CARE",           "돌봄휴가",          1,   false, 1, null, 2,    false, null, false,false,false,"귀속연도",    null,  "#10b981",  4],
-    ["CARE_AM",        "오전 돌봄휴가",     0.5, false, 1, null, null, false, null, true, true, false,"귀속연도",    null,  "#10b981",  5],
-    ["CARE_PM",        "오후 돌봄휴가",     0.5, false, 1, null, null, false, null, true, false,true, "귀속연도",    null,  "#10b981",  6],
     ["PUBLIC",         "공가",              1,   false, 2, null, null, false, null, false,false,false,"귀속연도",    null,  "#64748b",  7],
-    ["PUBLIC_AM",      "오전 공가",         0.5, false, 2, null, null, false, null, true, true, false,"귀속연도",    null,  "#64748b",  8],
-    ["PUBLIC_PM",      "오후 공가",         0.5, false, 2, null, null, false, null, true, false,true, "귀속연도",    null,  "#64748b",  9],
     ["RECOGNITION",    "인정휴가",          1,   false, 2, null, null, false, null, false,false,false,"귀속연도",    null,  "#64748b", 10],
-    ["RECOGNITION_AM", "오전 인정휴가",     0.5, false, 2, null, null, false, null, true, true, false,"귀속연도",    null,  "#64748b", 11],
-    ["RECOGNITION_PM", "오후 인정휴가",     0.5, false, 2, null, null, false, null, true, false,true, "귀속연도",    null,  "#64748b", 12],
     ["PM_HALF_MONTH",  "하프데이",          0.5, false, 1, 1,    null, false, null, true, false,true, "귀속연도",    null,  "#0ea5e9", 13],
     ["SICK",           "병가",              1,   false, 2, null, null, false, null, false,false,false,"귀속연도",    null,  "#ef4444", 14],
     ["HEALING_DAY",    "힐링데이",          0,   false, 0, null, null, true,  5,    false,false,false,"부여일기준",  null,  "#f59e0b", 15],
@@ -545,16 +542,14 @@ async function seedLeaveTypes() {
     ["TENURE_10Y",     "10년근속휴가",      1,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 19],
     ["AWARD",          "포상휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  12,    "#f59e0b", 20],
     ["HOLIDAY_EXT",       "연휴연장휴가",        1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 21],
-    ["HOLIDAY_EXT_AM",    "연휴연장휴가(오전)",  0.5, false, 1, null, null, false, null, true, true, false,"귀속연도",    null,  "#0ea5e9", 22],
-    ["HOLIDAY_EXT_PM",    "연휴연장휴가(오후)",  0.5, false, 1, null, null, false, null, true, false,true, "귀속연도",    null,  "#0ea5e9", 23],
-    ["BIRTHDAY_HALF_AM",  "생일반차(오전)",      0.5, false, 1, null, null, false, null, true, true, false,"부여일기준", 12,   "#ec4899", 24],
-    ["BIRTHDAY_HALF",     "생일반차(오후)",      0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 12,   "#ec4899", 25],
+    ["BIRTHDAY_HALF",     "생일반차",            0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 12,   "#ec4899", 25],
   ] as const;
 
   function allocationSourceForCode(lc: string): string | null {
-    if (["CARE", "CARE_AM", "CARE_PM"].includes(lc)) return "CARE";
-    if (["HOLIDAY_EXT", "HOLIDAY_EXT_AM", "HOLIDAY_EXT_PM"].includes(lc)) return "HOLIDAY_EXT";
-    if (["BIRTHDAY_HALF", "BIRTHDAY_HALF_AM"].includes(lc)) return "BIRTHDAY_HALF";
+    if (lc === "CARE") return "CARE";
+    if (lc === "HOLIDAY_EXT") return "HOLIDAY_EXT";
+    if (lc === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
+    if (lc === "TENURE_1Y" || lc === "TENURE_5Y" || lc === "TENURE_10Y") return lc;
     if (lc === "AWARD") return "AWARD";
     return null;
   }

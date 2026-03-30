@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { formatMDWithDay, formatYMD } from "@/lib/dateUtils";
+import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 import ApproveActions from "./ApproveActions";
 import CancelApproveActions from "./CancelApproveActions";
 
@@ -42,7 +43,11 @@ function summaryLine(req: SerializedReq): string {
   const items = req.items;
   if (items.length === 1) {
     const it = items[0];
-    return `${formatMDWithDay(it.startDate)} · ${it.leaveType.name} ${it.days}일`;
+    const { mergedName } = mergedLeaveTypeLabel(
+      it.leaveType as any,
+      { timeSlot: it.timeSlot ?? null },
+    );
+    return `${formatMDWithDay(it.startDate)} · ${mergedName} ${it.days}일`;
   }
   const a = formatMDWithDay(req.startDate);
   const b = formatMDWithDay(req.endDate);
@@ -60,8 +65,10 @@ function detailTitle(req: SerializedReq): string {
 
 /** 신청 내역과 같은 한 줄: 유형(색/병가빨강) 날짜 **N일** */
 function ItemDetailLine({ it }: { it: SerializedReq["items"][0] }) {
-  const slot = it.timeSlot?.trim().toUpperCase();
-  const slotKo = slot === "AM" ? "오전 " : slot === "PM" ? "오후 " : "";
+  const { mergedName, mergedColor } = mergedLeaveTypeLabel(
+    it.leaveType as any,
+    { timeSlot: it.timeSlot ?? null },
+  );
   const sick = it.leaveType.code === "SICK" || it.leaveType.name === "병가";
   const sameDay = it.startDate.slice(0, 10) === it.endDate.slice(0, 10);
   const period = sameDay
@@ -74,10 +81,9 @@ function ItemDetailLine({ it }: { it: SerializedReq["items"][0] }) {
       <p>
         <span
           className={`font-medium ${sick ? "text-red-600" : ""}`}
-          style={sick ? undefined : { color: it.leaveType.color }}
+          style={sick ? undefined : { color: mergedColor ?? it.leaveType.color }}
         >
-          {slotKo}
-          {it.leaveType.name}
+          {mergedName}
         </span>{" "}
         <span className="text-slate-700">{period}</span>{" "}
         <span className="font-bold text-slate-900 tabular-nums">{it.days}일</span>

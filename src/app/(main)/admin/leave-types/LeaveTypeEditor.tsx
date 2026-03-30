@@ -100,6 +100,10 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
     const ab = APPROVAL_BADGE[lt.approvalSteps] ?? APPROVAL_BADGE[2];
     const deductCls = lt.deductFromBalance ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600";
     const deductLabel = lt.deductFromBalance ? "연차 차감" : "미차감";
+    const slotBadges: string[] = [];
+    if (lt.allowsFullDay) slotBadges.push("종일");
+    if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "AM_ONLY")) slotBadges.push("오전");
+    if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "PM_ONLY")) slotBadges.push("오후");
     return (
       <tr key={lt.id} className={`hover:bg-gray-50 border-b border-gray-100 last:border-0 ${!lt.isActive ? "opacity-40" : ""}`}>
         {/* 유형명 */}
@@ -143,6 +147,16 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
             {lt.requiresStamp && <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">×{lt.stampCount}개</span>}
           </div>
         </td>
+        {/* 신청가능시간 */}
+        <td className="px-2 sm:px-3 py-3 text-center hidden xl:table-cell">
+          <div className="flex items-center justify-center gap-1 flex-wrap">
+            {slotBadges.map((s) => (
+              <span key={s} className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">
+                {s}
+              </span>
+            ))}
+          </div>
+        </td>
         {/* 상태 토글 */}
         <td className="px-2 sm:px-3 py-3 text-center">
           <button onClick={()=>toggleActive(lt)} title={lt.isActive ? "클릭하면 비활성화" : "클릭하면 활성화"}
@@ -169,6 +183,10 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
   const renderCard = (lt: LT) => {
     const vb = VALIDITY_BADGE[lt.validityBasis];
     const ab = APPROVAL_BADGE[lt.approvalSteps] ?? APPROVAL_BADGE[2];
+    const slotBadges: string[] = [];
+    if (lt.allowsFullDay) slotBadges.push("종일");
+    if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "AM_ONLY")) slotBadges.push("오전");
+    if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "PM_ONLY")) slotBadges.push("오후");
     return (
       <div key={lt.id} className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm ${!lt.isActive ? "opacity-60" : ""}`}>
         <div className="flex items-start justify-between gap-3">
@@ -203,6 +221,13 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
             {lt.requiresStamp && <span className="bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">×{lt.stampCount}개</span>}
           </div>
         )}
+        <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+          {slotBadges.map((s) => (
+            <span key={s} className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-medium">
+              {s} 신청 가능
+            </span>
+          ))}
+        </div>
         <div className="mt-3 pt-3 border-t border-gray-100">
           <button onClick={()=>openEdit(lt)}
             className="w-full py-2 rounded-lg text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition flex items-center justify-center gap-1.5">
@@ -237,6 +262,7 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
               <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">연차 차감</th>
               <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">유효기간</th>
               <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide hidden lg:table-cell">제한</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide hidden xl:table-cell">신청 가능 시간</th>
               <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">상태</th>
               <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wide">편집</th>
             </tr>

@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import AttendanceClient from "./AttendanceClient";
+import { redirect } from "next/navigation";
 
 export default async function AttendancePage({
   searchParams,
@@ -8,6 +9,12 @@ export default async function AttendancePage({
   const session = await auth();
   const user = session!.user as any;
   const isAdmin = ["PM","ADMIN","TEAM_LEAD"].includes(user.role);
+
+  const self = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
 
   const { year: yearRaw, month: monthRaw, view: viewRaw } = await searchParams;
   const now   = new Date();
@@ -87,12 +94,17 @@ export default async function AttendancePage({
           leaveTypeName: i.leaveType.name,
           leaveTypeCode: i.leaveType.code,
           leaveTypeColor: i.leaveType.color,
+          leaveTypeApplyGroupKey: i.leaveType.applyGroupKey ?? null,
           days: i.days,
           startDate: i.startDate.toISOString(),
           endDate:   i.endDate.toISOString(),
           isHalf: i.leaveType.isHalf,
           isAmOnly: i.leaveType.isAmOnly,
           isPmOnly: i.leaveType.isPmOnly,
+          allowsFullDay: (i.leaveType as any).allowsFullDay ?? null,
+          allowsHalfDay: (i.leaveType as any).allowsHalfDay ?? null,
+          halfDayAmPm: (i.leaveType as any).halfDayAmPm ?? null,
+          timeSlot: i.timeSlot ?? null,
         })),
       }))}
       annualRequests={annualRequests.map((r) => ({
@@ -104,9 +116,17 @@ export default async function AttendancePage({
           leaveTypeCode: i.leaveType.code,
           leaveTypeName: i.leaveType.name,
           leaveTypeColor: i.leaveType.color,
+          leaveTypeApplyGroupKey: i.leaveType.applyGroupKey ?? null,
           days: i.days,
           startDate: i.startDate.toISOString(),
           endDate:   i.endDate.toISOString(),
+          isHalf: i.leaveType.isHalf,
+          isAmOnly: i.leaveType.isAmOnly,
+          isPmOnly: i.leaveType.isPmOnly,
+          allowsFullDay: (i.leaveType as any).allowsFullDay ?? null,
+          allowsHalfDay: (i.leaveType as any).allowsHalfDay ?? null,
+          halfDayAmPm: (i.leaveType as any).halfDayAmPm ?? null,
+          timeSlot: i.timeSlot ?? null,
         })),
       }))}
       allocations={allocations.map((a) => ({

@@ -1,4 +1,7 @@
 import { BookOpen, Info, AlertCircle, Calendar, Clock, Award, Heart, Stethoscope, Baby } from "lucide-react";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/db";
+import { redirect } from "next/navigation";
 
 export const metadata = { title: "휴가 규정 안내 | GBIT Portal" };
 
@@ -146,7 +149,15 @@ function Section({ title, children }: { title:string; children:React.ReactNode }
 }
 
 // ─────────────────── 컴포넌트 ───────────────────
-export default function LeavePolicyPage() {
+export default async function LeavePolicyPage() {
+  const session = await auth();
+  const user = session!.user as any;
+  const self = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
+
   return (
     <div className="max-w-4xl mx-auto space-y-5 px-4 py-6">
       {/* 헤더 */}

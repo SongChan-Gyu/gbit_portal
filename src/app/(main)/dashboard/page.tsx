@@ -8,6 +8,7 @@ import { isWelfareDept } from "@/lib/jeju";
 import { formatMDWithDay } from "@/lib/dateUtils";
 import { itemSlotLabelKo } from "@/lib/leaveTimeSlot";
 import DashboardMonthCalendar from "./DashboardMonthCalendar";
+import { redirect } from "next/navigation";
 
 const STATUS_BADGE: Record<string, string> = {
   PENDING: "badge-warning", APPROVED: "badge-success",
@@ -30,7 +31,10 @@ export default async function DashboardPage({
   searchParams: Promise<{ teamY?: string; teamM?: string }>;
 }) {
   const session = await auth();
-  const user = session!.user as any;
+  if (!session?.user) {
+    redirect("/login");
+  }
+  const user = session.user as any;
   const fy = getFiscalYear();
   const now = new Date();
   const params = await searchParams;
@@ -46,26 +50,41 @@ export default async function DashboardPage({
   const prevMonth = teamCalMonth === 1 ? { y: teamCalYear - 1, m: 12 } : { y: teamCalYear, m: teamCalMonth - 1 };
   const nextMonth = teamCalMonth === 12 ? { y: teamCalYear + 1, m: 1 } : { y: teamCalYear, m: teamCalMonth + 1 };
 
-  const [allocations, pendingReqs, stamps, employee, recentRequests] = await Promise.all([
-    prisma.leaveAllocation.findMany({
-      where: {
-        employeeId: user.employeeId,
-        isActive: true,
-        validFrom:  { lte: now },
-        validUntil: { gte: now },
-      },
-      orderBy: [{ fiscalYear: "desc" }, { sourceCode: "asc" }],
-    }),
-    prisma.leaveRequest.count({ where: { employeeId: user.employeeId, status: "PENDING" } }),
-    prisma.stampCoupon.count({ where: { employeeId: user.employeeId } }),
-    prisma.employee.findUnique({ where: { id: user.employeeId }, include: { team: { include: { employees: true } } } }),
-    prisma.leaveRequest.findMany({
-      where: { employeeId: user.employeeId },
-      include: { items: { include: { leaveType: true } } },
-      orderBy: { createdAt: "desc" },
-      take: 5,
-    }),
-  ]);
+  const employee = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    include: { team: { include: { employees: true } } },
+  });
+  const isExternal = employee?.employeeType === "EXTERNAL";
+
+  let allocations: any[] = [];
+  let pendingReqs = 0;
+  let stamps = 0;
+  let recentRequests: any[] = [];
+  if (!isExternal) {
+    const res = await Promise.all([
+      prisma.leaveAllocation.findMany({
+        where: {
+          employeeId: user.employeeId,
+          isActive: true,
+          validFrom:  { lte: now },
+          validUntil: { gte: now },
+        },
+        orderBy: [{ fiscalYear: "desc" }, { sourceCode: "asc" }],
+      }),
+      prisma.leaveRequest.count({ where: { employeeId: user.employeeId, status: "PENDING" } }),
+      prisma.stampCoupon.count({ where: { employeeId: user.employeeId } }),
+      prisma.leaveRequest.findMany({
+        where: { employeeId: user.employeeId },
+        include: { items: { include: { leaveType: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 5,
+      }),
+    ]);
+    allocations = res[0] as any[];
+    pendingReqs = res[1] as number;
+    stamps = res[2] as number;
+    recentRequests = res[3] as any[];
+  }
 
   const welfare = isWelfareDept(employee);
   const jejuPendingCount = welfare ? await prisma.jejuAccommodation.count({ where: { status: "PENDING" } }) : 0;
@@ -95,7 +114,7 @@ export default async function DashboardPage({
   let approvalPending = 0;
   let stampPending = 0;
   let pendingStamps: any[] = [];
-  if (["TEAM_LEAD","PM","ADMIN"].includes(user.role)) {
+  if (!isExternal && ["TEAM_LEAD","PM","ADMIN"].includes(user.role)) {
     [approvalPending, stampPending] = await Promise.all([
       prisma.leaveApproval.count({ where: { approverId: user.employeeId, status: "PENDING" } }),
       prisma.stampRequest.count({ where: { approverId: user.employeeId, status: "PENDING" } }),
@@ -113,7 +132,7 @@ export default async function DashboardPage({
   // 팀 월간 일정: 팀 소속이면 팀만, ADMIN/PM이면 팀 없어도 전사 일정 표시
   type MonthData = { year: number; month: number; dates: string[]; byDay: Record<string, { name: string; status: string }[]> };
   let teamMonthData: MonthData | null = null;
-  const showTeamCalendar = employee?.teamId || (user.role === "ADMIN" || user.role === "PM");
+  const showTeamCalendar = !isExternal && (employee?.teamId || (user.role === "ADMIN" || user.role === "PM"));
   if (showTeamCalendar) {
     const year = teamCalYear;
     const month = teamCalMonth;
@@ -300,7 +319,7 @@ export default async function DashboardPage({
                 <div key={req.id} className="px-4 py-2.5 flex items-center justify-between">
                   <div>
                     <p className="text-[13px] font-medium text-gray-800">
-                      {req.items.map((i) => i.leaveType.name).join(" + ")}
+                      {req.items.map((i: any) => i.leaveType?.name ?? "").filter(Boolean).join(" + ")}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       <Calendar size={11} className="inline mr-1" />

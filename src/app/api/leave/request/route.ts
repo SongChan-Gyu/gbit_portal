@@ -12,8 +12,8 @@ import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot"
 /** 연차 = 기본연차 + 근속가산 + 이월연차만. 특별휴가(근속1/5/10년)·부서추가는 별도 풀 */
 const ANNUAL_ONLY_SOURCES = [
   "CARRYOVER",
-  "TENURE_BONUS",
   "BASE_ANNUAL",
+  "TENURE_BONUS",
 ];
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 
@@ -326,13 +326,6 @@ export async function POST(req: Request) {
           return a.id;
         }
       }
-      const best = poolAllocs
-        .filter((a) => (poolRemaining[a.id] ?? 0) > 0)
-        .sort((a, b) => (poolRemaining[b.id] ?? 0) - (poolRemaining[a.id] ?? 0))[0];
-      if (best) {
-        poolRemaining[best.id] = Math.max(0, (poolRemaining[best.id] ?? 0) - days);
-        return best.id;
-      }
       return null;
     }
 
@@ -355,7 +348,44 @@ export async function POST(req: Request) {
       return null;
     }
 
-    const resolvedItems = workItems.map((it) => {
+    const holidaySetForExpand = holidaySet;
+    const toYmdLocal = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    function listWorkingYmds(startYmd: string, endYmd: string): string[] {
+      const s = new Date(startYmd);
+      const e = new Date(endYmd);
+      const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
+      const end = new Date(e.getFullYear(), e.getMonth(), e.getDate());
+      const out: string[] = [];
+      while (cur <= end) {
+        const ds = toYmdLocal(cur);
+        const dow = cur.getDay();
+        if (dow !== 0 && dow !== 6 && !holidaySetForExpand.has(ds)) out.push(ds);
+        cur.setDate(cur.getDate() + 1);
+      }
+      return out;
+    }
+
+    /**
+     * 연차 소진(우선순위 + 부분 소진) 정확도를 위해,
+     * - 연차 차감(deductFromBalance) + 전용풀 아님(allocationSourceCode 없음) + 종일(FULL) 항목은
+     *   1일을 0.5 + 0.5 단위로 쪼개 allocationId를 우선순위대로 배정한다.
+     */
+    const expandedWorkItems: WorkItem[] = [];
+    for (const it of workItems) {
+      const lt = ltMap[it.leaveTypeId];
+      if (lt?.deductFromBalance && !lt.allocationSourceCode && it.timeSlot === "FULL") {
+        const ymds = listWorkingYmds(it.startDate, it.endDate);
+        for (const d of ymds) {
+          expandedWorkItems.push({ ...it, startDate: d, endDate: d, days: 0.5 });
+          expandedWorkItems.push({ ...it, startDate: d, endDate: d, days: 0.5 });
+        }
+      } else {
+        expandedWorkItems.push(it);
+      }
+    }
+
+    const resolvedItems = expandedWorkItems.map((it) => {
       const lt = ltMap[it.leaveTypeId];
       const days = leaveItemDeductDays(it, lt);
       let allocationId = it.allocationId || null;

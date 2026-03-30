@@ -79,7 +79,9 @@ export async function runMonthlyAccrual(
   const monthStart = new Date(tYear, tMonth - 1, 1);
   const monthEnd   = new Date(tYear, tMonth, 0);
 
-  const employees = await prisma.employee.findMany({ where: { status: "ACTIVE" } });
+  const employees = await prisma.employee.findMany({
+    where: { status: "ACTIVE", employeeType: { not: "EXTERNAL" } },
+  });
 
   for (const emp of employees) {
     const hire = new Date(emp.hireDate);
@@ -178,7 +180,9 @@ export async function runTenureCheck(
   const checkFrom = new Date(target); checkFrom.setDate(checkFrom.getDate() - window);
   const checkTo   = new Date(target); checkTo.setDate(checkTo.getDate() + window);
 
-  const employees = await prisma.employee.findMany({ where: { status: "ACTIVE" } });
+  const employees = await prisma.employee.findMany({
+    where: { status: "ACTIVE", employeeType: { not: "EXTERNAL" } },
+  });
 
   for (const emp of employees) {
     const hire = new Date(emp.hireDate); hire.setHours(0, 0, 0, 0);
@@ -208,8 +212,20 @@ export async function runTenureCheck(
       }
 
       const validFrom  = anniversary;
-      const validUntil = new Date(anniversary);
-      validUntil.setMonth(validUntil.getMonth() + m.validityMonths);
+      // TENURE_1Y는 "FY 종료(4/30)까지" + "마지막 3개월(2~4월) 부여분은 다음 FY까지 이월" 규칙 적용
+      let validUntil: Date;
+      if (m.code === "TENURE_1Y") {
+        const fiscalYearOfGrant = getFiscalYear(anniversary); // anniversary가 속한 귀속연도
+        const fyEnd = new Date(fiscalYearOfGrant + 1, 3, 30, 23, 59, 59, 999); // (fy+1)-04-30 23:59:59.999
+        const nextFyEnd = new Date(fiscalYearOfGrant + 2, 3, 30, 23, 59, 59, 999); // (fy+2)-04-30
+        const grantMonth = anniversary.getMonth() + 1; // 1~12
+        const grantInLast3Months = grantMonth >= 2 && grantMonth <= 4; // Feb~Apr
+        validUntil = grantInLast3Months ? nextFyEnd : fyEnd;
+      } else {
+        const d = new Date(anniversary);
+        d.setMonth(d.getMonth() + m.validityMonths);
+        validUntil = d;
+      }
       // 근속휴가는 입사 기념일 기준이라 귀속연도 없음 (스케줄러 전용)
       const fiscalYear = null;
 
@@ -265,7 +281,7 @@ export async function getUpcomingAnniversaries(days = 30) {
   const until = new Date(today); until.setDate(until.getDate() + days);
 
   const employees = await prisma.employee.findMany({
-    where: { status: "ACTIVE" },
+    where: { status: "ACTIVE", employeeType: { not: "EXTERNAL" } },
     include: { team: { select: { name: true } } },
   });
 
@@ -321,7 +337,7 @@ export async function getTenureScheduleForFiscalYears(fy?: number): Promise<Tenu
   const rows: TenureScheduleRow[] = [];
 
   const employees = await prisma.employee.findMany({
-    where: { status: "ACTIVE" },
+    where: { status: "ACTIVE", employeeType: { not: "EXTERNAL" } },
     include: { team: { select: { name: true } } },
   });
 
@@ -399,7 +415,7 @@ export async function runBirthdayHalf(
   const monthEnd = new Date(tYear, tMonth, 0);
 
   const employees = await prisma.employee.findMany({
-    where: { status: "ACTIVE", birthDate: { not: null } },
+    where: { status: "ACTIVE", birthDate: { not: null }, employeeType: { not: "EXTERNAL" } },
   });
 
   for (const emp of employees) {

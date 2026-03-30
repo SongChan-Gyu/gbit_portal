@@ -18,18 +18,10 @@ async function seedLeaveTypes() {
   const { APPLY_GROUP_BY_CODE } = await import("../src/lib/leaveApplyGroups");
   const types = [
     ["ANNUAL", "연차", 1, true, 1, null, null, false, null, false, false, false, "귀속연도", null, "#3b82f6", 0],
-    ["AM_HALF", "연차(오전반차)", 0.5, true, 1, null, null, false, null, true, true, false, "귀속연도", null, "#6366f1", 1],
-    ["PM_HALF", "연차(오후반차)", 0.5, true, 1, null, null, false, null, true, false, true, "귀속연도", null, "#6366f1", 2],
     ["CONDOLENCE", "경조휴가", 1, false, 2, null, null, false, null, false, false, false, "부여일기준", null, "#f59e0b", 3],
     ["CARE", "돌봄휴가", 1, false, 1, null, 2, false, null, false, false, false, "귀속연도", null, "#10b981", 4],
-    ["CARE_AM", "오전 돌봄휴가", 0.5, false, 1, null, null, false, null, true, true, false, "귀속연도", null, "#10b981", 5],
-    ["CARE_PM", "오후 돌봄휴가", 0.5, false, 1, null, null, false, null, true, false, true, "귀속연도", null, "#10b981", 6],
     ["PUBLIC", "공가", 1, false, 2, null, null, false, null, false, false, false, "귀속연도", null, "#64748b", 7],
-    ["PUBLIC_AM", "오전 공가", 0.5, false, 2, null, null, false, null, true, true, false, "귀속연도", null, "#64748b", 8],
-    ["PUBLIC_PM", "오후 공가", 0.5, false, 2, null, null, false, null, true, false, true, "귀속연도", null, "#64748b", 9],
     ["RECOGNITION", "인정휴가", 1, false, 2, null, null, false, null, false, false, false, "귀속연도", null, "#64748b", 10],
-    ["RECOGNITION_AM", "오전 인정휴가", 0.5, false, 2, null, null, false, null, true, true, false, "귀속연도", null, "#64748b", 11],
-    ["RECOGNITION_PM", "오후 인정휴가", 0.5, false, 2, null, null, false, null, true, false, true, "귀속연도", null, "#64748b", 12],
     ["PM_HALF_MONTH", "하프데이", 0.5, false, 1, 1, null, false, null, true, false, true, "귀속연도", null, "#0ea5e9", 13],
     ["SICK", "병가", 1, false, 2, null, null, false, null, false, false, false, "귀속연도", null, "#ef4444", 14],
     ["HEALING_DAY", "힐링데이", 0, false, 0, null, null, true, 5, false, false, false, "부여일기준", null, "#f59e0b", 15],
@@ -39,31 +31,52 @@ async function seedLeaveTypes() {
     ["TENURE_10Y", "10년근속휴가", 1, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 19],
     ["AWARD", "포상휴가", 1, false, 2, null, null, false, null, false, false, false, "부여일기준", 12, "#f59e0b", 20],
     ["HOLIDAY_EXT", "연휴연장휴가", 1, false, 1, null, null, false, null, false, false, false, "귀속연도", null, "#0ea5e9", 21],
-    ["HOLIDAY_EXT_AM", "연휴연장휴가(오전)", 0.5, false, 1, null, null, false, null, true, true, false, "귀속연도", null, "#0ea5e9", 22],
-    ["HOLIDAY_EXT_PM", "연휴연장휴가(오후)", 0.5, false, 1, null, null, false, null, true, false, true, "귀속연도", null, "#0ea5e9", 23],
-    ["BIRTHDAY_HALF_AM", "생일반차(오전)", 0.5, false, 1, null, null, false, null, true, true, false, "부여일기준", 12, "#ec4899", 24],
-    ["BIRTHDAY_HALF", "생일반차(오후)", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 12, "#ec4899", 25],
+    ["BIRTHDAY_HALF", "생일반차", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 12, "#ec4899", 25],
   ] as const;
 
+  const DUAL_TIME_SLOT_CODES = new Set([
+    "ANNUAL",
+    "PUBLIC",
+    "RECOGNITION",
+    "CARE",
+    "HOLIDAY_EXT",
+  ]);
+
   function allocationSourceForCode(code: string): string | null {
-    if (["CARE", "CARE_AM", "CARE_PM"].includes(code)) return "CARE";
-    if (["HOLIDAY_EXT", "HOLIDAY_EXT_AM", "HOLIDAY_EXT_PM"].includes(code)) return "HOLIDAY_EXT";
-    if (["BIRTHDAY_HALF", "BIRTHDAY_HALF_AM"].includes(code)) return "BIRTHDAY_HALF";
+    if (code === "CARE") return "CARE";
+    if (code === "HOLIDAY_EXT") return "HOLIDAY_EXT";
+    if (code === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
+    if (code === "TENURE_1Y" || code === "TENURE_5Y" || code === "TENURE_10Y") return code;
     if (code === "AWARD") return "AWARD";
     return null;
   }
 
   for (const [code, name, dpu, deduct, steps, maxMon, maxYr, stamp, stampCnt, isHalf, amOnly, pmOnly, vBasis, vMon, color, sort] of types) {
-    const half = !!(isHalf as boolean);
-    const allowsFullDay = !half;
-    const allowsHalfDay = half;
-    const halfDayAmPm = !half
+    let half = !!(isHalf as boolean);
+    let allowsFullDay = !half;
+    let allowsHalfDay = half;
+    let halfDayAmPm = !half
       ? "BOTH"
       : (amOnly as boolean)
         ? "AM_ONLY"
         : (pmOnly as boolean)
           ? "PM_ONLY"
           : "BOTH";
+
+    // 시간대 통합(오전/오후/종일)용 정책: timeSlot로만 AM/PM/FULL을 구분
+    if (DUAL_TIME_SLOT_CODES.has(code)) {
+      half = false;
+      allowsFullDay = true;
+      allowsHalfDay = true;
+      halfDayAmPm = "BOTH";
+    }
+    // 생일반차는 half-only + AM/PM 선택 (type은 하나, timeSlot로만 구분)
+    if (code === "BIRTHDAY_HALF") {
+      half = true;
+      allowsFullDay = false;
+      allowsHalfDay = true;
+      halfDayAmPm = "BOTH";
+    }
     const data = {
       name,
       daysPerUnit: dpu as number,
@@ -78,9 +91,9 @@ async function seedLeaveTypes() {
       allowsHalfDay,
       halfDayAmPm,
       applyGroupKey: APPLY_GROUP_BY_CODE[code] ?? null,
-      isHalf: isHalf as boolean,
-      isAmOnly: amOnly as boolean,
-      isPmOnly: pmOnly as boolean,
+      isHalf: half,
+      isAmOnly: code === "BIRTHDAY_HALF" ? false : (amOnly as boolean),
+      isPmOnly: code === "BIRTHDAY_HALF" ? false : (pmOnly as boolean),
       validityBasis: vBasis as string,
       validityMonths: vMon as number | null,
       color,

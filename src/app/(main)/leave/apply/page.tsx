@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getFiscalYear } from "@/lib/workdays";
+import { redirect } from "next/navigation";
 import { formatYMD } from "@/lib/dateUtils";
 import LeaveApplyForm from "./LeaveApplyForm";
 import { serializeDates } from "@/lib/serialize";
@@ -11,6 +12,12 @@ export default async function LeaveApplyPage() {
   const user = session!.user as any;
   const fy = getFiscalYear();
   const now = new Date();
+
+  const self = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
 
   const [leaveTypes, allocations, employee, holidays, totalStamps, afternoonStampSlots, healingStampSlots] =
     await Promise.all([

@@ -28,6 +28,7 @@ const prisma = new PrismaClient();
 
 const CONFIRM_VALUE = "RESET_LEAVE";
 const DONE_KEY = "resetLeaveTestDataDoneAt";
+const FORCE_ENV = "FORCE_RESET_LEAVE_TEST_DATA";
 
 function nowIso() {
   return new Date().toISOString();
@@ -40,13 +41,15 @@ async function main() {
     return;
   }
 
+  const force = (process.env[FORCE_ENV] ?? "").trim() === "1";
   const done = await prisma.systemConfig.findUnique({ where: { key: DONE_KEY } });
-  if (done?.value) {
+  if (!force && done?.value) {
     console.log(`[reset-leave-test-data] skip: already done at ${done.value}`);
     return;
   }
 
   console.log("[reset-leave-test-data] START");
+  if (force) console.log(`[reset-leave-test-data] force: ${FORCE_ENV}=1 (ignore done flag)`);
 
   const before = {
     leaveRequestItems: await prisma.leaveRequestItem.count(),

@@ -54,7 +54,7 @@ const ANNUAL_ONLY_SOURCES = new Set([
   "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER",
 ]);
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
-const HIDDEN_LT_CODES = new Set(["TENURE_1Y", "TENURE_5Y", "TENURE_10Y", "DEPT_BONUS"]);
+const HIDDEN_LT_CODES = new Set(["DEPT_BONUS"]);
 
 // ── 휴가 그룹 정의 ────────────────────────────────────────────
 type SubDef = { label: string; code: string; desc?: string };
@@ -68,45 +68,35 @@ const LEAVE_GROUPS: GroupDef[] = [
     key: "annual", label: "연차", meta: "연차 차감",
     color: "#2563eb", borderClass: "border-blue-500",
     subs: [
-      { label: "종일",    code: "ANNUAL" },
-      { label: "오전반차", code: "AM_HALF",  desc: "" },
-      { label: "오후반차", code: "PM_HALF",  desc: "" },
+      { label: "선택", code: "ANNUAL" },
     ],
   },
   {
     key: "public", label: "공가", meta: "연차 미차감",
     color: "#64748b", borderClass: "border-slate-600",
     subs: [
-      { label: "종일", code: "PUBLIC" },
-      { label: "오전", code: "PUBLIC_AM" },
-      { label: "오후", code: "PUBLIC_PM" },
+      { label: "선택", code: "PUBLIC" },
     ],
   },
   {
     key: "recognition", label: "인정휴가", meta: "연차 미차감",
     color: "#475569", borderClass: "border-slate-500",
     subs: [
-      { label: "종일",    code: "RECOGNITION" },
-      { label: "오전",    code: "RECOGNITION_AM" },
-      { label: "오후",    code: "RECOGNITION_PM" },
+      { label: "선택", code: "RECOGNITION" },
     ],
   },
   {
     key: "care", label: "돌봄휴가", meta: "연 2일 한도",
     color: "#059669", borderClass: "border-emerald-500",
     subs: [
-      { label: "종일",    code: "CARE" },
-      { label: "오전",    code: "CARE_AM" },
-      { label: "오후",    code: "CARE_PM" },
+      { label: "선택", code: "CARE" },
     ],
   },
   {
     key: "holidayExt", label: "연휴연장휴가", meta: "귀속연도 1일 (오전·오후·종일)",
     color: "#0ea5e9", borderClass: "border-sky-500",
     subs: [
-      { label: "종일", code: "HOLIDAY_EXT", desc: "연휴 3일 이상 시 앞뒤 연속일 사용 가능" },
-      { label: "오전", code: "HOLIDAY_EXT_AM" },
-      { label: "오후", code: "HOLIDAY_EXT_PM" },
+      { label: "선택", code: "HOLIDAY_EXT", desc: "연휴 3일 이상 시 앞뒤 연속일 사용 가능" },
     ],
   },
   {
@@ -133,11 +123,19 @@ const LEAVE_GROUPS: GroupDef[] = [
     subs: [{ label: "신청", code: "AWARD" }],
   },
   {
+    key: "tenure", label: "근속휴가", meta: "보유자만 신청 가능",
+    color: "#10b981", borderClass: "border-emerald-600",
+    subs: [
+      { label: "1년 근속", code: "TENURE_1Y" },
+      { label: "5년 근속", code: "TENURE_5Y" },
+      { label: "10년 근속", code: "TENURE_10Y" },
+    ],
+  },
+  {
     key: "birthday", label: "생일반차", meta: "생일 해당 월 자동 부여 0.5일",
     color: "#ec4899", borderClass: "border-pink-500",
     subs: [
-      { label: "오전 반차", code: "BIRTHDAY_HALF_AM", desc: "0.5일" },
-      { label: "오후 반차", code: "BIRTHDAY_HALF", desc: "0.5일" },
+      { label: "선택", code: "BIRTHDAY_HALF", desc: "0.5일" },
     ],
   },
 ];
@@ -147,11 +145,9 @@ LEAVE_GROUPS.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP[s.code] = g.ke
 
 /** UI: 자산형(소모 가능 부여) vs 사유형 — 섹션 분리 */
 const ASSET_GROUP_KEYS = new Set([
-  "annual", "care", "holidayExt", "stamp", "halfday", "award", "birthday",
+  "annual", "care", "holidayExt", "stamp", "halfday", "award", "birthday", "tenure",
 ]);
 const REASON_GROUP_KEYS = new Set(["public", "recognition", "sick"]);
-const LEAVE_GROUPS_ASSET = LEAVE_GROUPS.filter((g) => ASSET_GROUP_KEYS.has(g.key));
-const LEAVE_GROUPS_REASON = LEAVE_GROUPS.filter((g) => REASON_GROUP_KEYS.has(g.key));
 
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
 function ymdWithDay(ymd: string): string {
@@ -267,9 +263,36 @@ export default function LeaveApplyForm({
     return m;
   }, [allocations, now]);
 
+  const isSelectableCode = (code: string) => {
+    if (!ltByCode[code]) return false;
+    // 근속휴가는 실제 보유(할당 잔여)가 있는 사람에게만 신청 노출
+    if (code === "TENURE_1Y" || code === "TENURE_5Y" || code === "TENURE_10Y") {
+      return (poolRemainingBySource[code] ?? 0) > 0;
+    }
+    return true;
+  };
+
+  const visibleLeaveGroups = useMemo(() => {
+    return LEAVE_GROUPS
+      .map((g) => {
+        if (g.key === "stamp") return g; // 힐링/스탬프는 코드 유무와 무관하게 안내/선택 유지
+        const subs = g.subs.filter((s) => isSelectableCode(s.code) || s.code === "HEALING");
+        return { ...g, subs };
+      })
+      .filter((g) => g.subs.length > 0);
+  }, [ltByCode, poolRemainingBySource]);
+  const leaveGroupsAsset = useMemo(
+    () => visibleLeaveGroups.filter((g) => ASSET_GROUP_KEYS.has(g.key)),
+    [visibleLeaveGroups],
+  );
+  const leaveGroupsReason = useMemo(
+    () => visibleLeaveGroups.filter((g) => REASON_GROUP_KEYS.has(g.key)),
+    [visibleLeaveGroups],
+  );
+
   // ── 아이템 조작 ───────────────────────────────────────────
   function selectGroup(idx: number, groupKey: string) {
-    const grp = LEAVE_GROUPS.find((g) => g.key === groupKey);
+    const grp = visibleLeaveGroups.find((g) => g.key === groupKey);
     if (!grp) return;
     if (grp.key === "stamp") {
       setItems((prev) => prev.map((it, i) =>
@@ -547,7 +570,7 @@ export default function LeaveApplyForm({
                       자산형 (연차·돌봄·이벤트 등 부여 일수)
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-                      {LEAVE_GROUPS_ASSET.map((g) => {
+                      {leaveGroupsAsset.map((g) => {
                         const isSelected = item._groupKey === g.key;
                         return (
                           <button key={g.key} type="button"
@@ -575,7 +598,7 @@ export default function LeaveApplyForm({
                       사유형 (공가·병가·인정 등)
                     </p>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                      {LEAVE_GROUPS_REASON.map((g) => {
+                      {leaveGroupsReason.map((g) => {
                         const isSelected = item._groupKey === g.key;
                         return (
                           <button key={g.key} type="button"
@@ -650,6 +673,40 @@ export default function LeaveApplyForm({
                           style={item.timeSlot === k ? { borderColor: grp?.color ?? "#3b82f6" } : {}}>
                           <span className={`text-sm font-semibold ${item.timeSlot === k ? "" : "text-gray-700"}`}
                             style={item.timeSlot === k ? { color: grp?.color ?? "#3b82f6" } : {}}>
+                            {label}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* half-only + AM/PM 선택 (예: 생일반차 통합 타입) */}
+                {item.leaveTypeId && lt && polUi?.allowsHalfDay && !polUi?.allowsFullDay && polUi?.halfDayAmPm === "BOTH" && (
+                  <section>
+                    <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                      02. 시간대
+                    </p>
+                    <div className="flex gap-2">
+                      {([
+                        { k: "AM" as const, label: "오전 반차" },
+                        { k: "PM" as const, label: "오후 반차" },
+                      ]).map(({ k, label }) => (
+                        <button
+                          key={k}
+                          type="button"
+                          onClick={() => setTimeSlotForItem(idx, k)}
+                          className={`flex-1 flex flex-col items-center py-3 rounded-lg border transition-all ${
+                            item.timeSlot === k
+                              ? "border-2 bg-white shadow-sm"
+                              : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
+                          }`}
+                          style={item.timeSlot === k ? { borderColor: grp?.color ?? "#ec4899" } : {}}
+                        >
+                          <span
+                            className={`text-sm font-semibold ${item.timeSlot === k ? "" : "text-gray-700"}`}
+                            style={item.timeSlot === k ? { color: grp?.color ?? "#ec4899" } : {}}
+                          >
                             {label}
                           </span>
                         </button>

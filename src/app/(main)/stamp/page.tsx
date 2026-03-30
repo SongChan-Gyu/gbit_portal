@@ -3,10 +3,17 @@ import prisma from "@/lib/db";
 import StampClient from "./StampClient";
 import { serializeDates } from "@/lib/serialize";
 import { countAfternoonEligible, countHealingEligible } from "@/lib/stampCard";
+import { redirect } from "next/navigation";
 
 export default async function StampPage() {
   const session = await auth();
   const user = session!.user as any;
+
+  const self = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
 
   const [stampCards, stampRequests, employee, healingLogs, healingAvail, afternoonAvail, totalStamps] =
     await Promise.all([

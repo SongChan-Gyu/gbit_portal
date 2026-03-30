@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+echo "[start:prod] prisma migrate deploy"
+prisma migrate deploy
+
+if [ "${RUN_RESET_LEAVE_TEST_DATA_ONCE:-1}" = "1" ]; then
+  echo "[start:prod] one-time leave reset enabled"
+  CONFIRM_WIPE=RESET_LEAVE npx tsx scripts/reset-leave-test-data.ts
+else
+  echo "[start:prod] one-time leave reset disabled"
+fi
+
+echo "[start:prod] backfill stamp cards"
+npx tsx scripts/backfill-stamp-cards.ts
+
+echo "[start:prod] prisma db seed"
+npx prisma db seed
+
+echo "[start:prod] next start"
+next start
