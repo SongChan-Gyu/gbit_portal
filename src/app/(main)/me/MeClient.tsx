@@ -24,6 +24,10 @@ export default function MeClient({ initial }: { initial: Emp }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
+  const [pw, setPw] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState("");
+  const [pwOkMsg, setPwOkMsg] = useState("");
 
   async function save() {
     setSaving(true);
@@ -48,8 +52,44 @@ export default function MeClient({ initial }: { initial: Emp }) {
     router.refresh();
   }
 
+  async function changePassword() {
+    setPwError("");
+    setPwOkMsg("");
+    if (!pw.currentPassword || !pw.newPassword || !pw.confirmPassword) {
+      setPwError("현재/새 비밀번호를 모두 입력해 주세요.");
+      return;
+    }
+    if (pw.newPassword.length < 8) {
+      setPwError("새 비밀번호는 8자 이상이어야 합니다.");
+      return;
+    }
+    if (pw.newPassword !== pw.confirmPassword) {
+      setPwError("새 비밀번호 확인이 일치하지 않습니다.");
+      return;
+    }
+
+    setPwSaving(true);
+    const res = await fetch("/api/me/password", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        currentPassword: pw.currentPassword,
+        newPassword: pw.newPassword,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setPwSaving(false);
+    if (!res.ok) {
+      setPwError(data.error ?? "비밀번호 변경에 실패했습니다.");
+      return;
+    }
+    setPw({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    setPwOkMsg("비밀번호가 변경되었습니다.");
+  }
+
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm space-y-5">
+    <div className="space-y-5">
+      <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm space-y-5">
       <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-700">
         <div className="flex flex-wrap gap-x-4 gap-y-1">
           <span className="font-semibold">{initial.name}</span>
@@ -112,11 +152,64 @@ export default function MeClient({ initial }: { initial: Emp }) {
       {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
       {okMsg && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{okMsg}</p>}
 
-      <div className="flex gap-3 pt-1">
-        <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>뒤로</button>
-        <button type="button" className="btn-primary flex-1" onClick={save} disabled={saving}>
-          {saving ? "저장 중..." : "저장"}
-        </button>
+        <div className="flex gap-3 pt-1">
+          <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>뒤로</button>
+          <button type="button" className="btn-primary flex-1" onClick={save} disabled={saving}>
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm space-y-4">
+        <div>
+          <p className="text-base font-semibold text-gray-900">비밀번호 변경</p>
+          <p className="text-xs text-gray-500 mt-1">현재 비밀번호 확인 후 새 비밀번호로 변경합니다.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="sm:col-span-2">
+            <label className="label">현재 비밀번호</label>
+            <input
+              type="password"
+              className="input w-full"
+              value={pw.currentPassword}
+              onChange={(e) => setPw((p) => ({ ...p, currentPassword: e.target.value }))}
+              autoComplete="current-password"
+              placeholder="현재 비밀번호"
+            />
+          </div>
+          <div>
+            <label className="label">새 비밀번호</label>
+            <input
+              type="password"
+              className="input w-full"
+              value={pw.newPassword}
+              onChange={(e) => setPw((p) => ({ ...p, newPassword: e.target.value }))}
+              autoComplete="new-password"
+              placeholder="8자 이상"
+            />
+          </div>
+          <div>
+            <label className="label">새 비밀번호 확인</label>
+            <input
+              type="password"
+              className="input w-full"
+              value={pw.confirmPassword}
+              onChange={(e) => setPw((p) => ({ ...p, confirmPassword: e.target.value }))}
+              autoComplete="new-password"
+              placeholder="새 비밀번호 확인"
+            />
+          </div>
+        </div>
+
+        {pwError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{pwError}</p>}
+        {pwOkMsg && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{pwOkMsg}</p>}
+
+        <div className="flex justify-end">
+          <button type="button" className="btn-primary min-w-36" onClick={changePassword} disabled={pwSaving}>
+            {pwSaving ? "변경 중..." : "비밀번호 변경"}
+          </button>
+        </div>
       </div>
     </div>
   );

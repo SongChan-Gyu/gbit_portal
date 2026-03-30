@@ -136,11 +136,6 @@ export default function StampClient({
           </span>
         </div>
         <div className="panel-body py-3 px-4 text-[15px]">
-          <p className="text-xs text-gray-600 mb-3 leading-relaxed">
-            10칸이 한 장. 5칸 이상이면 힐링데이·10칸이면 오후 인정(장당 각 1회). 혜택을 써도 스탬프 칸은
-            그대로이며, 힐링·오후를 모두 쓴 장은 목록에서 숨깁니다.
-          </p>
-
           <div className="grid grid-cols-2 gap-2 mb-3">
             <div
               className={`border rounded-lg p-2.5 ${healingAvail > 0 ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"}`}
