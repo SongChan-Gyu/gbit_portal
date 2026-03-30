@@ -11,6 +11,6 @@ FROM base AS prod
 COPY . .
 RUN npm run build
 EXPOSE 3000
-ENV RUN_RESET_LEAVE_TEST_DATA_ONCE=1
+ENV RUN_RESET_LEAVE_TEST_DATA_ONCE=0
 # 컨테이너 시작: migrate → 스탬프 장 백필(쿠폰만 있는 기존 DB 정합, 이미 장 있으면 스킵) → seed → next
 CMD ["npm", "run", "start:prod"]
