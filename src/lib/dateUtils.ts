@@ -80,6 +80,13 @@ export function formatMDWithDay(dateStr: string | Date): string {
   return `${m}/${day}(${w})`;
 }
 
+/** YYYY-MM-DD 문자열을 로컬 달력 기준으로 파싱해 M/D(요) 표시 (타임존 이슈 방지) */
+export function formatMDWithDayFromYMD(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  if (!y || !m || !d) return ymd;
+  return formatMDWithDay(new Date(y, m - 1, d));
+}
+
 /** YYYY-MM-DD의 요일 인덱스 (0=일 … 3=수 … 6=토), 로컬 달력 기준 */
 export function weekdayIndexFromYMD(ymd: string): number {
   const [y, m, d] = ymd.split("-").map(Number);

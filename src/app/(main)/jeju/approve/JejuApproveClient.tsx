@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Check, List } from "lucide-react";
+import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
 
 type ListRequest = {
   id: string;
@@ -29,6 +30,20 @@ const STATUS_CLS: Record<string, string> = {
   CANCELLED: "badge-default",
   CANCEL_REQUESTED: "badge-warning",
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  PENDING: "승인 대기",
+  APPROVED: "승인",
+  REJECTED: "반려",
+  CANCELLED: "취소",
+  CANCEL_REQUESTED: "취소 요청 중",
+};
+
+function dateLine(start: string, end: string) {
+  return start === end
+    ? formatMDWithDayFromYMD(start)
+    : `${formatMDWithDayFromYMD(start)} ~ ${formatMDWithDayFromYMD(end)}`;
+}
 
 export default function JejuApproveClient() {
   const router = useRouter();
@@ -109,77 +124,100 @@ export default function JejuApproveClient() {
   return (
     <div className="space-y-8">
       {/* 승인 대기 */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h2 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-          <Check size={16} /> 승인 대기 ({pendingList.length}건)
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+        <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
+          <Check size={18} className="shrink-0 text-slate-600" /> 승인 대기
         </h2>
+        <p className="text-xs text-gray-500 mb-4">{pendingList.length}건</p>
         {pendingList.length === 0 ? (
-          <p className="text-sm text-gray-500 py-4">대기 중인 신청이 없습니다.</p>
+          <p className="text-sm text-gray-500 py-6 text-center">대기 중인 신청이 없습니다.</p>
         ) : (
-          <ul className="space-y-3">
+          <ul className="space-y-4">
             {pendingList.map((r) => (
-              <li key={r.id} className="border border-gray-200 rounded-lg p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
+              <li key={r.id} className="rounded-2xl border border-gray-200 overflow-hidden bg-white shadow-sm">
+                <div className="p-4 space-y-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-800">
+                    <p className="text-[15px] font-bold text-gray-900 leading-snug">
                       {r.employeeName}
-                      <span className="text-gray-500 text-sm ml-2">{r.empNo}</span>
-                      {r.teamName && <span className="text-gray-400 text-xs ml-1">· {r.teamName}</span>}
+                      <span className="text-gray-500 font-normal text-sm ml-1.5">{r.empNo}</span>
                     </p>
-                    <p className="text-sm text-gray-600 mt-0.5">
-                      {r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`} ({r.nights}박)
-                    </p>
-                    <p className="text-xs text-gray-600 mt-0.5">
-                      투숙객 {r.guestName} · 인원 {r.guestCount}명
-                      {r.depositorName ? ` · 입금자 ${r.depositorName}` : ""}
-                      {r.guestPhone ? ` · ${r.guestPhone}` : ""}
-                    </p>
-                    {r.reason && <p className="text-xs text-gray-500 mt-0.5">{r.reason}</p>}
+                    {r.teamName && <p className="text-xs text-gray-500 mt-0.5">{r.teamName}</p>}
+                    <p className="text-sm font-semibold text-slate-800 mt-2">{dateLine(r.startDate, r.endDate)}</p>
+                    <p className="text-xs text-gray-500 tabular-nums">{r.nights}박</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 shrink-0 pl-3 border-l border-gray-200">
+                  <dl className="space-y-1.5 text-sm text-gray-700">
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-500 shrink-0">투숙객</dt>
+                      <dd className="text-right min-w-0 break-words">{r.guestName}</dd>
+                    </div>
+                    <div className="flex justify-between gap-3">
+                      <dt className="text-gray-500 shrink-0">인원</dt>
+                      <dd className="tabular-nums">{r.guestCount}명</dd>
+                    </div>
+                    {r.depositorName && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-500 shrink-0">입금자</dt>
+                        <dd className="text-right min-w-0 break-words">{r.depositorName}</dd>
+                      </div>
+                    )}
+                    {r.guestPhone && (
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-500 shrink-0">연락처</dt>
+                        <dd className="tabular-nums text-right">{r.guestPhone}</dd>
+                      </div>
+                    )}
+                  </dl>
+                  {r.reason && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{r.reason}</p>}
+                </div>
+                {rejectId === r.id ? (
+                  <div className="border-t border-gray-100 bg-gray-50/90 p-3 space-y-2">
+                    <label className="text-xs font-medium text-gray-600">반려 사유</label>
+                    <textarea
+                      rows={3}
+                      placeholder="반려 사유를 입력하세요"
+                      value={rejectComment}
+                      onChange={(e) => setRejectComment(e.target.value)}
+                      className="input w-full resize-none py-3 min-h-[80px] text-base"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRejectId(null);
+                          setRejectComment("");
+                        }}
+                        className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 touch-manipulation"
+                      >
+                        닫기
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => rejectRequest(r.id)}
+                        disabled={!rejectComment.trim()}
+                        className="min-h-[48px] rounded-xl border border-rose-300 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 disabled:opacity-50 touch-manipulation"
+                      >
+                        반려 확정
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => approveRequest(r.id)}
-                      className="btn-primary btn-sm shrink-0"
+                      className="min-h-[48px] rounded-xl border border-slate-800 bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 touch-manipulation"
                     >
                       승인
                     </button>
-                    {rejectId === r.id ? (
-                      <div className="flex flex-wrap gap-2 items-center">
-                        <input
-                          type="text"
-                          placeholder="반려 사유 입력"
-                          value={rejectComment}
-                          onChange={(e) => setRejectComment(e.target.value)}
-                          className="input text-sm py-1.5 w-40 min-w-0"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => rejectRequest(r.id)}
-                          disabled={!rejectComment.trim()}
-                          className="btn-danger btn-sm disabled:opacity-50 shrink-0"
-                        >
-                          반려 확정
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setRejectId(null); setRejectComment(""); }}
-                          className="btn-secondary btn-sm shrink-0"
-                        >
-                          취소
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setRejectId(r.id)}
-                        className="btn-ghost text-rose-600 hover:bg-rose-50 border border-rose-200 rounded px-2.5 py-1.5 text-sm"
-                      >
-                        반려
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setRejectId(r.id)}
+                      className="min-h-[48px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 touch-manipulation"
+                    >
+                      반려
+                    </button>
                   </div>
-                </div>
+                )}
               </li>
             ))}
           </ul>
@@ -188,43 +226,42 @@ export default function JejuApproveClient() {
 
       {/* 취소 승인 대기 */}
       {cancelRequestedList.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
-          <h2 className="font-semibold text-amber-800 mb-3">취소 승인 대기 ({cancelRequestedList.length}건)</h2>
-          <ul className="space-y-3">
+        <div className="rounded-2xl border border-amber-200/90 bg-amber-50/60 p-4 sm:p-5 shadow-sm">
+          <h2 className="text-base font-bold text-amber-950 mb-1">취소 승인 대기</h2>
+          <p className="text-xs text-amber-900/80 mb-4">{cancelRequestedList.length}건</p>
+          <ul className="space-y-4">
             {cancelRequestedList.map((r) => (
-              <li key={r.id} className="border border-amber-100 rounded-lg p-3 bg-white">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-gray-800">
-                      {r.employeeName}
-                      <span className="text-gray-500 text-sm ml-2">{r.empNo}</span>
-                      {r.teamName && <span className="text-gray-400 text-xs ml-1">· {r.teamName}</span>}
+              <li key={r.id} className="rounded-2xl border border-amber-100 bg-white overflow-hidden shadow-sm">
+                <div className="p-4 space-y-2">
+                  <p className="text-[15px] font-bold text-gray-900">
+                    {r.employeeName}
+                    <span className="text-gray-500 font-normal text-sm ml-1.5">{r.empNo}</span>
+                  </p>
+                  {r.teamName && <p className="text-xs text-gray-500">{r.teamName}</p>}
+                  <p className="text-sm font-semibold text-slate-800 pt-1">{dateLine(r.startDate, r.endDate)}</p>
+                  <p className="text-xs text-gray-500 tabular-nums">{r.nights}박 · 투숙객 {r.guestName} · {r.guestCount}명</p>
+                  {r.depositorName && <p className="text-xs text-gray-600">입금자 {r.depositorName}</p>}
+                  {r.cancelReason && (
+                    <p className="text-sm text-amber-900 bg-amber-50/80 rounded-lg px-3 py-2 border border-amber-100 mt-2">
+                      취소 사유: {r.cancelReason}
                     </p>
-                    <p className="text-sm text-gray-600 mt-0.5">
-                      {r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`} ({r.nights}박)
-                    </p>
-                    <p className="text-xs text-gray-600 mt-0.5">
-                      투숙객 {r.guestName} · 인원 {r.guestCount}명
-                      {r.depositorName ? ` · 입금자 ${r.depositorName}` : ""}
-                    </p>
-                    {r.cancelReason && <p className="text-xs text-amber-700 mt-0.5">취소 사유: {r.cancelReason}</p>}
-                  </div>
-                  <div className="flex gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => cancelApproveRequest(r.id, "REJECT")}
-                      className="btn-secondary btn-sm"
-                    >
-                      취소 반려
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => cancelApproveRequest(r.id, "APPROVE")}
-                      className="btn-danger btn-sm"
-                    >
-                      취소 승인
-                    </button>
-                  </div>
+                  )}
+                </div>
+                <div className="border-t border-amber-100/80 bg-amber-50/40 p-3 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => cancelApproveRequest(r.id, "REJECT")}
+                    className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 touch-manipulation"
+                  >
+                    취소 반려
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => cancelApproveRequest(r.id, "APPROVE")}
+                    className="min-h-[48px] rounded-xl border border-rose-300 bg-white text-rose-800 text-sm font-semibold hover:bg-rose-50 touch-manipulation"
+                  >
+                    취소 승인
+                  </button>
                 </div>
               </li>
             ))}
@@ -233,15 +270,16 @@ export default function JejuApproveClient() {
       )}
 
       {/* 전체 신청 내역 (이번 달) */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <h2 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-          <List size={16} /> {year}년 {month}월 신청 내역 ({filteredAllList.length}건)
+      <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+        <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
+          <List size={18} className="shrink-0 text-slate-600" /> {year}년 {month}월 신청 내역
         </h2>
+        <p className="text-xs text-gray-500 mb-4">{filteredAllList.length}건</p>
         {filteredAllList.length === 0 ? (
-          <p className="text-sm text-gray-500 py-4">이 달의 신청이 없습니다.</p>
+          <p className="text-sm text-gray-500 py-6 text-center">이 달의 신청이 없습니다.</p>
         ) : (
           <>
-            <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-100">
+            <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-100">
               <table className="w-full text-sm border-collapse">
                 <thead>
                   <tr className="bg-gray-50 text-gray-600 text-left">
@@ -260,7 +298,7 @@ export default function JejuApproveClient() {
                       <td className="px-3 py-2 font-medium text-gray-800">{r.employeeName}</td>
                       <td className="px-3 py-2 text-gray-600">{r.empNo}</td>
                       <td className="px-3 py-2 text-gray-500">{r.teamName ?? "-"}</td>
-                      <td className="px-3 py-2 text-gray-700">
+                      <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                         {r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`}
                       </td>
                       <td className="px-3 py-2 text-gray-600">{r.guestCount}명</td>
@@ -271,7 +309,7 @@ export default function JejuApproveClient() {
                         <span className="text-gray-600">{r.nights}박</span>
                         <span className="ml-2">
                           <span className={`badge ${STATUS_CLS[r.status] ?? "badge-default"}`}>
-                            {r.status === "PENDING" ? "승인 대기" : r.status === "APPROVED" ? "승인" : r.status === "REJECTED" ? "반려" : r.status === "CANCEL_REQUESTED" ? "취소 요청 중" : "취소"}
+                            {STATUS_LABEL[r.status] ?? r.status}
                           </span>
                         </span>
                       </td>
@@ -280,19 +318,28 @@ export default function JejuApproveClient() {
                 </tbody>
               </table>
             </div>
-            <ul className="md:hidden space-y-2">
+            <ul className="md:hidden space-y-3">
               {filteredAllList.map((r) => (
-                <li key={r.id} className="py-2.5 px-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="font-medium text-gray-800">{r.employeeName}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{r.empNo}{r.teamName ? ` · ${r.teamName}` : ""}</p>
-                  <p className="text-xs text-gray-600 mt-0.5">투숙객 {r.guestName} · {r.guestCount}명{r.depositorName ? ` · 입금자 ${r.depositorName}` : ""}</p>
-                  <p className="text-sm text-gray-700 mt-1 flex items-center gap-2 flex-wrap">
-                    <span>{r.startDate === r.endDate ? r.startDate : `${r.startDate} ~ ${r.endDate}`}</span>
-                    <span className="text-gray-600">{r.nights}박</span>
-                    <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
-                      {r.status === "PENDING" ? "승인 대기" : r.status === "APPROVED" ? "승인" : r.status === "REJECTED" ? "반려" : r.status === "CANCEL_REQUESTED" ? "취소 요청 중" : "취소"}
-                    </span>
-                  </p>
+                <li key={r.id} className="rounded-2xl border border-gray-100 bg-gray-50/80 overflow-hidden">
+                  <div className="p-3.5 space-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-gray-900">{r.employeeName}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {r.empNo}
+                          {r.teamName ? ` · ${r.teamName}` : ""}
+                        </p>
+                      </div>
+                      <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </span>
+                    </div>
+                    <p className="text-sm font-medium text-slate-800">{dateLine(r.startDate, r.endDate)}</p>
+                    <p className="text-xs text-gray-600">
+                      {r.nights}박 · {r.guestCount}명 · {r.guestName}
+                      {r.depositorName ? ` · 입금 ${r.depositorName}` : ""}
+                    </p>
+                  </div>
                 </li>
               ))}
             </ul>

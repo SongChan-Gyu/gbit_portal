@@ -12,7 +12,8 @@ type SerializedReq = {
     id: string;
     days: number;
     reason: string | null;
-    leaveType: { name: string; color: string };
+    timeSlot?: string | null;
+    leaveType: { name: string; color: string; code?: string };
     startDate: string;
     endDate: string;
   }>;
@@ -54,11 +55,36 @@ function summaryLine(req: SerializedReq): string {
 }
 
 function detailTitle(req: SerializedReq): string {
-  if (req.items.length === 1) {
-    const it = req.items[0];
-    return `${req.employee.name} · ${it.leaveType.name} ${it.days}일`;
-  }
-  return `${req.employee.name} · 복합 ${req.totalDays}일`;
+  return `${req.employee.name} · 신청 ${req.items.length}항목 · 합계 ${req.totalDays}일`;
+}
+
+/** 신청 내역과 같은 한 줄: 유형(색/병가빨강) 날짜 **N일** */
+function ItemDetailLine({ it }: { it: SerializedReq["items"][0] }) {
+  const slot = it.timeSlot?.trim().toUpperCase();
+  const slotKo = slot === "AM" ? "오전 " : slot === "PM" ? "오후 " : "";
+  const sick = it.leaveType.code === "SICK" || it.leaveType.name === "병가";
+  const sameDay = it.startDate.slice(0, 10) === it.endDate.slice(0, 10);
+  const period = sameDay
+    ? formatMDWithDay(it.startDate)
+    : `${formatMDWithDay(it.startDate)} ~ ${formatMDWithDay(it.endDate)}`;
+  const reason = it.reason?.trim() && it.reason.trim().length >= 2 ? it.reason.trim() : "";
+
+  return (
+    <div className="text-[15px] leading-snug border-b border-gray-50 last:border-0 pb-2.5 last:pb-0 mb-2.5 last:mb-0">
+      <p>
+        <span
+          className={`font-medium ${sick ? "text-red-600" : ""}`}
+          style={sick ? undefined : { color: it.leaveType.color }}
+        >
+          {slotKo}
+          {it.leaveType.name}
+        </span>{" "}
+        <span className="text-slate-700">{period}</span>{" "}
+        <span className="font-bold text-slate-900 tabular-nums">{it.days}일</span>
+      </p>
+      {reason && <p className="text-xs text-gray-400 mt-1 pl-0.5">사유: {reason}</p>}
+    </div>
+  );
 }
 
 export default function LeaveApprovePendingClient({
@@ -172,49 +198,24 @@ function PendingDetail({
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold text-gray-900 leading-snug">{detailTitle(req)}</h2>
-        <p className="text-sm text-gray-600 mt-1.5">
-          {formatMDWithDay(req.startDate)}
-          {req.startDate.slice(0, 10) !== req.endDate.slice(0, 10) &&
-            ` ~ ${formatMDWithDay(req.endDate)}`}
-        </p>
         {req.employee.team?.name && (
           <p className="text-xs text-gray-400 mt-0.5">{req.employee.team.name}</p>
         )}
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {req.items.map((it) => (
-          <span
-            key={it.id}
-            className="text-sm px-2 py-0.5 rounded border font-medium"
-            style={{
-              color: it.leaveType.color,
-              borderColor: `${it.leaveType.color}40`,
-              background: `${it.leaveType.color}10`,
-            }}
-          >
-            {it.leaveType.name} {it.days}일
-            {it.reason?.trim() && it.reason.trim().length >= 2 ? ` — ${it.reason.trim()}` : ""}
-          </span>
-        ))}
+      <div>
+        <p className="text-xs font-medium text-gray-500 mb-2">신청 내역</p>
+        <div className="rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2.5 space-y-0">
+          {req.items.map((it) => (
+            <ItemDetailLine key={it.id} it={it} />
+          ))}
+        </div>
       </div>
 
       {kind === "leave" ? (
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <span className="text-gray-500 text-xs">기간</span>
-            <p className="font-medium text-[15px] mt-0.5">
-              {formatMDWithDay(req.startDate)}
-              {req.startDate.slice(0, 10) !== req.endDate.slice(0, 10) &&
-                ` ~ ${formatMDWithDay(req.endDate)}`}
-              <span className="ml-1 text-slate-800 font-bold">{req.totalDays}일</span>
-            </p>
-          </div>
-          <div>
-            <span className="text-gray-500 text-xs">신청일</span>
-            <p className="font-medium text-[15px] mt-0.5">{formatYMD(req.createdAt)}</p>
-          </div>
-        </div>
+        <p className="text-xs text-gray-500">
+          신청일 <span className="text-slate-700 font-medium">{formatYMD(req.createdAt)}</span>
+        </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
           <div>

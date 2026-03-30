@@ -35,14 +35,22 @@ export default function ApproveActions({
         value={comment} onChange={(e) => setComment(e.target.value)} />
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex gap-2">
-        <button onClick={() => handle("APPROVE")} disabled={!!loading}
-          className="btn-primary btn-sm flex-1 gap-1">
-          <CheckCircle2 size={13} />
+        <button
+          type="button"
+          onClick={() => handle("APPROVE")}
+          disabled={!!loading}
+          className="flex-1 inline-flex justify-center items-center gap-1 py-2 px-2.5 text-xs font-medium rounded-lg border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50 disabled:opacity-50 transition"
+        >
+          <CheckCircle2 size={14} strokeWidth={2} />
           {loading === "approve" ? "처리중…" : "승인"}
         </button>
-        <button onClick={() => handle("REJECT")} disabled={!!loading}
-          className="btn-danger btn-sm flex-1 gap-1">
-          <XCircle size={13} />
+        <button
+          type="button"
+          onClick={() => handle("REJECT")}
+          disabled={!!loading}
+          className="flex-1 inline-flex justify-center items-center gap-1 py-2 px-2.5 text-xs font-medium rounded-lg border border-rose-300 bg-white text-rose-800 hover:bg-rose-50 disabled:opacity-50 transition"
+        >
+          <XCircle size={14} strokeWidth={2} />
           {loading === "reject" ? "처리중…" : "반려"}
         </button>
       </div>

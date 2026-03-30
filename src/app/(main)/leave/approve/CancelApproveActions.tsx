@@ -44,19 +44,21 @@ export default function CancelApproveActions({
       {err && <p className="text-xs text-red-500">{err}</p>}
       <div className="flex gap-2">
         <button
+          type="button"
           onClick={() => handle("APPROVE")}
           disabled={!!loading}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition"
+          className="flex-1 inline-flex items-center justify-center gap-1 py-2 px-2.5 text-xs font-medium rounded-lg border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50 disabled:opacity-50 transition"
         >
-          <Check size={14} />
+          <Check size={14} strokeWidth={2} />
           {loading === "approve" ? "처리 중..." : "취소 승인"}
         </button>
         <button
+          type="button"
           onClick={() => handle("REJECT")}
           disabled={!!loading}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50 transition"
+          className="flex-1 inline-flex items-center justify-center gap-1 py-2 px-2.5 text-xs font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 transition"
         >
-          <X size={14} />
+          <X size={14} strokeWidth={2} />
           {loading === "reject" ? "처리 중..." : "취소 반려"}
         </button>
       </div>

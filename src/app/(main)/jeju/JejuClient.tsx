@@ -324,136 +324,157 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
         </p>
       </div>
 
-      {/* 선택 후 상세 입력 (날짜 고정) */}
+      {/* 선택 후 상세 입력 (날짜 고정) — 모바일 터치·구역 구분 */}
       {checkInDate && checkOutDate && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-          <h2 className="font-semibold text-gray-800 mb-3">예약 상세 입력</h2>
-          <form onSubmit={submitApply} className="space-y-4">
-            <div className="rounded-lg bg-gray-50 border border-gray-200 p-3">
-              <p className="text-sm font-medium text-gray-700">이용일 (선택 완료)</p>
-              <p className="text-base font-bold text-gray-900">
-                {checkInDate}({dowLabel(checkInDate)}) 입실 15:00 → {checkOutDate}({dowLabel(checkOutDate)}) 퇴실 11:00
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm max-w-lg mx-auto w-full">
+          <h2 className="text-base font-bold text-gray-900 mb-1">예약 상세 입력</h2>
+          <p className="text-xs text-gray-500 mb-4">필수 항목을 입력한 뒤 예약하기를 눌러 주세요.</p>
+          <form onSubmit={submitApply} className="space-y-5">
+            <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2">
+              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">이용 일정</p>
+              <p className="text-[15px] font-semibold text-slate-900 leading-snug">
+                입실 {checkInDate.slice(5).replace("-", "/")}({dowLabel(checkInDate)}) 15:00
               </p>
-              <p className="text-sm text-gray-600 mt-1">
-                총 <span className="font-semibold">{nightsBetween(checkInDate, checkOutDate)}</span>박
+              <p className="text-[15px] font-semibold text-slate-900 leading-snug">
+                퇴실 {checkOutDate.slice(5).replace("-", "/")}({dowLabel(checkOutDate)}) 11:00
+              </p>
+              <p className="text-sm text-slate-600 pt-1">
+                숙박 <span className="font-bold text-slate-900 tabular-nums">{nightsBetween(checkInDate, checkOutDate)}</span>박
               </p>
             </div>
-            <div>
-              <label className="label">이름 *</label>
-              <input
-                type="text"
-                className="input w-full"
-                value={applyGuestName}
-                onChange={(e) => setApplyGuestName(e.target.value)}
-                placeholder="입실자 이름"
-                required
-              />
-            </div>
-            <div>
-              <label className="label">연락처 *</label>
-              <input
-                type="tel"
-                className="input w-full"
-                value={applyGuestPhone}
-                onChange={(e) => setApplyGuestPhone(e.target.value)}
-                placeholder="010-0000-0000"
-                required
-              />
-            </div>
-            <div>
-              <label className="label">입실 인원 *</label>
-              <div className="flex items-stretch gap-2">
-                <button
-                  type="button"
-                  className="px-4 rounded-lg border border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 active:bg-gray-100"
-                  onClick={() => {
-                    const n = parseInt(String(applyGuestCount).trim(), 10);
-                    const cur = Number.isFinite(n) ? n : 1;
-                    setApplyGuestCount(String(Math.max(1, cur - 1)));
-                  }}
-                  aria-label="인원 줄이기"
-                >
-                  −
-                </button>
+
+            <div className="space-y-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 pb-2">투숙 정보</p>
+              <div>
+                <label className="label">이름 (투숙객) *</label>
                 <input
-                  type="number"
-                  min={1}
-                  max={99}
-                  className="input w-full"
-                  value={applyGuestCount}
-                  inputMode="numeric"
-                  onChange={(e) => setApplyGuestCount(e.target.value)}
-                  onBlur={() => {
-                    const n = parseInt(String(applyGuestCount).trim(), 10);
-                    if (!Number.isFinite(n) || n < 1) setApplyGuestCount("1");
-                    else setApplyGuestCount(String(Math.min(99, n)));
-                  }}
+                  type="text"
+                  autoComplete="name"
+                  className="input w-full min-h-[48px]"
+                  value={applyGuestName}
+                  onChange={(e) => setApplyGuestName(e.target.value)}
+                  placeholder="실명 입력"
                   required
                 />
-                <button
-                  type="button"
-                  className="px-4 rounded-lg border border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 active:bg-gray-100"
-                  onClick={() => {
-                    const n = parseInt(String(applyGuestCount).trim(), 10);
-                    const cur = Number.isFinite(n) ? n : 1;
-                    setApplyGuestCount(String(Math.min(99, cur + 1)));
-                  }}
-                  aria-label="인원 늘리기"
-                >
-                  +
-                </button>
+              </div>
+              <div>
+                <label className="label">연락처 *</label>
+                <input
+                  type="tel"
+                  autoComplete="tel"
+                  inputMode="tel"
+                  className="input w-full min-h-[48px]"
+                  value={applyGuestPhone}
+                  onChange={(e) => setApplyGuestPhone(e.target.value)}
+                  placeholder="010-0000-0000"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">입실 인원 *</label>
+                <div className="flex items-stretch gap-2">
+                  <button
+                    type="button"
+                    className="min-h-[48px] min-w-[48px] shrink-0 rounded-xl border border-gray-200 bg-white text-gray-800 font-bold text-lg hover:bg-gray-50 active:bg-gray-100 touch-manipulation"
+                    onClick={() => {
+                      const n = parseInt(String(applyGuestCount).trim(), 10);
+                      const cur = Number.isFinite(n) ? n : 1;
+                      setApplyGuestCount(String(Math.max(1, cur - 1)));
+                    }}
+                    aria-label="인원 줄이기"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={99}
+                    className="input w-full min-h-[48px] text-center font-semibold tabular-nums"
+                    value={applyGuestCount}
+                    inputMode="numeric"
+                    onChange={(e) => setApplyGuestCount(e.target.value)}
+                    onBlur={() => {
+                      const n = parseInt(String(applyGuestCount).trim(), 10);
+                      if (!Number.isFinite(n) || n < 1) setApplyGuestCount("1");
+                      else setApplyGuestCount(String(Math.min(99, n)));
+                    }}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="min-h-[48px] min-w-[48px] shrink-0 rounded-xl border border-gray-200 bg-white text-gray-800 font-bold text-lg hover:bg-gray-50 active:bg-gray-100 touch-manipulation"
+                    onClick={() => {
+                      const n = parseInt(String(applyGuestCount).trim(), 10);
+                      const cur = Number.isFinite(n) ? n : 1;
+                      setApplyGuestCount(String(Math.min(99, cur + 1)));
+                    }}
+                    aria-label="인원 늘리기"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 space-y-2">
-              <p className="text-sm font-semibold text-amber-800">예약금 이체</p>
-              <p className="text-base font-bold text-amber-900">
+
+            <div className="rounded-xl border border-amber-200/90 bg-amber-50/90 p-4 space-y-2">
+              <p className="text-xs font-semibold text-amber-900 uppercase tracking-wide">예약금 이체</p>
+              <p className="text-lg font-bold text-amber-950 tabular-nums">
                 {(config?.depositAmount ?? 100000).toLocaleString()}원
               </p>
               {config?.depositAccount && (
-                <p className="text-sm text-amber-800">
+                <p className="text-sm text-amber-900 leading-relaxed break-words">
                   {config.depositAccount.bankName} {config.depositAccount.accountHolder}{" "}
                   {formatJejuAccountNumber(config.depositAccount.accountNumber)}
                 </p>
               )}
-              <p className="text-xs text-amber-700">신청 후 24시간 내 미이체 시 자동 취소될 수 있습니다.</p>
+              <p className="text-[11px] text-amber-800/90 leading-relaxed">신청 후 24시간 내 미이체 시 자동 취소될 수 있습니다.</p>
             </div>
-            <div>
-              <label className="label">입금자명 *</label>
-              <input
-                type="text"
-                className="input w-full"
-                value={applyDepositorName}
-                onChange={(e) => setApplyDepositorName(e.target.value)}
-                placeholder="이체 시 사용할 이름"
-                required
-              />
+
+            <div className="space-y-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide border-b border-gray-100 pb-2">입금 정보</p>
+              <div>
+                <label className="label">입금자명 *</label>
+                <input
+                  type="text"
+                  className="input w-full min-h-[48px]"
+                  value={applyDepositorName}
+                  onChange={(e) => setApplyDepositorName(e.target.value)}
+                  placeholder="계좌 이체 시 표시될 이름"
+                  required
+                />
+              </div>
+              <div>
+                <label className="label">사유 (선택)</label>
+                <textarea
+                  rows={2}
+                  className="input w-full resize-none py-3 min-h-[72px]"
+                  placeholder="예: 가족 여행"
+                  value={applyReason}
+                  onChange={(e) => setApplyReason(e.target.value)}
+                />
+              </div>
             </div>
-            <div>
-              <label className="label">사유 (선택)</label>
-              <input
-                type="text"
-                className="input w-full"
-                placeholder="예: 가족 여행"
-                value={applyReason}
-                onChange={(e) => setApplyReason(e.target.value)}
-              />
-            </div>
+
             {applyError && (
-              <p className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{applyError}</p>
+              <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-xl px-3 py-2.5">{applyError}</p>
             )}
-            <div className="flex gap-3 pt-2">
+            <div className="grid grid-cols-2 gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={() => {
                   setCheckOutDate("");
                   setApplyError("");
                 }}
-                className="btn-secondary flex-1"
+                className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 active:bg-slate-100 touch-manipulation"
               >
-                퇴실일 다시 선택
+                날짜 다시 선택
               </button>
-              <button type="submit" disabled={applySubmitting} className="btn-primary flex-1">
-                {applySubmitting ? "신청 중..." : "예약하기"}
+              <button
+                type="submit"
+                disabled={applySubmitting}
+                className="min-h-[48px] rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 disabled:opacity-50 touch-manipulation"
+              >
+                {applySubmitting ? "신청 중…" : "예약하기"}
               </button>
             </div>
           </form>

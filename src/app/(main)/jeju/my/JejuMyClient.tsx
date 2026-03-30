@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
-import { formatYMD } from "@/lib/dateUtils";
+import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
 
 const STATUS_KO: Record<string, string> = {
   PENDING: "승인 대기",
@@ -77,11 +77,12 @@ export default function JejuMyClient() {
   async function submitEdit(e: React.FormEvent<HTMLFormElement>, requestId: string) {
     e.preventDefault();
     const form = e.currentTarget;
+    const reasonEl = form.querySelector('[name="reason"]') as HTMLInputElement | HTMLTextAreaElement | null;
     const payload = {
       requestId,
       startDate: (form.querySelector('[name="startDate"]') as HTMLInputElement)?.value,
       endDate: (form.querySelector('[name="endDate"]') as HTMLInputElement)?.value,
-      reason: (form.querySelector('[name="reason"]') as HTMLInputElement)?.value?.trim() || undefined,
+      reason: reasonEl?.value?.trim() || undefined,
       guestName: (form.querySelector('[name="guestName"]') as HTMLInputElement)?.value?.trim(),
       guestPhone: (form.querySelector('[name="guestPhone"]') as HTMLInputElement)?.value?.trim(),
       guestCount: parseInt((form.querySelector('[name="guestCount"]') as HTMLInputElement)?.value || "1", 10),
@@ -106,121 +107,178 @@ export default function JejuMyClient() {
     return <div className="py-8 text-center text-gray-500">로딩 중...</div>;
   }
 
+  const dateLine = (start: string, end: string) =>
+    start === end
+      ? formatMDWithDayFromYMD(start)
+      : `${formatMDWithDayFromYMD(start)} ~ ${formatMDWithDayFromYMD(end)}`;
+
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-      <h2 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-        <CalendarDays size={16} /> 예약 신청 내역
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+      <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
+        <CalendarDays size={18} className="shrink-0 text-slate-600" /> 예약 신청 내역
       </h2>
+      <p className="text-xs text-gray-500 mb-4">승인 전에는 수정·취소가 가능합니다.</p>
       {list.length === 0 ? (
-        <p className="text-sm text-gray-500 py-4">신청 내역이 없습니다.</p>
+        <p className="text-sm text-gray-500 py-6 text-center">신청 내역이 없습니다.</p>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-4">
           {list.map((r) => (
-            <li key={r.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <li
+              key={r.id}
+              className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
+            >
               {editId === r.id && r.status === "PENDING" ? (
-                <form onSubmit={(e) => submitEdit(e, r.id)} className="space-y-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <form onSubmit={(e) => submitEdit(e, r.id)} className="p-4 space-y-4">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">예약 수정</p>
+                  <div className="grid grid-cols-1 gap-3">
                     <div>
-                      <label className="text-xs text-gray-500">이용 시작일</label>
-                      <input name="startDate" type="date" defaultValue={r.startDate} className="input text-sm w-full" required />
+                      <label className="label">이용 시작일</label>
+                      <input
+                        name="startDate"
+                        type="date"
+                        defaultValue={r.startDate}
+                        className="input w-full min-h-[48px]"
+                        required
+                      />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500">이용 종료일</label>
-                      <input name="endDate" type="date" defaultValue={r.endDate} className="input text-sm w-full" required />
+                      <label className="label">이용 종료일</label>
+                      <input
+                        name="endDate"
+                        type="date"
+                        defaultValue={r.endDate}
+                        className="input w-full min-h-[48px]"
+                        required
+                      />
                     </div>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">사유</label>
-                    <input name="reason" type="text" defaultValue={r.reason ?? ""} className="input text-sm w-full" placeholder="선택" />
+                    <label className="label">사유 (선택)</label>
+                    <textarea
+                      name="reason"
+                      rows={2}
+                      defaultValue={r.reason ?? ""}
+                      className="input w-full resize-none py-3 min-h-[72px]"
+                      placeholder="선택"
+                    />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">투숙객명 *</label>
-                    <input name="guestName" type="text" defaultValue={r.guestName} className="input text-sm w-full" required />
+                    <label className="label">투숙객명 *</label>
+                    <input name="guestName" type="text" defaultValue={r.guestName} className="input w-full min-h-[48px]" required />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">연락처 *</label>
-                    <input name="guestPhone" type="text" defaultValue={r.guestPhone} className="input text-sm w-full" required />
+                    <label className="label">연락처 *</label>
+                    <input name="guestPhone" type="tel" inputMode="tel" defaultValue={r.guestPhone} className="input w-full min-h-[48px]" required />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">인원 수 *</label>
-                    <input name="guestCount" type="number" min={1} defaultValue={r.guestCount} className="input text-sm w-full" required />
+                    <label className="label">인원 수 *</label>
+                    <input
+                      name="guestCount"
+                      type="number"
+                      min={1}
+                      defaultValue={r.guestCount}
+                      className="input w-full min-h-[48px] tabular-nums"
+                      required
+                    />
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500">입금자명</label>
-                    <input name="depositorName" type="text" defaultValue={r.depositorName ?? ""} className="input text-sm w-full" />
+                    <label className="label">입금자명</label>
+                    <input name="depositorName" type="text" defaultValue={r.depositorName ?? ""} className="input w-full min-h-[48px]" />
                   </div>
-                  <div className="flex gap-2 pt-2">
-                    <button type="submit" className="btn-primary btn-sm">저장</button>
-                    <button type="button" onClick={() => setEditId(null)} className="btn-secondary btn-sm">취소</button>
+                  <div className="grid grid-cols-2 gap-2.5 pt-1">
+                    <button type="button" onClick={() => setEditId(null)} className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 touch-manipulation">
+                      닫기
+                    </button>
+                    <button type="submit" className="min-h-[48px] rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 touch-manipulation">
+                      저장
+                    </button>
                   </div>
                 </form>
               ) : (
                 <>
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="min-w-0 space-y-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold text-gray-900">
-                          {r.startDate === r.endDate ? formatYMD(r.startDate) : `${formatYMD(r.startDate)} ~ ${formatYMD(r.endDate)}`}
-                        </span>
-                        <span className="text-gray-500 text-sm">· {r.nights}박</span>
-                        <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
-                          {STATUS_KO[r.status] ?? r.status}
-                        </span>
+                  <div className="p-4 pb-3 space-y-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-[15px] font-bold text-gray-900 leading-snug">{dateLine(r.startDate, r.endDate)}</p>
+                        <p className="text-sm text-gray-500 mt-0.5 tabular-nums">{r.nights}박</p>
                       </div>
-                      <div className="text-sm text-gray-600 grid grid-cols-1 xs:grid-cols-2 gap-x-4 gap-y-0.5">
-                        <span>신청자: {r.applicantName}</span>
-                        <span>인원: {r.guestCount}명</span>
-                        {r.depositorName && <span>입금자: {r.depositorName}</span>}
-                        <span>투숙객: {r.guestName}</span>
-                        {r.guestPhone && <span>연락처: {r.guestPhone}</span>}
-                      </div>
-                      {r.reason && <p className="text-sm text-gray-500">{r.reason}</p>}
-                      {r.status === "REJECTED" && r.rejectComment && (
-                        <p className="text-sm text-rose-600">반려 사유: {r.rejectComment}</p>
-                      )}
-                      {r.status === "CANCEL_REQUESTED" && (
-                        <p className="text-sm text-amber-700">취소 요청이 접수되었습니다. 복지부 승인 후 취소됩니다.</p>
-                      )}
+                      <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
+                        {STATUS_KO[r.status] ?? r.status}
+                      </span>
                     </div>
-                    <div className="shrink-0 pt-2 sm:pt-0 sm:pl-4 sm:border-l sm:border-gray-200 flex flex-wrap items-center gap-2">
-                      {r.status === "PENDING" && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setEditId(r.id)}
-                            className="btn-secondary btn-sm"
-                          >
-                            수정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => cancelRequest(r.id, false)}
-                            className="btn-secondary btn-sm text-rose-700 border-rose-200 hover:bg-rose-50"
-                          >
-                            취소
-                          </button>
-                        </>
-                      )}
-                      {r.status === "APPROVED" && (
-                        <div className="flex flex-wrap gap-2">
-                          <input
-                            type="text"
-                            placeholder="취소 사유 (선택)"
-                            value={cancelReasons[r.id] ?? ""}
-                            onChange={(e) => setCancelReasons((prev) => ({ ...prev, [r.id]: e.target.value }))}
-                            className="input text-sm py-1.5 w-36 min-w-0"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => cancelRequest(r.id, true)}
-                            className="btn-secondary btn-sm text-rose-700 border-rose-200 hover:bg-rose-50"
-                          >
-                            취소 요청
-                          </button>
+                    <dl className="space-y-2 text-sm text-gray-700">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-500 shrink-0">신청자</dt>
+                        <dd className="font-medium text-right min-w-0 break-words">{r.applicantName}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-500 shrink-0">투숙객</dt>
+                        <dd className="text-right min-w-0 break-words">{r.guestName}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-gray-500 shrink-0">인원</dt>
+                        <dd className="tabular-nums">{r.guestCount}명</dd>
+                      </div>
+                      {r.guestPhone && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-gray-500 shrink-0">연락처</dt>
+                          <dd className="tabular-nums text-right">{r.guestPhone}</dd>
                         </div>
                       )}
-                    </div>
+                      {r.depositorName && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-gray-500 shrink-0">입금자</dt>
+                          <dd className="text-right min-w-0 break-words">{r.depositorName}</dd>
+                        </div>
+                      )}
+                    </dl>
+                    {r.reason && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{r.reason}</p>}
+                    {r.status === "REJECTED" && r.rejectComment && (
+                      <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">반려 사유: {r.rejectComment}</p>
+                    )}
+                    {r.status === "CANCEL_REQUESTED" && (
+                      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                        취소 요청이 접수되었습니다. 복지부 승인 후 취소됩니다.
+                      </p>
+                    )}
                   </div>
+                  {r.status === "PENDING" && (
+                    <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditId(r.id)}
+                        className="min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-white touch-manipulation"
+                      >
+                        수정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cancelRequest(r.id, false)}
+                        className="min-h-[44px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-medium hover:bg-rose-50 touch-manipulation"
+                      >
+                        취소
+                      </button>
+                    </div>
+                  )}
+                  {r.status === "APPROVED" && (
+                    <div className="border-t border-gray-100 bg-gray-50/90 p-3 space-y-2">
+                      <label className="text-xs font-medium text-gray-600">취소 사유 (선택)</label>
+                      <input
+                        type="text"
+                        placeholder="필요 시 입력"
+                        value={cancelReasons[r.id] ?? ""}
+                        onChange={(e) => setCancelReasons((prev) => ({ ...prev, [r.id]: e.target.value }))}
+                        className="input w-full min-h-[48px] text-base"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => cancelRequest(r.id, true)}
+                        className="w-full min-h-[48px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 touch-manipulation"
+                      >
+                        취소 요청
+                      </button>
+                    </div>
+                  )}
                 </>
               )}
             </li>
