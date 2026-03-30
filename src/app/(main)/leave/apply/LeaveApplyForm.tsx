@@ -636,7 +636,7 @@ export default function LeaveApplyForm({
 
                 {/* 스탬프 > 힐링데이: 전용 경로 안내 (일수 표기 없음, 1시간 40분 개념) */}
                 {item._groupKey === "stamp" && item._healingSelected && (
-                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                     <p className="text-sm font-semibold text-amber-800 mb-1">힐링데이 — 스탬프 쿠폰 메뉴에서 신청</p>
                     <p className="text-xs text-amber-700 mb-3 leading-relaxed">
                       스탬프 5개 소진 시 10:20 출근 또는 16:00 퇴근(1시간 40분 단축)으로 처리됩니다.
@@ -665,13 +665,13 @@ export default function LeaveApplyForm({
                       ]).map(({ k, label }) => (
                         <button key={k} type="button"
                           onClick={() => setTimeSlotForItem(idx, k)}
-                          className={`flex-1 flex flex-col items-center py-3 rounded-lg border transition-all ${
+                          className={`flex-1 flex flex-col items-center py-2.5 rounded-lg border transition-all ${
                             item.timeSlot === k
                               ? "border-2 bg-white shadow-sm"
                               : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                           }`}
                           style={item.timeSlot === k ? { borderColor: grp?.color ?? "#3b82f6" } : {}}>
-                          <span className={`text-sm font-semibold ${item.timeSlot === k ? "" : "text-gray-700"}`}
+                          <span className={`text-[15px] font-semibold ${item.timeSlot === k ? "" : "text-gray-700"}`}
                             style={item.timeSlot === k ? { color: grp?.color ?? "#3b82f6" } : {}}>
                             {label}
                           </span>
@@ -696,7 +696,7 @@ export default function LeaveApplyForm({
                           key={k}
                           type="button"
                           onClick={() => setTimeSlotForItem(idx, k)}
-                          className={`flex-1 flex flex-col items-center py-3 rounded-lg border transition-all ${
+                          className={`flex-1 flex flex-col items-center py-2.5 rounded-lg border transition-all ${
                             item.timeSlot === k
                               ? "border-2 bg-white shadow-sm"
                               : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
@@ -704,7 +704,7 @@ export default function LeaveApplyForm({
                           style={item.timeSlot === k ? { borderColor: grp?.color ?? "#ec4899" } : {}}
                         >
                           <span
-                            className={`text-sm font-semibold ${item.timeSlot === k ? "" : "text-gray-700"}`}
+                            className={`text-[15px] font-semibold ${item.timeSlot === k ? "" : "text-gray-700"}`}
                             style={item.timeSlot === k ? { color: grp?.color ?? "#ec4899" } : {}}
                           >
                             {label}
@@ -729,13 +729,13 @@ export default function LeaveApplyForm({
                           <button key={sub.code} type="button"
                             onClick={() => selectLeaveType(idx, sub.code, grp.key)}
                             disabled={!isHealing && !subLt}
-                            className={`flex-1 flex flex-col items-center py-3 rounded-lg border transition-all ${
+                            className={`flex-1 flex flex-col items-center py-2.5 rounded-lg border transition-all ${
                               isSelected
                                 ? "border-2 bg-white shadow-sm"
                                 : "border-gray-200 bg-white hover:border-gray-300 hover:bg-gray-50"
                             } disabled:opacity-40 disabled:cursor-not-allowed`}
                             style={isSelected ? { borderColor: grp.color } : {}}>
-                            <span className={`text-sm font-semibold ${isSelected ? "" : "text-gray-700"}`}
+                            <span className={`text-[15px] font-semibold ${isSelected ? "" : "text-gray-700"}`}
                               style={isSelected ? { color: grp.color } : {}}>
                               {sub.label}
                             </span>

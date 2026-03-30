@@ -77,24 +77,24 @@ export default async function LeaveApplyPage() {
 
       {/* 사용 가능 자산 요약 (공가·병가 미포함) */}
       <div className="panel mb-3">
-        <div className="panel-body py-3 px-4">
-          <div className="flex items-center gap-6">
+        <div className="panel-body py-2.5 px-3">
+          <div className="flex items-center gap-3 sm:gap-4">
             <div className="text-center min-w-[7rem]">
-              <p className="text-xl font-black text-blue-600 tabular-nums">{totalAssetRemain.toFixed(1)}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">사용 가능 휴가</p>
+              <p className="text-[22px] font-black text-blue-600 tabular-nums leading-none">{totalAssetRemain.toFixed(1)}</p>
+              <p className="text-xs text-gray-500 mt-1">사용 가능 휴가</p>
               <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">연차·돌봄·이벤트 등</p>
             </div>
-            <div className="w-px h-8 bg-gray-200" />
+            <div className="w-px h-7 bg-gray-200" />
             <div className="text-center">
-              <p className="text-xl font-black text-amber-500 tabular-nums">{totalStamps}</p>
-              <p className="text-[11px] text-gray-400 mt-0.5">누적 스탬프 칸</p>
+              <p className="text-[22px] font-black text-amber-500 tabular-nums leading-none">{totalStamps}</p>
+              <p className="text-xs text-gray-500 mt-1">누적 스탬프 칸</p>
             </div>
-            <div className="w-px h-8 bg-gray-200" />
-            <div className="text-center">
-              <p className="text-xl font-black text-gray-600">
+            <div className="w-px h-7 bg-gray-200" />
+            <div className="text-center min-w-[6.5rem]">
+              <p className="text-[20px] font-black text-gray-600 leading-none whitespace-nowrap">
                 {halfDayUsed > 0 ? "사용완료" : "미사용"}
               </p>
-              <p className="text-[11px] text-gray-400 mt-0.5">이달 하프데이</p>
+              <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">이달 하프데이</p>
             </div>
             <div className="flex-1" />
             <div className="text-right text-xs text-gray-400 hidden sm:block">

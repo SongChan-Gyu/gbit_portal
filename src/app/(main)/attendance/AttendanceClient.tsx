@@ -46,6 +46,13 @@ const DAYS_OF_WEEK = ["일","월","화","수","목","금","토"];
 
 function daysInMonth(y:number, m:number) { return new Date(y, m, 0).getDate(); }
 function pad2(n:number) { return String(n).padStart(2,"0"); }
+function ymd(v: string) { return v.slice(0, 10); }
+function dayContribution(item: ReqItem): number {
+  const slot = item.timeSlot ?? null;
+  if (slot === "AM" || slot === "PM") return 0.5;
+  if (ymd(item.startDate) !== ymd(item.endDate)) return 1;
+  return item.days;
+}
 
 export default function AttendanceClient({
   employees, monthRequests, annualRequests, allocations,
@@ -145,7 +152,7 @@ export default function AttendanceClient({
     for (const [, dm] of empDayMap) {
       for (const [dStr, items] of dm) {
         const d = parseInt(dStr) - 1;
-        const used = items.reduce((s, i) => s + i.days, 0);
+        const used = items.reduce((s, i) => s + dayContribution(i), 0);
         totals[d] += used;
       }
     }
@@ -271,7 +278,7 @@ export default function AttendanceClient({
                           const key = String(d);
                           const items = dm.get(key) ?? [];
                           if (items.length > 0) {
-                            monthUsed += items.reduce((s, i) => s + i.days, 0);
+                            monthUsed += items.reduce((s, i) => s + dayContribution(i), 0);
                           }
                           const bgClass = dow===0 ? "bg-red-50" : dow===6 ? "bg-blue-50" : isHoliday ? "bg-red-50" : "";
                           if (items.length === 0) {
@@ -280,7 +287,7 @@ export default function AttendanceClient({
                           return (
                             <td key={d} className={`border border-gray-200 px-0.5 py-0.5 ${bgClass}`}>
                               <div className="flex flex-col gap-px items-center">
-                                {items.map((item, ii) => (
+                                {Array.from(new Map(items.map((item) => [renderMergedAbbr(item), item])).values()).map((item, ii) => (
                                   <div key={ii}
                                     className="w-full text-center rounded text-white font-medium px-0.5"
                                     style={{ background: item.leaveTypeColor || "#3b82f6", fontSize:"9px", lineHeight:"14px" }}

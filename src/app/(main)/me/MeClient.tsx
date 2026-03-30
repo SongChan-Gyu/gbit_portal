@@ -90,13 +90,14 @@ export default function MeClient({ initial }: { initial: Emp }) {
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm space-y-5">
-      <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-700">
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          <span className="font-semibold">{initial.name}</span>
-          <span className="text-gray-500">{initial.empNo}</span>
-          <span className="text-gray-500">{initial.team?.name ?? "팀 없음"}</span>
-          <span className="text-gray-500">{initial.position}</span>
+      <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-base font-semibold text-gray-900">{initial.name}</p>
+          <p className="text-xs text-gray-500">{initial.empNo}</p>
         </div>
+        <p className="text-sm text-gray-600 mt-1">
+          {initial.team?.name ?? "팀 없음"} · {initial.position}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -62,6 +62,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
       where: {
         isActive: true,
         deductFromBalance: false,
+        allocationSourceCode: null,
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
@@ -313,14 +314,11 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
         </div>
       )}
 
-      {/* 이번 귀속연도 중 근속휴가 부여 예정 — 언제부터 사용 가능한지 안내 */}
+      {/* 이번 귀속연도 중 근속휴가 부여 예정 */}
       {(tenureThisFy.length > 0 || tenureNextFy.length > 0) && (
         <div className="panel">
           <div className="panel-header">
             <span className="panel-title">근속휴가 부여 예정</span>
-            <span className="text-xs text-gray-500 font-normal">
-              입사 기념일 도래 시 스케줄러가 자동 부여 · 부여일부터 사용 가능
-            </span>
           </div>
           <div className="panel-body space-y-4">
             {tenureThisFy.length > 0 && (
@@ -334,7 +332,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                       <th className="px-3 py-2 text-left font-semibold">부여예정일</th>
                       <th className="px-3 py-2 text-left font-semibold">구분</th>
                       <th className="px-3 py-2 text-center font-semibold">일수</th>
-                      <th className="px-3 py-2 text-center font-semibold">상태</th>
+                      <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">상태</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -367,7 +365,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                       <th className="px-3 py-2 text-left font-semibold">부여예정일</th>
                       <th className="px-3 py-2 text-left font-semibold">구분</th>
                       <th className="px-3 py-2 text-center font-semibold">일수</th>
-                      <th className="px-3 py-2 text-center font-semibold">상태</th>
+                      <th className="px-3 py-2 text-center font-semibold whitespace-nowrap">상태</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -443,8 +441,8 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
         ) : (
           <ul className="p-3 space-y-3 md:p-0 md:space-y-0 md:divide-y md:divide-gray-100">
             {requests.map((req) => (
-              <li key={req.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm md:rounded-none md:border-0 md:shadow-none md:px-4 md:py-3 md:hover:bg-gray-50/50">
-                <div className="p-4 md:p-0">
+              <li key={req.id} className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm md:rounded-none md:border-0 md:shadow-none md:px-3 md:py-2.5 md:hover:bg-gray-50/50">
+                <div className="p-3 md:p-0">
                   <div className="flex justify-between items-start gap-3 mb-2">
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className="font-medium text-gray-900 leading-snug">
@@ -494,8 +492,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                   const detailBlock = hasMeta ? (
                     <div className="space-y-1 text-xs text-gray-600 leading-relaxed">
                       {req.approvals.length > 0 && (
-                        <p>
-                          <span className="text-gray-400">결재</span>{" "}
+                        <p className="truncate">
                           {req.approvals.map((a) => `${a.approver.name}${a.status==="APPROVED"?" ✓":a.status==="REJECTED"?" ✗":""}`).join(" → ")}
                         </p>
                       )}

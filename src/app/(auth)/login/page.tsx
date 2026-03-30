@@ -22,6 +22,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -top-16 -left-10 w-64 h-64 rounded-full bg-blue-200/30 blur-3xl" />
+        <div className="absolute top-1/3 -right-10 w-72 h-72 rounded-full bg-indigo-200/25 blur-3xl" />
+      </div>
       <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 sm:py-12 min-h-screen flex items-center">
         <div className="w-full grid lg:grid-cols-2 gap-6 lg:gap-8 items-stretch">
           <div className="hidden lg:flex rounded-3xl bg-gradient-to-br from-blue-700 to-indigo-800 p-10 text-white shadow-2xl">
@@ -53,7 +57,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl sm:rounded-3xl border border-white/60 bg-white/90 backdrop-blur p-5 sm:p-8 shadow-xl">
+          <div className="rounded-2xl sm:rounded-3xl border border-white/70 bg-white/92 backdrop-blur p-5 sm:p-8 shadow-[0_20px_50px_rgba(15,23,42,0.08)]">
             <div className="mb-6 sm:mb-8">
               <p className="text-xs font-semibold tracking-wide text-blue-700">WELCOME BACK</p>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mt-1">로그인</h1>
@@ -98,7 +102,7 @@ export default function LoginPage() {
                 </div>
               )}
 
-              <button type="submit" disabled={loading} className="btn-primary w-full h-11 sm:h-12 rounded-xl justify-center mt-2 text-sm sm:text-base">
+              <button type="submit" disabled={loading} className="btn-primary w-full h-11 sm:h-12 rounded-xl justify-center mt-2 text-sm sm:text-base shadow-sm">
                 {loading ? <><span className="spinner" /><span>로그인 중</span></> : "로그인"}
               </button>
               <p className="mt-3 text-center text-sm text-gray-500">
