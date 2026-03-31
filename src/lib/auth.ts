@@ -50,10 +50,28 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             })
           : null;
         const loginUser = user ?? fallbackUser;
-        if (!loginUser) return null;
+        if (!loginUser) {
+          console.log("[auth][credentials] no user", {
+            rawUsername,
+            normalizedPhoneUsername,
+          });
+          return null;
+        }
         const valid = await bcrypt.compare(credentials.password as string, loginUser.passwordHash);
-        if (!valid) return null;
-        if (loginUser.employee.status === "INACTIVE") return null;
+        if (!valid) {
+          console.log("[auth][credentials] invalid password", {
+            username: loginUser.username,
+            employeeId: loginUser.employeeId,
+          });
+          return null;
+        }
+        if (loginUser.employee.status === "INACTIVE") {
+          console.log("[auth][credentials] inactive employee", {
+            username: loginUser.username,
+            employeeId: loginUser.employeeId,
+          });
+          return null;
+        }
         await prisma.user.update({ where: { id: loginUser.id }, data: { lastLoginAt: new Date() } });
         return {
           id: loginUser.id, name: loginUser.employee.name, email: loginUser.employee.email ?? "",
@@ -68,6 +86,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
+        token.userId     = (user as any).id;
         token.employeeId = (user as any).employeeId;
         token.role       = (user as any).role;
         token.teamId     = (user as any).teamId;
@@ -77,6 +96,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
+        (session.user as any).id         = token.userId ?? token.sub;
         (session.user as any).employeeId = token.employeeId;
         (session.user as any).role       = token.role;
         (session.user as any).teamId     = token.teamId;

@@ -9,6 +9,7 @@ import MyLeaveMonthlyTable from "./MyLeaveMonthlyTable";
 import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 import { leaveRequestStatusMeta } from "@/lib/statusMeta";
+import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 
 export default async function MyLeavePage({ searchParams }: { searchParams: Promise<{ fy?: string; tab?:string }> }) {
   const session = await auth();
@@ -74,12 +75,13 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const now = new Date();
   // 같은 귀속연도에 근속휴가(TENURE_1Y/5Y/10Y)가 fiscalYear null + fy 두 개 있으면 하나만 표시 (init 중복 방지)
   const TENURE_CODES = new Set(["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"]);
-  const ANNUAL_POOL_SOURCES = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"]);
   const rawFyAllocs = allocations.filter((a) => a.fiscalYear === fy || !a.fiscalYear);
   const byTenureSource = new Map<string, (typeof rawFyAllocs)[0]>();
   const fyAllocs: (typeof rawFyAllocs)[0][] = [];
-  const annualPoolRows = rawFyAllocs.filter((a) => ANNUAL_POOL_SOURCES.has(a.sourceCode));
-  const baseDays = annualPoolRows.find((a) => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0;
+  const annualPoolRows = rawFyAllocs.filter((a) => isAnnualPoolSourceCode(a.sourceCode));
+  const baseDays = annualPoolRows
+    .filter((a) => a.sourceCode === "BASE_ANNUAL" || a.sourceCode.startsWith("MONTHLY_ACCRUAL_") || a.sourceCode === "ANNUAL")
+    .reduce((s, a) => s + a.totalDays, 0);
   const tenureDays = annualPoolRows.find((a) => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0;
   const carryDays = annualPoolRows.find((a) => a.sourceCode === "CARRYOVER")?.totalDays ?? 0;
   const annualBreakdownLabel = `연차 (기본 ${baseDays} · 근속 ${tenureDays} · 이월 ${carryDays})`;
@@ -99,7 +101,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
     if (TENURE_CODES.has(a.sourceCode)) {
       const cur = byTenureSource.get(a.sourceCode);
       if (!cur || (a.fiscalYear === fy && cur.fiscalYear !== fy)) byTenureSource.set(a.sourceCode, a);
-    } else if (!ANNUAL_POOL_SOURCES.has(a.sourceCode)) {
+    } else if (!isAnnualPoolSourceCode(a.sourceCode)) {
       fyAllocs.push(a);
     }
   }
@@ -113,9 +115,9 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
       .filter((v): v is string => !!v),
   );
   // 정책상 자산형으로 유지해야 하는 공통 풀(LeaveType과 직접 1:1이 아닐 수 있음)
-  const KPI_ASSET_FALLBACK = new Set(["ANNUAL", "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER", "DUTY_DEPT"]);
+  const KPI_ASSET_FALLBACK = new Set(["ANNUAL", "DUTY_DEPT"]);
   const validAllocs = fyAllocs.filter((a) => now >= new Date(a.validFrom) && now <= new Date(a.validUntil));
-  const kpiAllocs = validAllocs.filter((a) => kpiAssetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode));
+  const kpiAllocs = validAllocs.filter((a) => kpiAssetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode) || isAnnualPoolSourceCode(a.sourceCode));
   const granted  = kpiAllocs.reduce((s,a)=>s+a.totalDays, 0);
   const used     = kpiAllocs.reduce((s,a)=>s+a.usedDays,  0);
   const remain   = granted - used;

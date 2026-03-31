@@ -4,9 +4,7 @@ import prisma from "@/lib/db";
 import { sendLeaveRequestAlimtalk, sendLeaveResultAlimtalk } from "@/lib/kakao";
 import { writeAudit } from "@/lib/audit";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
-
-/** 연차 = 기본연차 + 근속가산 + 이월연차만 (특별휴가·부서추가 제외) */
-const ANNUAL_ONLY_SOURCES = ["CARRYOVER", "TENURE_BONUS", "BASE_ANNUAL"];
+import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 
 export async function POST(req: Request) {
   try {
@@ -80,12 +78,16 @@ export async function POST(req: Request) {
         const alloc = await tx.leaveAllocation.findUnique({ where: { id: allocId } });
         if (!alloc) continue;
         const expired = new Date(alloc.validUntil) < now;
-        if (ANNUAL_ONLY_SOURCES.includes(alloc.sourceCode)) {
+        if (isAnnualPoolSourceCode(alloc.sourceCode)) {
           if (!alloc.isActive || expired) {
             const fallback = await tx.leaveAllocation.findFirst({
               where: {
                 employeeId: request.employeeId,
-                sourceCode: { in: ANNUAL_ONLY_SOURCES },
+                OR: [
+                  { sourceCode: { in: [...ANNUAL_CORE_SOURCE_CODES] } },
+                  { sourceCode: "ANNUAL" },
+                  { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+                ],
                 isActive: true,
                 validUntil: { gte: now },
               },

@@ -6,6 +6,7 @@ import { formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
+import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
 
 // ── 타입 ──────────────────────────────────────────────────────
@@ -52,10 +53,6 @@ function rowUsesSingleDayOnly(it: LeaveItem, lt: LT | undefined): boolean {
   return pol.allowsHalfDay && !pol.allowsFullDay;
 }
 
-// ── 연차 = 기본연차 + 근속가산 + 이월연차만 (특별휴가·부서추가 제외) ──
-const ANNUAL_ONLY_SOURCES = new Set([
-  "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER",
-]);
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 const HIDDEN_LT_CODES = new Set(["DEPT_BONUS"]);
 
@@ -255,9 +252,15 @@ export default function LeaveApplyForm({
 
   const annualPoolAllocs = useMemo(
     () => allocations
-      .filter((a) => ANNUAL_ONLY_SOURCES.has(a.sourceCode) && a.validUntil >= now)
+      .filter((a) => isAnnualPoolSourceCode(a.sourceCode) && a.validUntil >= now)
       .sort((x, y) => x.validUntil < y.validUntil ? -1 : 1),
     [allocations, now]
+  );
+  const baseAnnualDisplayTotal = useMemo(
+    () => annualPoolAllocs
+      .filter((a) => a.sourceCode === "BASE_ANNUAL" || a.sourceCode.startsWith("MONTHLY_ACCRUAL_") || a.sourceCode === "ANNUAL")
+      .reduce((s, a) => s + a.totalDays, 0),
+    [annualPoolAllocs],
   );
   const annualPoolRemaining = useMemo(
     () => annualPoolAllocs.reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0),
@@ -937,7 +940,7 @@ export default function LeaveApplyForm({
                       {annualPoolAllocs.length > 0 && (
                         <div className="flex items-center justify-between text-xs text-orange-700">
                           <span className="truncate mr-3">
-                            연차 (기본 {annualPoolAllocs.find(a => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0} · 근속 {annualPoolAllocs.find(a => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0} · 이월 {annualPoolAllocs.find(a => a.sourceCode === "CARRYOVER")?.totalDays ?? 0})
+                            연차 (기본 {baseAnnualDisplayTotal} · 근속 {annualPoolAllocs.find(a => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0} · 이월 {annualPoolAllocs.find(a => a.sourceCode === "CARRYOVER")?.totalDays ?? 0})
                           </span>
                           <span className="shrink-0 tabular-nums">
                             잔여 {annualPoolRemaining.toFixed(1)}일

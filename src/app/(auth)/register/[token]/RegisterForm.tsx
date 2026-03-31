@@ -41,14 +41,45 @@ export default function RegisterForm({ token, employeeId }: { token: string; emp
   const [showPw, setShowPw] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
+  const [usernameCheckMsg, setUsernameCheckMsg] = useState("");
+  const [usernameChecked, setUsernameChecked] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const pwMatch = confirm.length > 0 && password === confirm;
   const pwMismatch = confirm.length > 0 && password !== confirm;
 
+  async function checkUsernameDuplication() {
+    setCheckingUsername(true);
+    setUsernameCheckMsg("");
+    const res = await fetch("/api/auth/check-username", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setCheckingUsername(false);
+    if (!res.ok) {
+      setUsernameChecked(false);
+      setUsernameCheckMsg(data.error ?? "중복 확인에 실패했습니다.");
+      return;
+    }
+    if (data?.normalizedUsername && data.normalizedUsername !== username) {
+      setUsername(data.normalizedUsername);
+    }
+    if (data.available) {
+      setUsernameChecked(true);
+      setUsernameCheckMsg("사용 가능한 아이디입니다.");
+    } else {
+      setUsernameChecked(false);
+      setUsernameCheckMsg("이미 사용 중인 아이디입니다.");
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!usernameChecked) { setError("아이디 중복 확인을 먼저 해주세요."); return; }
     if (password.length < 8) { setError("비밀번호는 8자 이상이어야 합니다."); return; }
     if (password !== confirm) { setError("비밀번호가 일치하지 않습니다."); return; }
     setLoading(true); setError("");
@@ -69,19 +100,38 @@ export default function RegisterForm({ token, employeeId }: { token: string; emp
       {/* 아이디 */}
       <div>
         <label className="label">아이디 <span className="text-red-400">*</span></label>
-        <input
-          className="input"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="영문·숫자 조합 (3자 이상)"
-          minLength={3}
-          maxLength={30}
-          pattern="[a-zA-Z0-9_]+"
-          title="영문, 숫자, 언더스코어만 사용 가능"
-          required
-          autoComplete="username"
-        />
+        <div className="flex gap-2">
+          <input
+            className="input flex-1"
+            value={username}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setUsernameChecked(false);
+              setUsernameCheckMsg("");
+            }}
+            placeholder="영문·숫자 조합 (3자 이상)"
+            minLength={3}
+            maxLength={30}
+            pattern="[a-zA-Z0-9_]+"
+            title="영문, 숫자, 언더스코어만 사용 가능"
+            required
+            autoComplete="username"
+          />
+          <button
+            type="button"
+            onClick={checkUsernameDuplication}
+            disabled={checkingUsername || username.trim().length < 3}
+            className="btn-outline whitespace-nowrap px-3"
+          >
+            {checkingUsername ? "확인 중..." : "중복 확인"}
+          </button>
+        </div>
         <p className="text-xs text-gray-400 mt-1">영문, 숫자, _ 만 사용 가능합니다.</p>
+        {!!usernameCheckMsg && (
+          <p className={`text-xs mt-1 ${usernameChecked ? "text-green-600" : "text-red-500"}`}>
+            {usernameCheckMsg}
+          </p>
+        )}
       </div>
 
       {/* 비밀번호 */}
@@ -105,6 +155,7 @@ export default function RegisterForm({ token, employeeId }: { token: string; emp
           </button>
         </div>
         <PasswordStrength password={password} />
+        <p className="text-xs text-gray-400 mt-1">비밀번호는 8자 이상, 영문/숫자/특수문자 조합을 권장합니다.</p>
       </div>
 
       {/* 비밀번호 확인 */}

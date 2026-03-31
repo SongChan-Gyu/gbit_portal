@@ -16,32 +16,22 @@ export async function GET(req: Request) {
   const take    = Math.min(parseInt(searchParams.get("take") ?? "100"), 500);
   const skip    = parseInt(searchParams.get("skip") ?? "0");
 
-  // sourceCode 필터 구성
-  let sourceFilter: object;
-  if (type === "monthly") {
-    sourceFilter = { startsWith: "MONTHLY_ACCRUAL_" };
-  } else if (type === "tenure") {
-    sourceFilter = { in: TENURE_CODES };
-  } else {
-    // all: MONTHLY_ACCRUAL_* OR TENURE_*
-    sourceFilter = {
-      OR: [
-        { startsWith: "MONTHLY_ACCRUAL_" },
-        { in: TENURE_CODES },
-      ],
-    } as any;
-  }
-
-  // sourceCode 필터 — prisma는 OR at field level 불가, where.OR 사용
+  // sourceCode/노트 기반 필터 — 월별적립은 신규(BASE_ANNUAL+note키) + 레거시(MONTHLY_ACCRUAL_*) 모두 포함
   const where: any = {
     ...(empId ? { employeeId: empId } : {}),
     ...(type === "monthly"
-      ? { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } }
+      ? {
+          OR: [
+            { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL:" } },
+          ],
+        }
       : type === "tenure"
       ? { sourceCode: { in: TENURE_CODES } }
       : {
           OR: [
             { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL:" } },
             { sourceCode: { in: TENURE_CODES } },
           ],
         }),
@@ -85,8 +75,12 @@ export async function GET(req: Request) {
 
   // 부여 유형 레이블
   const rows = allocations.map((a) => {
-    const isMonthly = a.sourceCode.startsWith("MONTHLY_ACCRUAL_");
-    const month     = isMonthly ? a.sourceCode.replace("MONTHLY_ACCRUAL_", "") : null;
+    const legacyMonthly = a.sourceCode.startsWith("MONTHLY_ACCRUAL_");
+    const monthlyFromNote = a.note?.match(/MONTHLY_ACCRUAL:(\d{4}-\d{2})/)?.[1] ?? null;
+    const isMonthly = legacyMonthly || !!monthlyFromNote;
+    const month = legacyMonthly
+      ? a.sourceCode.replace("MONTHLY_ACCRUAL_", "").replace("_", "-")
+      : monthlyFromNote;
 
     const typeLabel = isMonthly
       ? `월별적립 (${month})`

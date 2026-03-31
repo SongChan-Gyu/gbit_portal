@@ -11,6 +11,7 @@ import DashboardMonthCalendar from "./DashboardMonthCalendar";
 import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 import { leaveRequestStatusMeta } from "@/lib/statusMeta";
+import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 
 function requestTitle(req: any): string {
   const labels: string[] = req.items
@@ -113,14 +114,15 @@ export default async function DashboardPage({
   );
 
   // 부여 = 자산형 부여(메타 기반) + 정책성 공통 풀 fallback, 잔여 연차 = 연차(기본+근속가산+이월)만
-  const ANNUAL_ONLY_SOURCES = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"]);
-  const KPI_ASSET_FALLBACK = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER", "DUTY_DEPT"]);
-  const annualAllocs = allocations.filter((a) => ANNUAL_ONLY_SOURCES.has(a.sourceCode));
-  const kpiAssetAllocs = allocations.filter((a) => assetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode));
+  const KPI_ASSET_FALLBACK = new Set(["DUTY_DEPT"]);
+  const annualAllocs = allocations.filter((a) => isAnnualPoolSourceCode(a.sourceCode));
+  const kpiAssetAllocs = allocations.filter((a) => assetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode) || isAnnualPoolSourceCode(a.sourceCode));
   const totalGranted = kpiAssetAllocs.reduce((s, a) => s + a.totalDays, 0);
   const annualUsed   = annualAllocs.reduce((s, a) => s + a.usedDays, 0);  // 연차 사용
   const totalRemain  = annualAllocs.reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0); // 잔여 연차
-  const baseDays   = annualAllocs.find((a) => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0;
+  const baseDays   = annualAllocs
+    .filter((a) => a.sourceCode === "BASE_ANNUAL" || a.sourceCode.startsWith("MONTHLY_ACCRUAL_") || a.sourceCode === "ANNUAL")
+    .reduce((s, a) => s + a.totalDays, 0);
   const tenureDays = annualAllocs.find((a) => a.sourceCode === "TENURE_BONUS")?.totalDays ?? 0;
   const carryDays  = annualAllocs.find((a) => a.sourceCode === "CARRYOVER")?.totalDays ?? 0;
   const annualBreakdownLabel = `연차 (기본 ${baseDays} · 근속 ${tenureDays} · 이월 ${carryDays})`;
@@ -130,7 +132,7 @@ export default async function DashboardPage({
     totalDays: annualAllocs.reduce((s, a) => s + a.totalDays, 0),
     usedDays: annualUsed,
   } : null;
-  const otherAllocs = allocations.filter((a) => !ANNUAL_ONLY_SOURCES.has(a.sourceCode));
+  const otherAllocs = allocations.filter((a) => !isAnnualPoolSourceCode(a.sourceCode));
   const allocationsForDetail = [
     ...(annualMergedForDisplay ? [annualMergedForDisplay] : []),
     ...otherAllocs,

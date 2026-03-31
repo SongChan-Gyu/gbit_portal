@@ -75,7 +75,8 @@ export async function runMonthlyAccrual(
     tMonth = prev.getMonth() + 1;
   }
   const monthStr   = `${tYear}-${String(tMonth).padStart(2, "0")}`;
-  const sourceCode = `MONTHLY_ACCRUAL_${tYear}_${String(tMonth).padStart(2, "0")}`;
+  const sourceCode = "BASE_ANNUAL";
+  const monthlyAccrualNoteKey = `MONTHLY_ACCRUAL:${monthStr}`;
   const monthStart = new Date(tYear, tMonth - 1, 1);
   const monthEnd   = new Date(tYear, tMonth, 0);
 
@@ -99,10 +100,54 @@ export async function runMonthlyAccrual(
     }
 
     const existing = await prisma.leaveAllocation.findFirst({
-      where: { employeeId: emp.id, sourceCode },
+      where: {
+        employeeId: emp.id,
+        OR: [
+          // 신규 표준: 월별 적립도 BASE_ANNUAL로 적재, note 키로 월 구분
+          { sourceCode, note: { contains: monthlyAccrualNoteKey } },
+          // 레거시 호환
+          { sourceCode: `MONTHLY_ACCRUAL_${tYear}_${String(tMonth).padStart(2, "0")}` },
+        ],
+      },
     });
     if (existing) {
-      result.skipped.push({ employeeId: emp.id, name: emp.name, month: monthStr, days: 1, reason: "이미 적립됨" });
+      const canReactivate = !existing.isActive && existing.validUntil >= now;
+      if (canReactivate) {
+        if (dryRun) {
+          result.granted.push({
+            employeeId: emp.id,
+            name: emp.name,
+            month: monthStr,
+            days: 1,
+            reason: "비활성 기존 적립 복구 예정",
+          });
+        } else {
+          await prisma.leaveAllocation.update({
+            where: { id: existing.id },
+            data: { isActive: true },
+          });
+          await writeAudit({
+            entityType: "LeaveAllocation",
+            entityId: existing.id,
+            action: "UPDATED",
+            actorId: actorId ?? null,
+            actorName: actorId ? undefined : "스케줄러(월별적립)",
+            note: `${emp.name} ${monthStr} 월별 적립 비활성 건 복구`,
+          });
+          result.granted.push({
+            employeeId: emp.id,
+            name: emp.name,
+            month: monthStr,
+            days: 1,
+            reason: "비활성 기존 적립 복구",
+          });
+        }
+      } else {
+        const reason = existing.validFrom > now
+          ? "이미 적립됨(유효 시작 전)"
+          : "이미 적립됨";
+        result.skipped.push({ employeeId: emp.id, name: emp.name, month: monthStr, days: 1, reason });
+      }
       continue;
     }
 
@@ -119,10 +164,10 @@ export async function runMonthlyAccrual(
       const alloc = await prisma.leaveAllocation.create({
         data: {
           employeeId: emp.id, fiscalYear: fy, sourceCode,
-          label:      `월별적립(${monthStr})`,
+          label:      "기본연차",
           totalDays:  1, usedDays: 0,
           validFrom, validUntil, isActive: true,
-          note: `${monthStr} 월별 연차 자동 적립 (입사 1년 미만)`,
+          note: `${monthlyAccrualNoteKey} · 월별 연차 자동 적립 (입사 1년 미만)`,
         },
       });
       await writeAudit({
@@ -515,7 +560,8 @@ export async function getAccrualCandidates(targetMonth?: string) {
     tMonth = now.getMonth() + 1;
   }
   const monthStr   = `${tYear}-${String(tMonth).padStart(2, "0")}`;
-  const sourceCode = `MONTHLY_ACCRUAL_${tYear}_${String(tMonth).padStart(2, "0")}`;
+  const sourceCode = "BASE_ANNUAL";
+  const monthlyAccrualNoteKey = `MONTHLY_ACCRUAL:${monthStr}`;
   const monthEnd   = new Date(tYear, tMonth, 0);
 
   const employees = await prisma.employee.findMany({
@@ -535,7 +581,13 @@ export async function getAccrualCandidates(targetMonth?: string) {
     if (monthsWorked < 0 || monthsWorked >= 12 || hire > monthEnd) continue;
 
     const existing = await prisma.leaveAllocation.findFirst({
-      where: { employeeId: emp.id, sourceCode },
+      where: {
+        employeeId: emp.id,
+        OR: [
+          { sourceCode, note: { contains: monthlyAccrualNoteKey } },
+          { sourceCode: `MONTHLY_ACCRUAL_${tYear}_${String(tMonth).padStart(2, "0")}` },
+        ],
+      },
     });
 
     candidates.push({

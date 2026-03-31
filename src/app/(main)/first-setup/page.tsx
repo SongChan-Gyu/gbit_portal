@@ -9,10 +9,11 @@ export default async function FirstSetupPage() {
   const session = await auth();
   if (!session) redirect("/login");
   const userId = (session.user as any)?.id as string | undefined;
-  if (!userId) redirect("/login");
+  const employeeId = (session.user as any)?.employeeId as string | undefined;
+  if (!userId && !employeeId) redirect("/login");
 
-  const me = await prisma.user.findUnique({
-    where: { id: userId },
+  const me = await prisma.user.findFirst({
+    where: userId ? { id: userId } : { employeeId },
     select: { username: true, mustChangePassword: true },
   });
   if (!me) redirect("/login");

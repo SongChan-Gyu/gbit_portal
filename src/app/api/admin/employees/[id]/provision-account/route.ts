@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
+import { ACCOUNT_PROVISION_REASON } from "@/lib/accountProvisionMeta";
 
 type Method = "EMAIL_INVITE" | "DIRECT_CREDENTIAL";
 
@@ -27,7 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!emp) return NextResponse.json({ error: "사원을 찾을 수 없습니다." }, { status: 404 });
 
   if (method === "EMAIL_INVITE") {
-    if (emp.user) return NextResponse.json({ error: "이미 계정이 존재합니다." }, { status: 400 });
+    if (emp.user) return NextResponse.json({ error: ACCOUNT_PROVISION_REASON.ALREADY_HAS_ACCOUNT }, { status: 400 });
     const token = uuid();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await prisma.$transaction(async (tx) => {
@@ -43,16 +44,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: true, method, url, expiresAt: expiresAt.toISOString() });
   }
 
-  if (emp.user) return NextResponse.json({ error: "이미 계정이 존재합니다." }, { status: 400 });
+  if (emp.user) return NextResponse.json({ error: ACCOUNT_PROVISION_REASON.ALREADY_HAS_ACCOUNT }, { status: 400 });
   const phoneDigits = String(emp.phone ?? "").replace(/[^0-9]/g, "");
   const birthYmd = emp.birthDate
     ? `${emp.birthDate.getFullYear()}${String(emp.birthDate.getMonth() + 1).padStart(2, "0")}${String(emp.birthDate.getDate()).padStart(2, "0")}`
     : "";
   if (phoneDigits.length < 8) {
-    return NextResponse.json({ error: "휴대폰번호가 없어 직접 발급할 수 없습니다." }, { status: 400 });
+    return NextResponse.json({ error: ACCOUNT_PROVISION_REASON.PHONE_INVALID }, { status: 400 });
   }
   if (birthYmd.length !== 8) {
-    return NextResponse.json({ error: "생년월일이 없어 직접 발급할 수 없습니다." }, { status: 400 });
+    return NextResponse.json({ error: ACCOUNT_PROVISION_REASON.BIRTHDATE_MISSING }, { status: 400 });
   }
   const dup = await prisma.user.findUnique({ where: { username: phoneDigits }, select: { id: true } });
   if (dup) {

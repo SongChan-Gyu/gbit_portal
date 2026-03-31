@@ -8,13 +8,7 @@ import { countAfternoonEligible, findAfternoonStampCard } from "@/lib/stampCard"
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
 import { calcWorkingDays } from "@/lib/workdays";
 import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
-
-/** 연차 = 기본연차 + 근속가산 + 이월연차만. 특별휴가(근속1/5/10년)·부서추가는 별도 풀 */
-const ANNUAL_ONLY_SOURCES = [
-  "CARRYOVER",
-  "BASE_ANNUAL",
-  "TENURE_BONUS",
-];
+import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 
 function ymdLocal(d: Date) {
@@ -66,15 +60,27 @@ export async function POST(req: Request) {
     const poolAllocs = await prisma.leaveAllocation.findMany({
       where: {
         employeeId: user.employeeId,
-        sourceCode: { in: ANNUAL_ONLY_SOURCES },
+        OR: [
+          { sourceCode: { in: [...ANNUAL_CORE_SOURCE_CODES] } },
+          { sourceCode: "ANNUAL" },
+          { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+        ],
         isActive: true,
         validFrom: { lte: now },
         validUntil: { gte: now },
       },
     });
     poolAllocs.sort((a, b) => {
-      const ai = ANNUAL_ONLY_SOURCES.indexOf(a.sourceCode);
-      const bi = ANNUAL_ONLY_SOURCES.indexOf(b.sourceCode);
+      const rank = (sourceCode: string) => {
+        if (sourceCode === "CARRYOVER") return 0;
+        if (sourceCode === "TENURE_BONUS") return 1;
+        if (sourceCode === "BASE_ANNUAL") return 2;
+        if (sourceCode.startsWith("MONTHLY_ACCRUAL_")) return 3;
+        if (sourceCode === "ANNUAL") return 4;
+        return 9;
+      };
+      const ai = rank(a.sourceCode);
+      const bi = rank(b.sourceCode);
       if (ai !== bi) return ai - bi;
       return new Date(a.validUntil).getTime() - new Date(b.validUntil).getTime();
     });
@@ -529,12 +535,16 @@ export async function POST(req: Request) {
               const alloc = await tx.leaveAllocation.findUnique({ where: { id: allocId } });
               if (!alloc) continue;
               const expired = new Date(alloc.validUntil) < tNow;
-              if (ANNUAL_ONLY_SOURCES.includes(alloc.sourceCode)) {
+              if (isAnnualPoolSourceCode(alloc.sourceCode)) {
                 if (!alloc.isActive || expired) {
                   const fallback = await tx.leaveAllocation.findFirst({
                     where: {
                       employeeId: user.employeeId,
-                      sourceCode: { in: ANNUAL_ONLY_SOURCES },
+                      OR: [
+                        { sourceCode: { in: [...ANNUAL_CORE_SOURCE_CODES] } },
+                        { sourceCode: "ANNUAL" },
+                        { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+                      ],
                       isActive: true,
                       validUntil: { gte: tNow },
                     },

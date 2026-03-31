@@ -6,6 +6,7 @@ import { formatYMD } from "@/lib/dateUtils";
 import LeaveApplyForm from "./LeaveApplyForm";
 import { serializeDates } from "@/lib/serialize";
 import { countAfternoonEligible, countHealingEligible } from "@/lib/stampCard";
+import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 
 export default async function LeaveApplyPage() {
   const session = await auth();
@@ -44,9 +45,8 @@ export default async function LeaveApplyPage() {
       .filter((lt) => lt.isActive && lt.usageCategory === "ASSET" && !!lt.allocationSourceCode)
       .map((lt) => lt.allocationSourceCode!)
   );
-  const KPI_ASSET_FALLBACK = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER", "DUTY_DEPT"]);
   const totalAssetRemain = allocations
-    .filter((a) => assetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode))
+    .filter((a) => assetSourceCodes.has(a.sourceCode) || isAnnualPoolSourceCode(a.sourceCode) || a.sourceCode === "DUTY_DEPT")
     .filter((a) => new Date(a.validFrom) <= now && new Date(a.validUntil) >= now)
     .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0);
 

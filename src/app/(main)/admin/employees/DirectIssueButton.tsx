@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
+import { classifyProvisionReason } from "@/lib/accountProvisionMeta";
+import ProvisionResultInline from "./ProvisionResultInline";
 
 export default function DirectIssueButton({
   employeeId,
@@ -17,6 +19,7 @@ export default function DirectIssueButton({
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [resultKind, setResultKind] = useState<"SENT" | "SKIPPED" | "FAILED" | null>(null);
 
   async function run() {
     if (hasUser) return;
@@ -24,6 +27,7 @@ export default function DirectIssueButton({
     setLoading(true);
     setErr("");
     setMsg("");
+    setResultKind(null);
     const res = await fetch(`/api/admin/employees/${employeeId}/provision-account`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,10 +36,13 @@ export default function DirectIssueButton({
     const data = await res.json().catch(() => ({}));
     setLoading(false);
     if (!res.ok) {
-      setErr(data.error ?? "직접 발급 실패");
+      const reason = data.error ?? "직접 발급 실패";
+      setErr(reason);
+      setResultKind(classifyProvisionReason(reason));
       return;
     }
     setMsg(`발급 완료: ${data.username}`);
+    setResultKind("SENT");
     setTimeout(() => {
       window.location.reload();
     }, 500);
@@ -55,8 +62,8 @@ export default function DirectIssueButton({
         <KeyRound size={11} />
         {loading ? "발급 중…" : "직접 발급"}
       </button>
-      {msg && <p className="text-[11px] text-green-700 mt-1">{msg}</p>}
-      {err && <p className="text-[11px] text-red-600 mt-1">{err}</p>}
+      {msg && <ProvisionResultInline kind="SENT" message={msg} />}
+      {err && <ProvisionResultInline kind={resultKind ?? "FAILED"} message={err} />}
     </div>
   );
 }

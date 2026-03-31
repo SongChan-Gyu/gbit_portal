@@ -2,6 +2,8 @@
 import { useState } from "react";
 import { Copy, Check, Link2, RefreshCw, X, ExternalLink, Mail } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
+import { classifyProvisionReason } from "@/lib/accountProvisionMeta";
+import ProvisionResultInline from "./ProvisionResultInline";
 
 export default function InviteButton({
   employeeId, name, hasUser, buttonClassName,
@@ -20,10 +22,11 @@ export default function InviteButton({
   const [emailSending, setEmailSending] = useState(false);
   const [emailResult, setEmailResult] = useState<"ok" | "err" | null>(null);
   const [emailMessage, setEmailMessage] = useState("");
+  const [resultKind, setResultKind] = useState<"SENT" | "SKIPPED" | "FAILED" | null>(null);
 
   async function generate() {
     if (url && !confirm(`${name}님의 새 초대 링크를 발급하시겠습니까?\n기존 링크는 만료됩니다.`)) return;
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setResultKind(null);
     const res = await fetch("/api/admin/invite", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -31,10 +34,16 @@ export default function InviteButton({
     });
     const data = await res.json();
     setLoading(false);
-    if (!res.ok) { setError(data.error ?? "링크 발급 실패"); return; }
+    if (!res.ok) {
+      const reason = data.error ?? "링크 발급 실패";
+      setError(reason);
+      setResultKind(classifyProvisionReason(reason));
+      return;
+    }
     setUrl(data.url);
     setExpiresAt(data.expiresAt);
     setShowModal(true);
+    setResultKind("SENT");
   }
 
   async function copyUrl() {
@@ -182,7 +191,7 @@ export default function InviteButton({
       )}
 
       {error && (
-        <p className="text-xs text-red-500 mt-1">{error}</p>
+        <ProvisionResultInline kind={resultKind ?? "FAILED"} message={error} className="text-xs" />
       )}
     </>
   );
