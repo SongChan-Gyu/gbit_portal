@@ -2,21 +2,9 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import Link from "next/link";
-import { formatYMD } from "@/lib/dateUtils";
-import InviteButton from "@/app/(main)/admin/employees/InviteButton";
 import ExcelImportBlock from "@/app/(main)/admin/employees/ExcelImportBlock";
+import EmployeesListClient from "@/app/(main)/admin/employees/EmployeesListClient";
 import TeamsEditor from "@/app/(main)/admin/teams/TeamsEditor";
-import { employeeStatusMeta } from "@/lib/statusMeta";
-const ROLE_LABEL: Record<string,string> = {
-  STAFF:"팀원", TEAM_LEAD:"팀장", PM:"PM", ADMIN:"관리자",
-};
-const DUTY_DEPT_LABEL: Record<string, string> = {
-  OPERATIONS: "운영부", EDUCATION: "교육부", WELFARE: "복지부", NONE: "해당사항없음",
-};
-function dutyDeptDisplay(dutyDept: string | null): string {
-  if (!dutyDept) return "-";
-  return DUTY_DEPT_LABEL[dutyDept] ?? dutyDept;
-}
 
 export const metadata = { title: "인사 관리 | GBIT Portal" };
 
@@ -57,6 +45,23 @@ export default async function OrganizationPage({
     { id:"employees", label:"사원 관리" },
     { id:"teams",     label:"팀 관리" },
   ];
+  const employeeListData = employees.map((e) => ({
+    id: e.id,
+    empNo: e.empNo,
+    name: e.name,
+    teamName: e.team?.name ?? null,
+    position: e.position,
+    dutyDept: e.dutyDept ?? null,
+    employeeType: e.employeeType ?? null,
+    role: e.role,
+    status: e.status,
+    username: (e as any).user?.username ?? null,
+    hireDate: e.hireDate.toISOString(),
+    birthDate: e.birthDate ? e.birthDate.toISOString() : null,
+    phone: e.phone ?? "",
+    email: e.email ?? null,
+    emailEnabled: (e as any).emailEnabled ?? false,
+  }));
 
   return (
     <div className="space-y-4">
@@ -100,89 +105,7 @@ export default async function OrganizationPage({
               <button className="btn-primary px-5">검색</button>
             </div>
           </form>
-
-          {/* PC 테이블 */}
-          <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 shadow-sm">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>사번</th><th>이름</th><th>팀</th><th>직위</th>
-                  <th>직무부서</th>
-                  <th>역할</th><th>상태</th><th>아이디</th><th>입사일</th><th>액션</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employees.map((emp) => (
-                  <tr key={emp.id}>
-                    <td className="text-gray-500">{emp.empNo}</td>
-                    <td className="font-medium">{emp.name}</td>
-                    <td>{emp.team?.name ?? "-"}</td>
-                    <td>{emp.position}</td>
-                    <td className="text-xs">
-                      <span className={["OPERATIONS", "EDUCATION", "WELFARE"].includes((emp as { dutyDept?: string }).dutyDept ?? "") ? "text-blue-600 font-medium" : "text-gray-600"}>
-                        {dutyDeptDisplay((emp as { dutyDept?: string | null }).dutyDept ?? null)}
-                        {["OPERATIONS", "EDUCATION", "WELFARE"].includes((emp as { dutyDept?: string }).dutyDept ?? "") && (
-                          <span className="text-gray-500 font-normal ml-0.5">(2일)</span>
-                        )}
-                      </span>
-                    </td>
-                    <td><span className="text-xs font-medium">{ROLE_LABEL[emp.role]}</span></td>
-                    <td>
-                      {(() => {
-                        const st = employeeStatusMeta(emp.status);
-                        return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>;
-                      })()}
-                    </td>
-                    <td className="text-gray-500 text-xs">{(emp as any).user?.username ?? "-"}</td>
-                    <td className="text-xs text-gray-500">{formatYMD(emp.hireDate)}</td>
-                    <td>
-                      <div className="flex gap-2">
-                        <Link href={`/admin/employees/${emp.id}`} className="text-blue-500 hover:underline text-xs">수정</Link>
-                        <InviteButton employeeId={emp.id} name={emp.name} hasUser={!!(emp as any).user?.username} />
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* 모바일 카드 */}
-          <div className="md:hidden space-y-3">
-            {employees.map((emp) => (
-              <div key={emp.id} className="card">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-semibold text-gray-800">{emp.name}
-                      <span className="ml-2 text-xs text-gray-500">{emp.empNo}</span>
-                    </p>
-                    <p className="text-sm text-gray-600">{emp.team?.name ?? "-"} · {emp.position}</p>
-                    <p className="text-xs mt-0.5">
-                      <span className={["OPERATIONS", "EDUCATION", "WELFARE"].includes((emp as { dutyDept?: string }).dutyDept ?? "") ? "text-blue-600 font-medium" : "text-gray-500"}>
-                        {dutyDeptDisplay((emp as { dutyDept?: string | null }).dutyDept ?? null)}
-                        {["OPERATIONS", "EDUCATION", "WELFARE"].includes((emp as { dutyDept?: string }).dutyDept ?? "") && (
-                          <span className="text-gray-500 font-normal ml-0.5">(2일)</span>
-                        )}
-                      </span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-0.5">입사 {formatYMD(emp.hireDate)}</p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    {(() => {
-                      const st = employeeStatusMeta(emp.status);
-                      return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>;
-                    })()}
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-                  <Link href={`/admin/employees/${emp.id}`} className="btn-secondary text-xs py-1.5 px-3 flex-1 text-center">수정</Link>
-                  <div className="flex-1">
-                    <InviteButton employeeId={emp.id} name={emp.name} hasUser={!!(emp as any).user?.username} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <EmployeesListClient employees={employeeListData as any} />
         </div>
       )}
 
