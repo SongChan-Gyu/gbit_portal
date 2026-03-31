@@ -10,9 +10,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "권한 없음" }, { status: 403 });
 
   const { employeeId } = await req.json();
-  const emp = await prisma.employee.findUnique({ where: { id: employeeId } });
+  const emp = await prisma.employee.findUnique({ where: { id: employeeId }, include: { user: true } });
   if (!emp) return NextResponse.json({ error: "사원 없음" }, { status: 404 });
-  if (emp.status === "ACTIVE")
+  if (emp.user)
     return NextResponse.json({ error: "이미 계정이 있는 사원입니다." }, { status: 400 });
 
   const token = uuid();

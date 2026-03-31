@@ -35,7 +35,12 @@ export default async function LeaveManagementPage({
   const leaveTypes = await prisma.leaveType.findMany({
     where: { isActive: true },
     orderBy: { sortOrder: "asc" },
-    select: { id: true, code: true, name: true },
+    select: { id: true, code: true, name: true, allocationSourceCode: true },
+  });
+  const allocationSourceConfigs = await prisma.allocationSourceConfig.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+    select: { sourceCode: true, label: true },
   });
 
   const TABS = [
@@ -145,7 +150,20 @@ export default async function LeaveManagementPage({
               ))}
             </div>
           </div>
-          <FiscalYearManager employees={serializeDates(employees) as any} fiscalYear={fy} />
+          <FiscalYearManager
+            employees={serializeDates(employees) as any}
+            fiscalYear={fy}
+            sourceOptions={Array.from(
+              new Map(
+                [
+                  ...allocationSourceConfigs.map((s) => [s.sourceCode, s.label] as const),
+                  ...leaveTypes
+                    .filter((t) => !!t.allocationSourceCode)
+                    .map((t) => [String(t.allocationSourceCode), t.name] as const),
+                ],
+              ).entries(),
+            ).map(([value, label]) => ({ value, label }))}
+          />
         </div>
       )}
 

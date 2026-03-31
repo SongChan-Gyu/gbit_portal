@@ -10,6 +10,9 @@ interface LT {
   isAmOnly:boolean; isPmOnly:boolean;
   allowsFullDay:boolean; allowsHalfDay:boolean; halfDayAmPm:string;
   applyGroupKey:string|null;
+  usageCategory:string;
+  displayHint:string|null;
+  includeInFiscalInit:boolean;
   validityBasis:string; validityMonths:number|null;
   isActive:boolean; sortOrder:number; color:string;
   /** LeaveAllocation.sourceCode 와 동일하면 그 부여 풀에서만 차감 */
@@ -39,6 +42,8 @@ function newBlank(): Partial<LT> {
     code:"", name:"", daysPerUnit:1, deductFromBalance:true, approvalSteps:2,
     maxPerMonth:null, maxPerYear:null, requiresStamp:false, stampCount:null,
     allowsFullDay:true, allowsHalfDay:false, halfDayAmPm:"BOTH", applyGroupKey:null,
+    usageCategory:"ASSET", displayHint:null,
+    includeInFiscalInit:true,
     isHalf:false, isAmOnly:false, isPmOnly:false,
     validityBasis:"귀속연도", validityMonths:null, isActive:true, sortOrder:99, color:"#3b82f6",
   };
@@ -390,7 +395,24 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
                     const v = e.target.value.trim();
                     set("applyGroupKey", v || null);
                   }} />
-                <p className="text-xs text-gray-400 mt-1">휴가 신청 카테고리 탭을 나눕니다. 시드 기본값은 코드별로 정해져 있습니다.</p>
+                <p className="text-xs text-gray-400 mt-1">휴가 신청 카드 묶음 키입니다. 같은 키는 같은 카드 묶음으로 보입니다.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="label">신청/내역 분류</label>
+                  <select className="input" value={editing.usageCategory ?? "ASSET"}
+                    onChange={(e)=>set("usageCategory", e.target.value)}>
+                    <option value="ASSET">자산형 (부여·차감 관리)</option>
+                    <option value="REASON">사유형 (승인일수 집계)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label">카드 설명 문구</label>
+                  <input className="input text-sm" placeholder="예: 연 2일 한도"
+                    value={editing.displayHint ?? ""}
+                    onChange={(e)=>set("displayHint", e.target.value || null)} />
+                </div>
               </div>
 
               {/* 유효기간 */}
@@ -470,6 +492,7 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   {([
                     ["requiresStamp", "스탬프 쿠폰 필요"],
+                    ["includeInFiscalInit", "귀속연도 초기화 포함"],
                     ["isActive",      "활성화"],
                   ] as [keyof LT, string][]).map(([k,l]) => (
                     <label key={k as string} className="flex items-center gap-2 text-sm cursor-pointer py-1">

@@ -29,6 +29,11 @@ export async function POST(req: Request) {
     typeof body.applyGroupKey === "string" && body.applyGroupKey.trim()
       ? body.applyGroupKey.trim()
       : null;
+  const usageCategory = body.usageCategory === "REASON" ? "REASON" : "ASSET";
+  const displayHint =
+    typeof body.displayHint === "string" && body.displayHint.trim()
+      ? body.displayHint.trim()
+      : null;
   const legacy = deriveLegacyHalfFlags({ allowsFullDay, allowsHalfDay, halfDayAmPm });
 
   const lt = await prisma.leaveType.create({
@@ -39,11 +44,32 @@ export async function POST(req: Request) {
       requiresStamp:body.requiresStamp??false, stampCount:body.stampCount??null,
       allowsFullDay, allowsHalfDay, halfDayAmPm,
       applyGroupKey,
+      usageCategory,
+      displayHint,
+      includeInFiscalInit: body.includeInFiscalInit ?? true,
       isHalf: legacy.isHalf, isAmOnly: legacy.isAmOnly, isPmOnly: legacy.isPmOnly,
       validityBasis:body.validityBasis??"FISCAL", validityMonths:body.validityMonths??null,
       isActive:body.isActive??true, sortOrder:body.sortOrder??99, color:body.color??"#3b82f6",
       allocationSourceCode: allocSrc,
     },
   });
+  if (allocSrc && (body.validityBasis ?? "FISCAL") === "귀속연도") {
+    const defaultDays =
+      body.maxPerYear != null ? Number(body.maxPerYear) : Number(body.daysPerUnit ?? 1);
+    await prisma.allocationSourceConfig.upsert({
+      where: { sourceCode: allocSrc },
+      update: {
+        label: body.name,
+        defaultDays: Number.isFinite(defaultDays) ? defaultDays : null,
+        isActive: true,
+      },
+      create: {
+        sourceCode: allocSrc,
+        label: body.name,
+        defaultDays: Number.isFinite(defaultDays) ? defaultDays : null,
+        isActive: true,
+      },
+    });
+  }
   return NextResponse.json({ ok:true, id:lt.id });
 }

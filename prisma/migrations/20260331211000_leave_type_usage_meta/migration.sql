@@ -1,0 +1,4 @@
+ALTER TABLE `LeaveType`
+  ADD COLUMN `usageCategory` VARCHAR(20) NOT NULL DEFAULT 'ASSET',
+  ADD COLUMN `displayHint` VARCHAR(191) NULL;
+

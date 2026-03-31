@@ -2,13 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 
-/** 스케줄러가 자동 부여하는 sourceCode 패턴 */
-const AUTO_SOURCE_PREFIXES = ["MONTHLY_ACCRUAL_", "TENURE_"];
 const TENURE_CODES = ["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"];
-
-function isAutoSource(code: string) {
-  return code.startsWith("MONTHLY_ACCRUAL_") || TENURE_CODES.includes(code);
-}
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -71,6 +65,23 @@ export async function GET(req: Request) {
       skip,
     }),
   ]);
+  const [sourceConfigs, leaveTypes] = await Promise.all([
+    prisma.allocationSourceConfig.findMany({
+      where: { isActive: true },
+      select: { sourceCode: true, label: true },
+    }),
+    prisma.leaveType.findMany({
+      where: { isActive: true, allocationSourceCode: { not: null } },
+      select: { allocationSourceCode: true, name: true },
+    }),
+  ]);
+  const sourceLabelMap = new Map<string, string>();
+  sourceConfigs.forEach((s) => sourceLabelMap.set(s.sourceCode, s.label));
+  leaveTypes.forEach((lt) => {
+    if (lt.allocationSourceCode && !sourceLabelMap.has(lt.allocationSourceCode)) {
+      sourceLabelMap.set(lt.allocationSourceCode, lt.name);
+    }
+  });
 
   // 부여 유형 레이블
   const rows = allocations.map((a) => {
@@ -79,10 +90,7 @@ export async function GET(req: Request) {
 
     const typeLabel = isMonthly
       ? `월별적립 (${month})`
-      : a.sourceCode === "TENURE_1Y"  ? "1년 근속"
-      : a.sourceCode === "TENURE_5Y"  ? "5년 근속"
-      : a.sourceCode === "TENURE_10Y" ? "10년 근속"
-      : a.sourceCode;
+      : sourceLabelMap.get(a.sourceCode) ?? a.label ?? a.sourceCode;
 
     const now     = new Date();
     const validUntil = new Date(a.validUntil);

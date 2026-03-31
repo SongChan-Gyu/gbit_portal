@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import InviteButton from "./InviteButton";
 import ResetPasswordButton from "./ResetPasswordButton";
+import DirectIssueButton from "./DirectIssueButton";
+import { employeeStatusMeta } from "@/lib/statusMeta";
 
 type Emp = {
   id: string;
@@ -17,21 +19,12 @@ type Emp = {
   status: string;
   username: string | null;
   hireDate: string;
+  birthDate: string | null;
+  phone: string;
+  email: string | null;
   emailEnabled: boolean;
 };
 
-const STATUS_BADGE: Record<string, string> = {
-  PENDING: "bg-gray-100 text-gray-500",
-  INVITED: "bg-yellow-100 text-yellow-700",
-  ACTIVE: "bg-green-100 text-green-700",
-  INACTIVE: "bg-red-100 text-red-500",
-};
-const STATUS_LABEL: Record<string, string> = {
-  PENDING: "미초대",
-  INVITED: "초대발송",
-  ACTIVE: "재직",
-  INACTIVE: "퇴직",
-};
 const ROLE_LABEL: Record<string, string> = {
   STAFF: "팀원",
   TEAM_LEAD: "팀장",
@@ -54,6 +47,7 @@ function formatYMD(iso: string) {
 
 export default function EmployeesListClient({ employees }: { employees: Emp[] }) {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [bulkMethod, setBulkMethod] = useState<"EMAIL_INVITE" | "DIRECT_CREDENTIAL">("EMAIL_INVITE");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkResult, setBulkResult] = useState<any>(null);
   const [bulkError, setBulkError] = useState("");
@@ -61,14 +55,18 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
   const ids = useMemo(() => employees.map((e) => e.id), [employees]);
   const selectedIds = useMemo(() => ids.filter((id) => selected[id]), [ids, selected]);
 
-  const eligibleIds = useMemo(
-    () => employees.filter((e) => e.status !== "ACTIVE" && e.emailEnabled).map((e) => e.id),
+  const selectableIds = useMemo(
+    () => employees.filter((e) => !e.username).map((e) => e.id),
     [employees]
+  );
+  const directExpectedFailCount = useMemo(
+    () => employees.filter((e) => !e.username).filter((e) => String(e.phone ?? "").replace(/[^0-9]/g, "").length < 8 || !e.birthDate).length,
+    [employees],
   );
 
   function toggleAllEligible(v: boolean) {
     const next: Record<string, boolean> = { ...selected };
-    for (const id of eligibleIds) next[id] = v;
+    for (const id of selectableIds) next[id] = v;
     setSelected(next);
   }
 
@@ -81,7 +79,10 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
     }
     setBulkLoading(true);
     try {
-      const res = await fetch("/api/admin/invite/bulk", {
+      const endpoint = bulkMethod === "EMAIL_INVITE"
+        ? "/api/admin/invite/bulk"
+        : "/api/admin/employees/provision-direct/bulk";
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeIds: selectedIds }),
@@ -103,9 +104,30 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
     <div className="space-y-4">
       <div className="rounded-xl border border-gray-200 bg-white shadow-sm p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div className="text-sm text-gray-700">
-          <p className="font-semibold">초대 이메일 일괄 발송</p>
+          <p className="font-semibold">계정 발급 일괄 처리</p>
+          <div className="mt-2 flex gap-3 text-xs">
+            <label className="inline-flex items-center gap-1.5">
+              <input
+                type="radio"
+                checked={bulkMethod === "EMAIL_INVITE"}
+                onChange={() => setBulkMethod("EMAIL_INVITE")}
+              />
+              이메일 초대
+            </label>
+            <label className="inline-flex items-center gap-1.5">
+              <input
+                type="radio"
+                checked={bulkMethod === "DIRECT_CREDENTIAL"}
+                onChange={() => setBulkMethod("DIRECT_CREDENTIAL")}
+              />
+              직접 발급
+            </label>
+          </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            기본 정책상 <span className="font-medium">이메일 전송(수신) 사용</span>으로 켠 사원에게만 발송됩니다.
+            한 사원당 이메일 초대/직접 발급 중 하나만 적용됩니다. 이미 계정이 있으면 자동 스킵됩니다.
+            {bulkMethod === "DIRECT_CREDENTIAL" && directExpectedFailCount > 0 && (
+              <span className="ml-1 text-amber-700">· 예상 스킵 {directExpectedFailCount}명(휴대폰/생년월일 누락)</span>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -116,7 +138,11 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
             선택 해제
           </button>
           <button type="button" className="btn-primary px-4 py-2 text-sm" onClick={bulkSend} disabled={bulkLoading}>
-            {bulkLoading ? "발송 중..." : `선택 ${selectedIds.length}명 초대 이메일 발송`}
+            {bulkLoading
+              ? (bulkMethod === "EMAIL_INVITE" ? "발송 중..." : "발급 중...")
+              : (bulkMethod === "EMAIL_INVITE"
+                ? `선택 ${selectedIds.length}명 이메일 초대`
+                : `선택 ${selectedIds.length}명 직접 발급`)}
           </button>
         </div>
       </div>
@@ -125,8 +151,21 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
         <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 px-4 py-2 text-sm">{bulkError}</div>
       )}
       {bulkResult?.summary && (
-        <div className="rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm">
-          발송 완료 {bulkResult.summary.sent} · 스킵 {bulkResult.summary.skipped} · 실패 {bulkResult.summary.failed}
+        <div className="rounded-lg bg-green-50 border border-green-200 text-green-800 px-4 py-2 text-sm space-y-2">
+          <p>
+            완료 {bulkResult.summary.sent} · 스킵 {bulkResult.summary.skipped} · 실패 {bulkResult.summary.failed}
+          </p>
+          {Array.isArray(bulkResult.results) && bulkResult.results.length > 0 && (
+            <div className="max-h-44 overflow-y-auto rounded border border-green-200 bg-white/70 p-2 space-y-1 text-xs">
+              {bulkResult.results.map((r: any, idx: number) => (
+                <p key={`${r.employeeId}-${idx}`} className="text-gray-700">
+                  [{r.status}] {r.name}
+                  {r.username ? ` (${r.username})` : ""}
+                  {r.reason ? ` - ${r.reason}` : ""}
+                </p>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -138,7 +177,7 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
                 <input
                   type="checkbox"
-                  checked={eligibleIds.length > 0 && eligibleIds.every((id) => selected[id])}
+                  checked={selectableIds.length > 0 && selectableIds.every((id) => selected[id])}
                   onChange={(e) => toggleAllEligible(e.target.checked)}
                 />
               </th>
@@ -156,16 +195,16 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
           </thead>
           <tbody>
             {employees.map((emp) => {
-              const eligible = emp.status !== "ACTIVE" && emp.emailEnabled;
+              const selectable = !emp.username;
               return (
                 <tr key={emp.id} className="border-b border-gray-100 hover:bg-gray-50/50 last:border-0">
                   <td className="px-3 py-3">
                     <input
                       type="checkbox"
                       checked={!!selected[emp.id]}
-                      disabled={!eligible}
+                      disabled={!selectable}
                       onChange={(e) => setSelected((p) => ({ ...p, [emp.id]: e.target.checked }))}
-                      title={eligible ? "선택" : "발송대상 아님(재직/이메일미사용)"}
+                      title={selectable ? "선택" : "이미 계정 있음"}
                     />
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-sm">{emp.empNo}</td>
@@ -174,9 +213,10 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
                   <td className="px-4 py-3 text-sm">{emp.position}</td>
                   <td className="px-4 py-3 text-xs text-gray-600">{dutyDeptDisplay(emp.dutyDept)}</td>
                   <td className="px-4 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_BADGE[emp.status]}`}>
-                      {STATUS_LABEL[emp.status]}
-                    </span>
+                    {(() => {
+                      const st = employeeStatusMeta(emp.status);
+                      return <span className={`text-xs px-2 py-1 rounded-full font-medium ${st.badge}`}>{st.label}</span>;
+                    })()}
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-sm">{emp.username ?? "-"}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{formatYMD(emp.hireDate)}</td>
@@ -186,7 +226,8 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2 flex-wrap">
                       <Link href={`/admin/employees/${emp.id}`} className="text-sm text-blue-600 hover:text-blue-800 font-medium">수정</Link>
-                      <InviteButton employeeId={emp.id} name={emp.name} currentStatus={emp.status} />
+                      <InviteButton employeeId={emp.id} name={emp.name} hasUser={!!emp.username} />
+                      <DirectIssueButton employeeId={emp.id} name={emp.name} hasUser={!!emp.username} />
                       <ResetPasswordButton employeeId={emp.id} name={emp.name} hasUser={!!emp.username} />
                     </div>
                   </td>
@@ -200,7 +241,7 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
       {/* 모바일: 카드 */}
       <div className="md:hidden space-y-4">
         {employees.map((emp) => {
-          const eligible = emp.status !== "ACTIVE" && emp.emailEnabled;
+          const selectable = !emp.username;
           return (
             <div key={emp.id} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
@@ -209,7 +250,7 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
                     <input
                       type="checkbox"
                       checked={!!selected[emp.id]}
-                      disabled={!eligible}
+                      disabled={!selectable}
                       onChange={(e) => setSelected((p) => ({ ...p, [emp.id]: e.target.checked }))}
                     />
                     <p className="font-semibold text-gray-800 text-base truncate">
@@ -219,9 +260,10 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
                   </div>
                   <p className="text-sm text-gray-600 mt-0.5">{emp.teamName ?? "-"} · {emp.position}</p>
                   <div className="flex flex-wrap gap-1.5 mt-2 items-center">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[emp.status]}`}>
-                      {STATUS_LABEL[emp.status]}
-                    </span>
+                    {(() => {
+                      const st = employeeStatusMeta(emp.status);
+                      return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>;
+                    })()}
                     <span className={emp.emailEnabled ? "text-xs text-green-700 font-medium" : "text-xs text-gray-400"}>
                       이메일 {emp.emailEnabled ? "사용" : "미사용"}
                     </span>
@@ -236,8 +278,17 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
                   className="flex-1 min-w-0 py-2.5 rounded-lg text-center text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition">
                   수정
                 </Link>
-                <InviteButton employeeId={emp.id} name={emp.name} currentStatus={emp.status} />
-                <ResetPasswordButton employeeId={emp.id} name={emp.name} hasUser={!!emp.username} />
+                <div className="flex-1 min-w-0">
+                  <InviteButton employeeId={emp.id} name={emp.name} hasUser={!!emp.username} buttonClassName="w-full justify-center py-2.5 text-sm" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <DirectIssueButton employeeId={emp.id} name={emp.name} hasUser={!!emp.username} buttonClassName="w-full justify-center py-2.5 text-sm" />
+                </div>
+                {emp.username && (
+                  <div className="flex-1 min-w-0">
+                    <ResetPasswordButton employeeId={emp.id} name={emp.name} hasUser={!!emp.username} buttonClassName="w-full justify-center py-2.5 text-sm" />
+                  </div>
+                )}
               </div>
             </div>
           );

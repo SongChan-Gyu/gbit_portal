@@ -25,6 +25,7 @@ const DUTY_DEPT_OPTIONS = [
 
 export default function EmployeeForm({ teams, employee }: { teams:Team[]; employee?:Employee }) {
   const router = useRouter();
+  const today = new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState<Partial<Employee>>(employee
     ? {
       ...employee,
@@ -33,9 +34,11 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
       birthDate: employee.birthDate ? String(employee.birthDate).slice(0,10) : "",
     }
     : {
+      position: "사원",
       role:"STAFF",
       employeeType:"FULL",
       status:"PENDING",
+      hireDate: today,
       dutyDept:"",
       emailEnabled: false,
       alimtalkEnabled: false,
@@ -43,8 +46,6 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [issueByEmail, setIssueByEmail] = useState(true);
-  const [issueDirect, setIssueDirect] = useState(false);
 
   const isEdit = !!employee;
 
@@ -63,25 +64,11 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
       headers: {"Content-Type":"application/json"},
       body: JSON.stringify({
         ...form,
-        ...(isEdit
-          ? {}
-          : {
-              accountProvision: {
-                modes: [
-                  ...(issueByEmail ? ["EMAIL_INVITE"] : []),
-                  ...(issueDirect ? ["DIRECT_CREDENTIAL"] : []),
-                ],
-              },
-            }),
       }),
     });
     const data = await res.json();
     setLoading(false);
     if (!res.ok) { setError(data.error ?? "저장 실패"); return; }
-    const notices = Array.isArray(data?.notices) ? data.notices.filter(Boolean) : [];
-    if (notices.length > 0) {
-      window.alert(notices.join("\n"));
-    }
     router.push("/admin/employees");
     router.refresh();
   }
@@ -106,34 +93,6 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
         </div>
       </div>
 
-      {!isEdit && (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-          <p className="text-sm font-semibold text-gray-900">계정 생성 방식</p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={issueByEmail} onChange={(e)=>setIssueByEmail(e.target.checked)} />
-            이메일 초대 링크 발송 방식
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={issueDirect}
-              onChange={(e)=>setIssueDirect(e.target.checked)}
-            />
-            사원정보 기반 즉시 계정 발급 방식
-          </label>
-          {issueDirect && (
-            <div className="pt-1 text-xs text-gray-600 leading-relaxed rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
-              아이디는 <b>휴대폰번호 숫자만</b>으로 생성되고, 비밀번호는 <b>생년월일 8자리</b>로 생성됩니다.
-              <br />
-              휴대폰번호 또는 생년월일이 없으면 해당 사원은 직접 발급을 건너뛰고 안내만 표시됩니다.
-              <br />
-              최초 로그인 시 아이디/비밀번호를 반드시 재설정해야 합니다.
-            </div>
-          )}
-          <p className="text-xs text-gray-500">두 방식 동시 선택도 가능합니다. (즉시 발급 + 이메일 안내)</p>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">팀</label>
@@ -145,6 +104,7 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
         <div>
           <label className="label">직급 *</label>
           <select className="input" value={form.position??""} onChange={(e)=>set("position",e.target.value)} required>
+            <option value="" disabled>선택</option>
             {POSITIONS.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </div>

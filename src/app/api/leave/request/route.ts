@@ -119,6 +119,11 @@ export async function POST(req: Request) {
     });
     const holidaySet = new Set(rangeHolidays.map((h) => h.date.toISOString().slice(0, 10)));
     const holidayList = Array.from(holidaySet);
+    const sourceLabel = (sourceCode: string) => {
+      const fromType = Object.values(ltMap).find((t) => t.allocationSourceCode === sourceCode)?.name;
+      const fromAlloc = (allocsBySource.get(sourceCode) ?? [])[0]?.label;
+      return fromType || fromAlloc || sourceCode;
+    };
     const isHolidayOrWeekend = (ymd: string) => {
       const d = new Date(ymd);
       const dow = d.getDay();
@@ -325,7 +330,7 @@ export async function POST(req: Request) {
       if (requested > 0 && requested > rem) {
         return NextResponse.json(
           {
-            error: `「${src}」부여 휴가 잔여 부족 (잔여 ${rem.toFixed(1)}일, 신청 ${requested.toFixed(1)}일). PM·관리자에게 부여 후 이용해 주세요.`,
+            error: `「${sourceLabel(src)}」부여 휴가 잔여 부족 (잔여 ${rem.toFixed(1)}일, 신청 ${requested.toFixed(1)}일). PM·관리자에게 부여 후 이용해 주세요.`,
           },
           { status: 400 },
         );

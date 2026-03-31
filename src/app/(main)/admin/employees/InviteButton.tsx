@@ -4,11 +4,12 @@ import { Copy, Check, Link2, RefreshCw, X, ExternalLink, Mail } from "lucide-rea
 import { formatYMD } from "@/lib/dateUtils";
 
 export default function InviteButton({
-  employeeId, name, currentStatus,
+  employeeId, name, hasUser, buttonClassName,
 }: {
   employeeId: string;
   name: string;
-  currentStatus: string;
+  hasUser: boolean;
+  buttonClassName?: string;
 }) {
   const [loading, setLoading] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -70,21 +71,19 @@ export default function InviteButton({
     }
   }
 
-  const isActive = currentStatus === "ACTIVE";
-
   return (
     <>
       <button
-        onClick={isActive ? undefined : generate}
-        disabled={loading || isActive}
+        onClick={hasUser ? undefined : generate}
+        disabled={loading || hasUser}
         className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
-          isActive
+          hasUser
             ? "bg-gray-100 text-gray-400 cursor-not-allowed"
             : "bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200"
-        }`}>
+        } ${buttonClassName ?? ""}`}>
         {loading
           ? <><RefreshCw size={11} className="animate-spin" /><span>생성 중…</span></>
-          : <><Link2 size={11} /><span>초대 링크</span></>}
+          : <><Link2 size={11} /><span>이메일 초대</span></>}
       </button>
 
       {/* 링크 모달 */}

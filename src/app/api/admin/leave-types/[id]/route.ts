@@ -34,10 +34,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     approvalSteps:body.approvalSteps, maxPerMonth:body.maxPerMonth??null, maxPerYear:body.maxPerYear??null,
     requiresStamp:body.requiresStamp, stampCount:body.stampCount??null,
     allowsFullDay, allowsHalfDay, halfDayAmPm: hd,
+    includeInFiscalInit: body.includeInFiscalInit ?? undefined,
     isHalf: legacy.isHalf, isAmOnly: legacy.isAmOnly, isPmOnly: legacy.isPmOnly,
     validityBasis:body.validityBasis, validityMonths:body.validityMonths??null,
     isActive:body.isActive, sortOrder:body.sortOrder, color:body.color,
   };
+  if ("usageCategory" in body) {
+    data.usageCategory = body.usageCategory === "REASON" ? "REASON" : "ASSET";
+  }
+  if ("displayHint" in body) {
+    data.displayHint =
+      typeof body.displayHint === "string" && body.displayHint.trim()
+        ? body.displayHint.trim()
+        : null;
+  }
   if ("allocationSourceCode" in body) {
     data.allocationSourceCode =
       typeof body.allocationSourceCode === "string" && body.allocationSourceCode.trim()
@@ -50,6 +60,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
         ? body.applyGroupKey.trim()
         : null;
   }
-  await prisma.leaveType.update({ where:{ id }, data });
+  const updated = await prisma.leaveType.update({ where:{ id }, data });
+  if (updated.allocationSourceCode && updated.validityBasis === "귀속연도") {
+    const defaultDays =
+      updated.maxPerYear != null ? Number(updated.maxPerYear) : Number(updated.daysPerUnit ?? 1);
+    await prisma.allocationSourceConfig.upsert({
+      where: { sourceCode: updated.allocationSourceCode },
+      update: {
+        label: updated.name,
+        defaultDays: Number.isFinite(defaultDays) ? defaultDays : null,
+        isActive: true,
+      },
+      create: {
+        sourceCode: updated.allocationSourceCode,
+        label: updated.name,
+        defaultDays: Number.isFinite(defaultDays) ? defaultDays : null,
+        isActive: true,
+      },
+    });
+  }
   return NextResponse.json({ ok:true });
 }

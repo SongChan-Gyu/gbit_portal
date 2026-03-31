@@ -14,11 +14,14 @@ interface LT {
   deductFromBalance: boolean; approvalSteps: number;
   maxPerMonth: number | null; requiresStamp: boolean; stampCount: number | null;
   isHalf: boolean; isAmOnly: boolean; isPmOnly: boolean;
+  applyGroupKey?: string | null;
   allowsFullDay?: boolean | null;
   allowsHalfDay?: boolean | null;
   halfDayAmPm?: string | null;
   color: string;
   allocationSourceCode: string | null;
+  usageCategory?: string | null;
+  displayHint?: string | null;
 }
 interface Alloc {
   id: string; sourceCode: string; label: string; totalDays: number; usedDays: number;
@@ -63,44 +66,44 @@ type GroupDef = {
   borderClass: string; subs: SubDef[];
 };
 
-const LEAVE_GROUPS: GroupDef[] = [
+const LEAVE_GROUPS_BASE: GroupDef[] = [
   {
-    key: "annual", label: "연차", meta: "연차 차감",
+    key: "annual", label: "연차", meta: "",
     color: "#2563eb", borderClass: "border-blue-500",
     subs: [
       { label: "선택", code: "ANNUAL" },
     ],
   },
   {
-    key: "public", label: "공가", meta: "연차 미차감",
+    key: "public", label: "공가", meta: "",
     color: "#64748b", borderClass: "border-slate-600",
     subs: [
       { label: "선택", code: "PUBLIC" },
     ],
   },
   {
-    key: "recognition", label: "인정휴가", meta: "연차 미차감",
+    key: "recognition", label: "인정휴가", meta: "",
     color: "#475569", borderClass: "border-slate-500",
     subs: [
       { label: "선택", code: "RECOGNITION" },
     ],
   },
   {
-    key: "care", label: "돌봄휴가", meta: "연 2일 한도",
+    key: "care", label: "돌봄휴가", meta: "",
     color: "#059669", borderClass: "border-emerald-500",
     subs: [
       { label: "선택", code: "CARE" },
     ],
   },
   {
-    key: "holidayExt", label: "연휴연장휴가", meta: "귀속연도 1일 (오전·오후·종일)",
+    key: "holidayExt", label: "연휴연장휴가", meta: "",
     color: "#0ea5e9", borderClass: "border-sky-500",
     subs: [
       { label: "선택", code: "HOLIDAY_EXT", desc: "연휴 3일 이상 시 앞뒤 연속일 사용 가능" },
     ],
   },
   {
-    key: "stamp", label: "스탬프", meta: "힐링데이·오후인정",
+    key: "stamp", label: "스탬프", meta: "",
     color: "#d97706", borderClass: "border-amber-500",
     subs: [
       { label: "힐링데이",   code: "HEALING", desc: "스탬프 메뉴에서 신청 (장당 1회)" },
@@ -108,22 +111,22 @@ const LEAVE_GROUPS: GroupDef[] = [
     ],
   },
   {
-    key: "halfday", label: "하프데이", meta: "수요일 오후",
+    key: "halfday", label: "하프데이", meta: "",
     color: "#0284c7", borderClass: "border-sky-500",
     subs: [{ label: "하프데이", code: "PM_HALF_MONTH", desc: "월 1회" }],
   },
   {
-    key: "sick", label: "병가", meta: "미차감 (급여만 감액)",
+    key: "sick", label: "병가", meta: "",
     color: "#dc2626", borderClass: "border-red-500",
     subs: [{ label: "신청", code: "SICK" }],
   },
   {
-    key: "award", label: "포상휴가", meta: "별도 부여",
+    key: "award", label: "포상휴가", meta: "",
     color: "#7c3aed", borderClass: "border-violet-500",
     subs: [{ label: "신청", code: "AWARD" }],
   },
   {
-    key: "tenure", label: "근속휴가", meta: "보유자만 신청 가능",
+    key: "tenure", label: "근속휴가", meta: "",
     color: "#10b981", borderClass: "border-emerald-600",
     subs: [
       { label: "1년 근속", code: "TENURE_1Y" },
@@ -132,7 +135,7 @@ const LEAVE_GROUPS: GroupDef[] = [
     ],
   },
   {
-    key: "birthday", label: "생일반차", meta: "생일 해당 월 자동 부여 0.5일",
+    key: "birthday", label: "생일반차", meta: "",
     color: "#ec4899", borderClass: "border-pink-500",
     subs: [
       { label: "선택", code: "BIRTHDAY_HALF", desc: "0.5일" },
@@ -140,14 +143,18 @@ const LEAVE_GROUPS: GroupDef[] = [
   },
 ];
 
-const CODE_TO_GROUP: Record<string, string> = {};
-LEAVE_GROUPS.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP[s.code] = g.key; }));
+const CODE_TO_GROUP_BASE: Record<string, string> = {};
+LEAVE_GROUPS_BASE.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP_BASE[s.code] = g.key; }));
 
 /** UI: 자산형(소모 가능 부여) vs 사유형 — 섹션 분리 */
-const ASSET_GROUP_KEYS = new Set([
+const BASE_ASSET_GROUP_KEYS = new Set([
   "annual", "care", "holidayExt", "stamp", "halfday", "award", "birthday", "tenure",
 ]);
-const REASON_GROUP_KEYS = new Set(["public", "recognition", "sick"]);
+const BASE_REASON_GROUP_KEYS = new Set(["public", "recognition", "sick"]);
+
+function leaveTypeMetaText(lt: LT): string {
+  return lt.displayHint?.trim() ?? "";
+}
 
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
 function ymdWithDay(ymd: string): string {
@@ -275,21 +282,61 @@ export default function LeaveApplyForm({
     return true;
   };
 
+  const dynamicLeaveGroups = useMemo<GroupDef[]>(() => {
+    const base = LEAVE_GROUPS_BASE.map((g) => ({ ...g, subs: [...g.subs] }));
+    const knownCodes = new Set(base.flatMap((g) => g.subs.map((s) => s.code)));
+    const extras = leaveTypes
+      .filter((t) => !HIDDEN_LT_CODES.has(t.code))
+      .filter((t) => !knownCodes.has(t.code))
+      .map((t) => t);
+    const customByKey = new Map<string, GroupDef>();
+    for (const t of extras) {
+      const rawKey = (t.applyGroupKey ?? "").trim().toLowerCase();
+      const keyPart = rawKey || t.code.toLowerCase();
+      const isReason =
+        t.usageCategory === "REASON" ||
+        (!t.deductFromBalance && !t.allocationSourceCode &&
+        (rawKey.includes("reason") || rawKey.includes("public") || rawKey.includes("recognition") || rawKey.includes("sick")));
+      const groupKey = `${isReason ? "custom-reason:" : "custom-asset:"}${keyPart}`;
+      const current = customByKey.get(groupKey);
+      const sub = { label: t.name, code: t.code, desc: leaveTypeMetaText(t) };
+      if (!current) {
+        customByKey.set(groupKey, {
+          key: groupKey,
+          label: t.name,
+          meta: leaveTypeMetaText(t),
+          color: t.color || (isReason ? "#64748b" : "#2563eb"),
+          borderClass: isReason ? "border-slate-500" : "border-blue-500",
+          subs: [sub],
+        });
+      } else {
+        current.subs.push(sub);
+      }
+    }
+    base.push(...Array.from(customByKey.values()));
+    return base;
+  }, [leaveTypes]);
+  const codeToGroup = useMemo(() => {
+    const m: Record<string, string> = { ...CODE_TO_GROUP_BASE };
+    dynamicLeaveGroups.forEach((g) => g.subs.forEach((s) => { m[s.code] = g.key; }));
+    return m;
+  }, [dynamicLeaveGroups]);
+
   const visibleLeaveGroups = useMemo(() => {
-    return LEAVE_GROUPS
+    return dynamicLeaveGroups
       .map((g) => {
         if (g.key === "stamp") return g; // 힐링/스탬프는 코드 유무와 무관하게 안내/선택 유지
         const subs = g.subs.filter((s) => isSelectableCode(s.code) || s.code === "HEALING");
         return { ...g, subs };
       })
       .filter((g) => g.subs.length > 0);
-  }, [ltByCode, poolRemainingBySource]);
+  }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource]);
   const leaveGroupsAsset = useMemo(
-    () => visibleLeaveGroups.filter((g) => ASSET_GROUP_KEYS.has(g.key)),
+    () => visibleLeaveGroups.filter((g) => BASE_ASSET_GROUP_KEYS.has(g.key) || g.key.startsWith("custom-asset:")),
     [visibleLeaveGroups],
   );
   const leaveGroupsReason = useMemo(
-    () => visibleLeaveGroups.filter((g) => REASON_GROUP_KEYS.has(g.key)),
+    () => visibleLeaveGroups.filter((g) => BASE_REASON_GROUP_KEYS.has(g.key) || g.key.startsWith("custom-reason:")),
     [visibleLeaveGroups],
   );
 
@@ -338,7 +385,7 @@ export default function LeaveApplyForm({
           : 0;
       return {
         ...it, leaveTypeId: lt.id,
-        _groupKey: groupKey ?? CODE_TO_GROUP[code] ?? it._groupKey,
+        _groupKey: groupKey ?? codeToGroup[code] ?? it._groupKey,
         timeSlot,
         days,
         endDate: single || isHalfDay ? it.startDate : it.endDate,
@@ -501,7 +548,11 @@ export default function LeaveApplyForm({
     for (const [src, need] of Object.entries(dedicatedTotals)) {
       const rem = poolRemainingBySource[src] ?? 0;
       if (need > rem) {
-        setError(`「${src}」부여 잔여 부족 — 신청 ${need.toFixed(1)}일, 잔여 ${rem.toFixed(1)}일`); return;
+        const srcName =
+          leaveTypes.find((t) => t.allocationSourceCode === src)?.name
+          || allocations.find((a) => a.sourceCode === src)?.label
+          || src;
+        setError(`「${srcName}」부여 잔여 부족 — 신청 ${need.toFixed(1)}일, 잔여 ${rem.toFixed(1)}일`); return;
       }
     }
     const overlap = detectOverlap(items, leaveTypes);
@@ -551,7 +602,7 @@ export default function LeaveApplyForm({
     <form onSubmit={handleSubmit} className="space-y-3">
       {items.map((item, idx) => {
         const lt        = leaveTypes.find((t) => t.id === item.leaveTypeId);
-        const grp       = LEAVE_GROUPS.find((g) => g.key === item._groupKey);
+        const grp       = dynamicLeaveGroups.find((g) => g.key === item._groupKey);
         const actualDays = lt ? leaveItemDeductDays({ days: item.days, timeSlot: item.timeSlot }, lt) : 0;
         const polUi     = lt ? leaveTypeWithPolicy(lt) : null;
         const isAnnualDeduct = lt?.deductFromBalance ?? false;
@@ -613,7 +664,7 @@ export default function LeaveApplyForm({
                             }`} style={isSelected ? { color: g.color } : {}}>
                               {g.label}
                             </span>
-                            <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span>
+                            {g.meta ? <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span> : null}
                           </button>
                         );
                       })}
@@ -641,7 +692,7 @@ export default function LeaveApplyForm({
                             }`} style={isSelected ? { color: g.color } : {}}>
                               {g.label}
                             </span>
-                            <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span>
+                            {g.meta ? <span className="text-xs text-gray-500 mt-1 leading-tight">{g.meta}</span> : null}
                           </button>
                         );
                       })}
@@ -1016,7 +1067,7 @@ export default function LeaveApplyForm({
               }
               const t = leaveTypes.find((t) => t.id === it.leaveTypeId);
               if (!t) return null;
-              const g = LEAVE_GROUPS.find((g) => g.key === it._groupKey);
+              const g = dynamicLeaveGroups.find((g) => g.key === it._groupKey);
               const slot = resolveItemTimeSlot({ timeSlot: it.timeSlot }, leaveTypeWithPolicy(t));
               const slotLabel = slot === "FULL" ? "종일" : slot === "AM" ? "오전" : "오후";
               const d = leaveItemDeductDays({ days: it.days, timeSlot: it.timeSlot }, t);

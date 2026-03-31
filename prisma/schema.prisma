@@ -129,6 +129,8 @@ model LeaveType {
   stampCount       Int?
   // 전용 부여 풀: LeaveAllocation.sourceCode와 동일하면 신청 시 해당 풀에서만 차감 (null = 연차/스탬프/무제한 등 기존 규칙)
   allocationSourceCode String?
+  // 신청/내역 화면 분류: 자산형(부여·차감 관리) / 사유형(승인일수 집계 중심)
+  usageCategory    String  @default("ASSET") // ASSET | REASON
   // 같은 날 중복 허용 (오전반차+오후인정 등)
   allowSameDay     Boolean @default(true)
   // 신청 방식: 종일(기간) / 반차(오전·오후) 허용 범위 (관리자 설정). 둘 다 true면 신청 시 종일·오전·오후 선택.
@@ -138,6 +140,10 @@ model LeaveType {
   halfDayAmPm      String  @default("BOTH") // BOTH | AM_ONLY | PM_ONLY
   // 휴가 신청 화면 카테고리 키 (annual, care …). null이면 "기타"
   applyGroupKey    String?
+  // 신청 화면 카드 설명 문구 (예: 연 2일 한도, 별도 부여 등)
+  displayHint      String?
+  // 귀속연도 초기화(fiscal-year init) 대상 여부. 귀속연도 유형이어도 false면 자동 부여 제외.
+  includeInFiscalInit Boolean @default(true)
   // 반차 여부 (AM or PM 선택) — 기존 데이터·간편 조회용. allows* 로부터 저장 시 동기화 권장.
   isHalf           Boolean @default(false)
   isAmOnly         Boolean @default(false)

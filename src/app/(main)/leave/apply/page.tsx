@@ -38,14 +38,15 @@ export default async function LeaveApplyPage() {
       countHealingEligible(prisma, user.employeeId),
     ]);
 
-  /** 상단 KPI: 소모 가능 자산 잔여 (연차 풀 + 돌봄·연휴연장·포상·근속특별 등). 공가·병가 부여는 제외 */
-  const KPI_ASSET_SOURCES = new Set([
-    "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER",
-    "CARE", "HOLIDAY_EXT", "AWARD", "BIRTHDAY_HALF", "DUTY_DEPT",
-    "TENURE_1Y", "TENURE_5Y", "TENURE_10Y",
-  ]);
+  /** 상단 KPI: usageCategory=ASSET 메타 기반 + 정책성 fallback */
+  const assetSourceCodes = new Set(
+    leaveTypes
+      .filter((lt) => lt.isActive && lt.usageCategory === "ASSET" && !!lt.allocationSourceCode)
+      .map((lt) => lt.allocationSourceCode!)
+  );
+  const KPI_ASSET_FALLBACK = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER", "DUTY_DEPT"]);
   const totalAssetRemain = allocations
-    .filter((a) => KPI_ASSET_SOURCES.has(a.sourceCode))
+    .filter((a) => assetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode))
     .filter((a) => new Date(a.validFrom) <= now && new Date(a.validUntil) >= now)
     .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0);
 
@@ -85,9 +86,9 @@ export default async function LeaveApplyPage() {
               <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">연차·돌봄·이벤트 등</p>
             </div>
             <div className="w-px h-7 bg-gray-200" />
-            <div className="text-center">
-              <p className="text-[22px] font-black text-amber-500 tabular-nums leading-none">{totalStamps}</p>
-              <p className="text-xs text-gray-500 mt-1">누적 스탬프 칸</p>
+            <div className="text-center min-w-[5.5rem]">
+              <p className="text-[22px] font-black text-amber-500 tabular-nums leading-none whitespace-nowrap">{totalStamps}</p>
+              <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">누적 스탬프 칸</p>
             </div>
             <div className="w-px h-7 bg-gray-200" />
             <div className="text-center min-w-[6.5rem]">

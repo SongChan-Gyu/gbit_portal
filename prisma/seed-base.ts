@@ -50,6 +50,18 @@ async function seedLeaveTypes() {
     if (code === "AWARD") return "AWARD";
     return null;
   }
+  function usageCategoryForCode(code: string): "ASSET" | "REASON" {
+    if (["PUBLIC", "RECOGNITION", "SICK", "CONDOLENCE"].includes(code)) return "REASON";
+    return "ASSET";
+  }
+  function displayHintForCode(code: string): string | null {
+    if (code === "CARE") return "연 2일 한도";
+    if (code === "HOLIDAY_EXT") return "연휴 3일 이상 시 앞뒤 연속일 사용 가능";
+    if (code === "PM_HALF_MONTH") return "수요일 오후";
+    if (code === "BIRTHDAY_HALF") return "생일 해당 월 자동 부여 0.5일";
+    if (code === "AWARD") return "별도 부여";
+    return null;
+  }
 
   for (const [code, name, dpu, deduct, steps, maxMon, maxYr, stamp, stampCnt, isHalf, amOnly, pmOnly, vBasis, vMon, color, sort] of types) {
     let half = !!(isHalf as boolean);
@@ -87,6 +99,8 @@ async function seedLeaveTypes() {
       requiresStamp: stamp as boolean,
       stampCount: stampCnt as number | null,
       allocationSourceCode: allocationSourceForCode(code),
+      usageCategory: usageCategoryForCode(code),
+      displayHint: displayHintForCode(code),
       allowsFullDay,
       allowsHalfDay,
       halfDayAmPm,

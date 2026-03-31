@@ -6,14 +6,7 @@ import { formatYMD } from "@/lib/dateUtils";
 import InviteButton from "@/app/(main)/admin/employees/InviteButton";
 import ExcelImportBlock from "@/app/(main)/admin/employees/ExcelImportBlock";
 import TeamsEditor from "@/app/(main)/admin/teams/TeamsEditor";
-
-const STATUS_BADGE: Record<string,string> = {
-  PENDING:"bg-gray-100 text-gray-500", INVITED:"bg-yellow-100 text-yellow-700",
-  ACTIVE:"bg-green-100 text-green-700", INACTIVE:"bg-red-100 text-red-500",
-};
-const STATUS_LABEL: Record<string,string> = {
-  PENDING:"미초대", INVITED:"초대발송", ACTIVE:"재직", INACTIVE:"퇴직",
-};
+import { employeeStatusMeta } from "@/lib/statusMeta";
 const ROLE_LABEL: Record<string,string> = {
   STAFF:"팀원", TEAM_LEAD:"팀장", PM:"PM", ADMIN:"관리자",
 };
@@ -135,16 +128,17 @@ export default async function OrganizationPage({
                     </td>
                     <td><span className="text-xs font-medium">{ROLE_LABEL[emp.role]}</span></td>
                     <td>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[emp.status]}`}>
-                        {STATUS_LABEL[emp.status]}
-                      </span>
+                      {(() => {
+                        const st = employeeStatusMeta(emp.status);
+                        return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>;
+                      })()}
                     </td>
                     <td className="text-gray-500 text-xs">{(emp as any).user?.username ?? "-"}</td>
                     <td className="text-xs text-gray-500">{formatYMD(emp.hireDate)}</td>
                     <td>
                       <div className="flex gap-2">
                         <Link href={`/admin/employees/${emp.id}`} className="text-blue-500 hover:underline text-xs">수정</Link>
-                        <InviteButton employeeId={emp.id} name={emp.name} currentStatus={emp.status} />
+                        <InviteButton employeeId={emp.id} name={emp.name} hasUser={!!(emp as any).user?.username} />
                       </div>
                     </td>
                   </tr>
@@ -174,15 +168,16 @@ export default async function OrganizationPage({
                     <p className="text-xs text-gray-400 mt-0.5">입사 {formatYMD(emp.hireDate)}</p>
                   </div>
                   <div className="flex flex-col items-end gap-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[emp.status]}`}>
-                      {STATUS_LABEL[emp.status]}
-                    </span>
+                    {(() => {
+                      const st = employeeStatusMeta(emp.status);
+                      return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>;
+                    })()}
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
                   <Link href={`/admin/employees/${emp.id}`} className="btn-secondary text-xs py-1.5 px-3 flex-1 text-center">수정</Link>
                   <div className="flex-1">
-                    <InviteButton employeeId={emp.id} name={emp.name} currentStatus={emp.status} />
+                    <InviteButton employeeId={emp.id} name={emp.name} hasUser={!!(emp as any).user?.username} />
                   </div>
                 </div>
               </div>

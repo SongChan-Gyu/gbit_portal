@@ -9,15 +9,18 @@ import { formatMDWithDay } from "@/lib/dateUtils";
 import { itemSlotLabelKo } from "@/lib/leaveTimeSlot";
 import DashboardMonthCalendar from "./DashboardMonthCalendar";
 import { redirect } from "next/navigation";
+import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { leaveRequestStatusMeta } from "@/lib/statusMeta";
 
-const STATUS_BADGE: Record<string, string> = {
-  PENDING: "badge-warning", APPROVED: "badge-success",
-  REJECTED: "badge-danger", CANCELLED: "badge-default",
-  WITHDRAWN: "badge-default",
-};
-const STATUS_KO: Record<string, string> = {
-  PENDING: "대기", APPROVED: "승인", REJECTED: "반려", CANCELLED: "취소", WITHDRAWN: "철회",
-};
+function requestTitle(req: any): string {
+  const labels: string[] = req.items
+    .map((i: any) => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName)
+    .filter(Boolean);
+  const uniq = Array.from(new Set<string>(labels));
+  if (uniq.length === 0) return "";
+  if (uniq.length === 1) return uniq[0]!;
+  return uniq.join(" + ");
+}
 
 function getMonthDates(year: number, month: number): string[] {
   const last = new Date(year, month, 0).getDate();
@@ -95,10 +98,26 @@ export default async function DashboardPage({
     : [0, 0];
   const jejuPendingCount = jejuApplyPendingCount + jejuCancelPendingCount;
 
-  // 부여 = 전체 부여(연차+특별휴가+돌봄 등). 잔여 연차 = 연차(기본+근속가산+이월)만
+  const assetPoolLeaveTypes = await prisma.leaveType.findMany({
+    where: {
+      isActive: true,
+      usageCategory: "ASSET",
+      allocationSourceCode: { not: null },
+    },
+    select: { allocationSourceCode: true },
+  });
+  const assetSourceCodes = new Set(
+    assetPoolLeaveTypes
+      .map((lt) => lt.allocationSourceCode)
+      .filter((v): v is string => !!v),
+  );
+
+  // 부여 = 자산형 부여(메타 기반) + 정책성 공통 풀 fallback, 잔여 연차 = 연차(기본+근속가산+이월)만
   const ANNUAL_ONLY_SOURCES = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"]);
+  const KPI_ASSET_FALLBACK = new Set(["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER", "DUTY_DEPT"]);
   const annualAllocs = allocations.filter((a) => ANNUAL_ONLY_SOURCES.has(a.sourceCode));
-  const totalGranted = allocations.reduce((s, a) => s + a.totalDays, 0);  // 전체 부여
+  const kpiAssetAllocs = allocations.filter((a) => assetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode));
+  const totalGranted = kpiAssetAllocs.reduce((s, a) => s + a.totalDays, 0);
   const annualUsed   = annualAllocs.reduce((s, a) => s + a.usedDays, 0);  // 연차 사용
   const totalRemain  = annualAllocs.reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0); // 잔여 연차
   const baseDays   = annualAllocs.find((a) => a.sourceCode === "BASE_ANNUAL")?.totalDays ?? 0;
@@ -337,7 +356,7 @@ export default async function DashboardPage({
                 <div key={req.id} className="px-4 py-2.5 flex items-center justify-between">
                   <div>
                     <p className="text-[13px] font-medium text-gray-800">
-                      {req.items.map((i: any) => i.leaveType?.name ?? "").filter(Boolean).join(" + ")}
+                      {requestTitle(req)}
                     </p>
                     <p className="text-xs text-gray-400 mt-0.5">
                       <Calendar size={11} className="inline mr-1" />
@@ -348,7 +367,10 @@ export default async function DashboardPage({
                       {req.totalDays}일
                     </p>
                   </div>
-                  <span className={`badge ${STATUS_BADGE[req.status]}`}>{STATUS_KO[req.status]}</span>
+                  {(() => {
+                    const st = leaveRequestStatusMeta(req.status);
+                    return <span className={`badge ${st.badge}`}>{st.label}</span>;
+                  })()}
                 </div>
               ))}
             </div>

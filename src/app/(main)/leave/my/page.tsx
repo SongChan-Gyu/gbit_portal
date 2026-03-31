@@ -8,17 +8,7 @@ import CancelRequestButton from "./CancelRequestButton";
 import MyLeaveMonthlyTable from "./MyLeaveMonthlyTable";
 import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
-
-const STATUS_BADGE: Record<string,string> = {
-  PENDING:"badge-warning",  APPROVED:"badge-success",
-  REJECTED:"badge-danger",  CANCELLED:"badge-default",
-  WITHDRAWN:"badge-default",
-  CANCEL_REQUESTED:"badge-warning",
-};
-const STATUS_KO: Record<string,string> = {
-  PENDING:"대기", APPROVED:"승인", REJECTED:"반려",
-  CANCELLED:"취소", WITHDRAWN:"철회", CANCEL_REQUESTED:"취소심사",
-};
+import { leaveRequestStatusMeta } from "@/lib/statusMeta";
 
 export default async function MyLeavePage({ searchParams }: { searchParams: Promise<{ fy?: string; tab?:string }> }) {
   const session = await auth();
@@ -36,7 +26,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const fyEnd   = new Date(`${fy+1}-04-30`);
   const fyRangeLabel = `${formatYMD(fyStart)} ~ ${formatYMD(fyEnd)}`;
 
-  const [allocations, requests, tenureScheduleAll, reasonNoPoolLeaveTypes] = await Promise.all([
+  const [allocations, requests, tenureScheduleAll, reasonNoPoolLeaveTypes, assetPoolLeaveTypes] = await Promise.all([
     prisma.leaveAllocation.findMany({
       where: {
         employeeId: user.employeeId,
@@ -61,10 +51,18 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
     prisma.leaveType.findMany({
       where: {
         isActive: true,
-        deductFromBalance: false,
+        usageCategory: "REASON",
         allocationSourceCode: null,
       },
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+    prisma.leaveType.findMany({
+      where: {
+        isActive: true,
+        usageCategory: "ASSET",
+        allocationSourceCode: { not: null },
+      },
+      select: { allocationSourceCode: true },
     }),
   ]);
 
@@ -108,15 +106,16 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   fyAllocs.push(...annualMerged);
   byTenureSource.forEach((a) => fyAllocs.push(a));
 
-  // 총 부여/사용/잔여: 소모 가능 자산만 (공가·병가 성격의 부여는 합계에서 제외 — 혼동 방지)
-  const KPI_ASSET_SOURCE_CODES = new Set([
-    "ANNUAL",
-    "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER",
-    "CARE", "HOLIDAY_EXT", "AWARD", "BIRTHDAY_HALF", "DUTY_DEPT",
-    "TENURE_1Y", "TENURE_5Y", "TENURE_10Y",
-  ]);
+  // 총 부여/사용/잔여: 자산형 메타(usageCategory=ASSET) 기반 + 정책성 필수 소스 fallback
+  const kpiAssetSourceCodes = new Set(
+    assetPoolLeaveTypes
+      .map((lt) => lt.allocationSourceCode)
+      .filter((v): v is string => !!v),
+  );
+  // 정책상 자산형으로 유지해야 하는 공통 풀(LeaveType과 직접 1:1이 아닐 수 있음)
+  const KPI_ASSET_FALLBACK = new Set(["ANNUAL", "BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER", "DUTY_DEPT"]);
   const validAllocs = fyAllocs.filter((a) => now >= new Date(a.validFrom) && now <= new Date(a.validUntil));
-  const kpiAllocs = validAllocs.filter((a) => KPI_ASSET_SOURCE_CODES.has(a.sourceCode));
+  const kpiAllocs = validAllocs.filter((a) => kpiAssetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode));
   const granted  = kpiAllocs.reduce((s,a)=>s+a.totalDays, 0);
   const used     = kpiAllocs.reduce((s,a)=>s+a.usedDays,  0);
   const remain   = granted - used;
@@ -271,7 +270,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                         {r.name}
                       </p>
                       <p className="text-sm text-gray-600 mt-1">
-                        부여 <span className="text-gray-400">—</span>
+                        부여 <span className="text-gray-400">0</span>
                         {" · "}
                         사용 <span className="text-red-600 font-semibold tabular-nums">{r.used.toFixed(1)}</span>일
                       </p>
@@ -301,7 +300,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                               {r.name}
                             </span>
                           </td>
-                          <td className="text-right text-gray-400">—</td>
+                          <td className="text-right text-gray-400">0</td>
                           <td className="text-right font-semibold text-red-600 tabular-nums">{r.used.toFixed(1)}</td>
                           <td className="text-xs text-gray-500">부여 풀 없음</td>
                         </tr>
@@ -456,9 +455,10 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                         <span className="text-slate-800 font-semibold ml-1 tabular-nums">· {req.totalDays}일</span>
                       </p>
                     </div>
-                    <span className={`badge shrink-0 whitespace-nowrap ${STATUS_BADGE[req.status]}`}>
-                      {STATUS_KO[req.status]}
-                    </span>
+                    {(() => {
+                      const st = leaveRequestStatusMeta(req.status);
+                      return <span className={`badge shrink-0 whitespace-nowrap ${st.badge}`}>{st.label}</span>;
+                    })()}
                   </div>
                   {req.items.length > 1 && (
                     <ul className="mt-3 space-y-2 text-sm border-t border-gray-100 pt-3">

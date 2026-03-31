@@ -7,6 +7,7 @@ import StampApproveClient from "@/app/(main)/stamp/approve/StampApproveClient";
 import { serializeDates } from "@/lib/serialize";
 import { formatMDWithDay } from "@/lib/dateUtils";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { leaveApprovalStatusMeta, leaveApproveEntryKindMeta, leaveCancelApprovalStatusMeta, leaveRequestStatusMeta } from "@/lib/statusMeta";
 
 export default async function ApprovePage({
   searchParams,
@@ -109,6 +110,8 @@ export default async function ApprovePage({
         })
       : [];
   const adminTotalPages = Math.ceil(adminTotal / PAGE_SIZE);
+  const requestKind = leaveApproveEntryKindMeta("REQUEST");
+  const cancelKind = leaveApproveEntryKindMeta("CANCEL");
 
   return (
     <div className="max-w-3xl">
@@ -211,17 +214,10 @@ export default async function ApprovePage({
                         <p className="font-semibold text-gray-800">{req.employee.name}</p>
                         <p className="text-xs text-gray-500">{req.employee.team?.name}</p>
                       </div>
-                      <span className={`badge shrink-0 ${
-                        req.status === "APPROVED" ? "badge-success" :
-                        req.status === "CANCEL_REQUESTED" ? "badge-warning" :
-                        req.status === "WITHDRAWN" ? "badge-default" :
-                        req.status === "CANCELLED" ? "badge-default" :
-                        req.status === "REJECTED" ? "badge-danger" : "badge-default"
-                      }`}>
-                        {req.status === "APPROVED" ? "승인" : req.status === "CANCEL_REQUESTED" ? "취소신청" :
-                          req.status === "WITHDRAWN" ? "철회" : req.status === "CANCELLED" ? "취소" :
-                          req.status === "REJECTED" ? "반려" : "대기"}
-                      </span>
+                      {(() => {
+                        const st = leaveRequestStatusMeta(req.status);
+                        return <span className={`badge shrink-0 ${st.badge}`}>{st.label}</span>;
+                      })()}
                     </div>
                     <p className="text-sm text-gray-600 mt-1">
                       {req.items.map((i) => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")} · {formatMDWithDay(req.startDate)}
@@ -263,17 +259,10 @@ export default async function ApprovePage({
                         <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
                       </td>
                       <td className="request-list-td status">
-                        <span className={`badge ${
-                          req.status === "APPROVED" ? "badge-success" :
-                          req.status === "CANCEL_REQUESTED" ? "badge-warning" :
-                          req.status === "WITHDRAWN" ? "badge-default" :
-                          req.status === "CANCELLED" ? "badge-default" :
-                          req.status === "REJECTED" ? "badge-danger" : "badge-default"
-                        }`}>
-                          {req.status === "APPROVED" ? "승인" : req.status === "CANCEL_REQUESTED" ? "취소신청" :
-                            req.status === "WITHDRAWN" ? "철회" : req.status === "CANCELLED" ? "취소" :
-                            req.status === "REJECTED" ? "반려" : "대기"}
-                        </span>
+                        {(() => {
+                          const st = leaveRequestStatusMeta(req.status);
+                          return <span className={`badge ${st.badge}`}>{st.label}</span>;
+                        })()}
                       </td>
                       <td className="request-list-td action">
                         {(req.status === "APPROVED" || req.status === "PENDING") && (
@@ -311,19 +300,21 @@ export default async function ApprovePage({
               <div className="md:hidden divide-y divide-gray-100">
                 {[...actionable,...pastApprovals].map((ap) => {
                   const req = ap.leaveRequest;
-                  const statusMap: Record<string,string> = { PENDING:"대기", APPROVED:"승인", REJECTED:"반려" };
                   return (
                     <div key={ap.id} className="px-4 py-3">
-                      <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">신청</span>
+                      <span className={requestKind.badge}>{requestKind.label}</span>
                       <div className="flex flex-wrap items-start justify-between gap-2 mt-1.5">
                         <div>
                           <p className="font-semibold text-gray-800">{req.employee.name}</p>
                           <p className="text-xs text-gray-500">{req.employee.team?.name}</p>
                         </div>
-                        <span className={`badge shrink-0 ${ap.status==="APPROVED"?"badge-success":ap.status==="REJECTED"?"badge-default":"badge-warning"}`}>{statusMap[ap.status]??"대기"}</span>
+                        {(() => {
+                          const st = leaveApprovalStatusMeta(ap.status);
+                          return <span className={`badge shrink-0 ${st.badge}`}>{st.label}</span>;
+                        })()}
                       </div>
                       <p className="text-sm text-gray-600 mt-1">
-                        {req.items.map(i => i.leaveType.name).join("+")} · {formatMDWithDay(req.startDate)}
+                        {req.items.map(i => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")} · {formatMDWithDay(req.startDate)}
                         {req.startDate.toDateString()!==req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
                         <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
                       </p>
@@ -332,19 +323,21 @@ export default async function ApprovePage({
                 })}
                 {[...cancelActionable,...pastCancel].map((ap) => {
                   const req = ap.leaveRequest;
-                  const statusMap: Record<string,string> = { CANCEL_PENDING:"대기", CANCEL_APPROVED:"취소승인", CANCEL_REJECTED:"취소반려" };
                   return (
-                    <div key={`cancel-${ap.id}`} className="px-4 py-3 bg-amber-50/30">
-                      <span className="text-xs bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">취소</span>
+                    <div key={`cancel-${ap.id}`} className={`px-4 py-3 ${cancelKind.rowClass}`}>
+                      <span className={cancelKind.badge}>{cancelKind.label}</span>
                       <div className="flex flex-wrap items-start justify-between gap-2 mt-1.5">
                         <div>
                           <p className="font-semibold text-gray-800">{req.employee.name}</p>
                           <p className="text-xs text-gray-500">{req.employee.team?.name}</p>
                         </div>
-                        <span className={`badge shrink-0 ${ap.status==="CANCEL_APPROVED"?"badge-success":ap.status==="CANCEL_REJECTED"?"badge-default":"badge-warning"}`}>{statusMap[ap.status]??"대기"}</span>
+                        {(() => {
+                          const st = leaveCancelApprovalStatusMeta(ap.status);
+                          return <span className={`badge shrink-0 ${st.badge}`}>{st.label}</span>;
+                        })()}
                       </div>
                       <p className="text-sm text-gray-600 mt-1">
-                        {req.items.map(i => i.leaveType.name).join("+")} · {formatMDWithDay(req.startDate)}
+                        {req.items.map(i => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")} · {formatMDWithDay(req.startDate)}
                         {req.startDate.toDateString()!==req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
                         <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
                       </p>
@@ -370,37 +363,45 @@ export default async function ApprovePage({
                 <tbody>
                   {[...actionable,...pastApprovals].map((ap) => {
                     const req = ap.leaveRequest;
-                    const statusMap: Record<string,string> = { PENDING:"대기", APPROVED:"승인", REJECTED:"반려" };
                     return (
                       <tr key={ap.id}>
-                        <td className="request-list-td type"><span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">신청</span></td>
+                        <td className="request-list-td type"><span className={requestKind.badge}>{requestKind.label}</span></td>
                         <td className="request-list-td type"><p className="font-medium text-[15px] md:text-base">{req.employee.name}</p><p className="text-xs text-gray-500">{req.employee.team?.name}</p></td>
-                        <td className="request-list-td type text-[15px] md:text-xs">{req.items.map(i => i.leaveType.name).join("+")}</td>
+                        <td className="request-list-td type text-[15px] md:text-xs">{req.items.map(i => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")}</td>
                         <td className="request-list-td period whitespace-nowrap text-[15px] md:text-xs">
                           {formatMDWithDay(req.startDate)}
                           {req.startDate.toDateString()!==req.endDate.toDateString() &&
                             ` ~ ${formatMDWithDay(req.endDate)}`}
                           <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
                         </td>
-                        <td className="request-list-td status"><span className={`badge ${ap.status==="APPROVED"?"badge-success":ap.status==="REJECTED"?"badge-default":"badge-warning"}`}>{statusMap[ap.status]??"대기"}</span></td>
+                        <td className="request-list-td status">
+                          {(() => {
+                            const st = leaveApprovalStatusMeta(ap.status);
+                            return <span className={`badge ${st.badge}`}>{st.label}</span>;
+                          })()}
+                        </td>
                       </tr>
                     );
                   })}
                   {[...cancelActionable,...pastCancel].map((ap) => {
                     const req = ap.leaveRequest;
-                    const statusMap: Record<string,string> = { CANCEL_PENDING:"대기", CANCEL_APPROVED:"취소승인", CANCEL_REJECTED:"취소반려" };
                     return (
-                      <tr key={`cancel-${ap.id}`} className="bg-amber-50/30">
-                        <td className="request-list-td type"><span className="text-xs bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded">취소</span></td>
+                      <tr key={`cancel-${ap.id}`} className={cancelKind.rowClass}>
+                        <td className="request-list-td type"><span className={cancelKind.badge}>{cancelKind.label}</span></td>
                         <td className="request-list-td type"><p className="font-medium text-[15px] md:text-base">{req.employee.name}</p><p className="text-xs text-gray-500">{req.employee.team?.name}</p></td>
-                        <td className="request-list-td type text-[15px] md:text-xs">{req.items.map(i => i.leaveType.name).join("+")}</td>
+                        <td className="request-list-td type text-[15px] md:text-xs">{req.items.map(i => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")}</td>
                         <td className="request-list-td period whitespace-nowrap text-[15px] md:text-xs">
                           {formatMDWithDay(req.startDate)}
                           {req.startDate.toDateString()!==req.endDate.toDateString() &&
                             ` ~ ${formatMDWithDay(req.endDate)}`}
                           <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
                         </td>
-                        <td className="request-list-td status"><span className={`badge ${ap.status==="CANCEL_APPROVED"?"badge-success":ap.status==="CANCEL_REJECTED"?"badge-default":"badge-warning"}`}>{statusMap[ap.status]??"대기"}</span></td>
+                        <td className="request-list-td status">
+                          {(() => {
+                            const st = leaveCancelApprovalStatusMeta(ap.status);
+                            return <span className={`badge ${st.badge}`}>{st.label}</span>;
+                          })()}
+                        </td>
                       </tr>
                     );
                   })}

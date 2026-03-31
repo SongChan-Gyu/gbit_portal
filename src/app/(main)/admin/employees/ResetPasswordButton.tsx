@@ -8,10 +8,12 @@ export default function ResetPasswordButton({
   employeeId,
   name,
   hasUser,
+  buttonClassName,
 }: {
   employeeId: string;
   name: string;
   hasUser: boolean;
+  buttonClassName?: string;
 }) {
   const router = useRouter();
   const [showModal, setShowModal] = useState(false);
@@ -54,7 +56,7 @@ export default function ResetPasswordButton({
       <button
         type="button"
         onClick={() => { setShowModal(true); setMessage(null); setPassword(""); }}
-        className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all"
+        className={`inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 transition-all ${buttonClassName ?? ""}`}
       >
         <KeyRound size={11} />
         비밀번호 초기화

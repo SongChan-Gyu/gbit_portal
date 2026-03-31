@@ -9,18 +9,21 @@ interface Alloc {
   validFrom:string; validUntil:string; note:string|null; isActive?:boolean; fiscalYear?:number|null;
 }
 interface Emp { id:string; name:string; empNo:string; position:string; team:{ name:string }|null; leaveAllocations:Alloc[]; }
-
-const SOURCE_OPTIONS = [
-  ["BASE_ANNUAL","기본연차"],["TENURE_BONUS","근속가산"],["DUTY_DEPT","직무부서휴가(2일)"],["HOLIDAY_EXT","연휴연장휴가"],["DEPT_BONUS","부서·직무"],
-  ["CARRYOVER","이월"],["TENURE_1Y","1년근속"],["TENURE_5Y","5년근속"],
-  ["TENURE_10Y","10년근속"],["AWARD","포상"],["SICK_RECOGNITION","병가인정"],
-];
+interface SourceOption { value: string; label: string; }
 
 function fyDates(fy: number) {
   return { from:`${fy}-05-01`, until:`${fy+1}-04-30` };
 }
 
-export default function FiscalYearManager({ employees, fiscalYear }: { employees:Emp[]; fiscalYear:number }) {
+export default function FiscalYearManager({
+  employees,
+  fiscalYear,
+  sourceOptions,
+}: {
+  employees:Emp[];
+  fiscalYear:number;
+  sourceOptions: SourceOption[];
+}) {
   const router = useRouter();
   const [grantModal, setGrantModal] = useState<{ emp:Emp; alloc?:Alloc } | null>(null);
   const [form, setForm] = useState<Partial<Alloc & { isNew:boolean }>>({});
@@ -77,8 +80,10 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
 
   function openGrant(emp: Emp, alloc?: Alloc) {
     setGrantModal({ emp, alloc });
+    const defaultSource = sourceOptions[0]?.value ?? "BASE_ANNUAL";
+    const defaultLabel = sourceOptions[0]?.label ?? "기본연차";
     const initial = alloc ? { ...alloc, isNew: false as boolean } : {
-      sourceCode: "BASE_ANNUAL", label: "기본연차", totalDays: 15, usedDays: 0,
+      sourceCode: defaultSource, label: defaultLabel, totalDays: 15, usedDays: 0,
       validFrom: fyD.from, validUntil: fyD.until, note: null, isNew: true as boolean,
     };
     setForm(initial);
@@ -323,7 +328,7 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
               <div>
                 <label className="label">분류</label>
                 <select className={`input ${isFieldChanged("sourceCode") ? "border-red-500 bg-red-50" : ""}`} value={form.sourceCode??""} onChange={(e)=>setForm((p)=>({...p,sourceCode:e.target.value}))}>
-                  {SOURCE_OPTIONS.map(([v,l])=><option key={v} value={v}>{l}</option>)}
+                  {sourceOptions.map((opt)=><option key={opt.value} value={opt.value}>{opt.label}</option>)}
                 </select>
               </div>
               <div>
@@ -334,12 +339,12 @@ export default function FiscalYearManager({ employees, fiscalYear }: { employees
                 <div>
                   <label className="label">부여일수 *</label>
                   <input type="number" step="0.5" className={`input ${isFieldChanged("totalDays") ? "border-red-500 bg-red-50" : ""}`} value={form.totalDays??0}
-                    onChange={(e)=>setForm((p)=>({...p,totalDays:parseFloat(e.target.value)}))} />
+                    onChange={(e)=>setForm((p)=>({...p,totalDays:e.target.value === "" ? 0 : parseFloat(e.target.value)}))} />
                 </div>
                 <div>
                   <label className="label">사용일수</label>
                   <input type="number" step="0.5" className={`input ${isFieldChanged("usedDays") ? "border-red-500 bg-red-50" : ""}`} value={form.usedDays??0}
-                    onChange={(e)=>setForm((p)=>({...p,usedDays:parseFloat(e.target.value)}))} />
+                    onChange={(e)=>setForm((p)=>({...p,usedDays:e.target.value === "" ? 0 : parseFloat(e.target.value)}))} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">

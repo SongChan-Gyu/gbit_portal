@@ -29,6 +29,7 @@ export async function POST(req: Request) {
 
   const emps = await prisma.employee.findMany({
     where: { id: { in: employeeIds } },
+    include: { user: { select: { id: true } } },
   });
   const byId = Object.fromEntries(emps.map((e) => [e.id, e]));
 
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
       results.push({ employeeId, name: "-", status: "FAILED", reason: "사원을 찾을 수 없습니다." });
       continue;
     }
-    if (emp.status === "ACTIVE") {
+    if (emp.user) {
       results.push({ employeeId, name: emp.name, status: "SKIPPED", reason: "이미 계정이 있는 사원입니다." });
       continue;
     }

@@ -34,9 +34,39 @@ export async function POST(req: Request) {
     },
     include: { team: true },
   });
+  const sourceConfigsDb = await prisma.allocationSourceConfig.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+  });
+  const requiredDefaults = [
+    { sourceCode: "CARE", label: "돌봄휴가", defaultDays: 2, sortOrder: 3, isActive: true },
+    { sourceCode: "HOLIDAY_EXT", label: "연휴연장휴가", defaultDays: 1, sortOrder: 4, isActive: true },
+    { sourceCode: "DUTY_DEPT", label: "직무부서휴가", defaultDays: 2, sortOrder: 5, isActive: true },
+  ];
+  const sourceConfigs = [...sourceConfigsDb];
+  for (const d of requiredDefaults) {
+    if (!sourceConfigs.some((s) => s.sourceCode === d.sourceCode)) {
+      sourceConfigs.push(d as any);
+    }
+  }
+  const leaveTypesBySource = await prisma.leaveType.findMany({
+    where: { isActive: true, allocationSourceCode: { not: null } },
+    select: {
+      allocationSourceCode: true,
+      name: true,
+      daysPerUnit: true,
+      maxPerYear: true,
+      validityBasis: true,
+      includeInFiscalInit: true,
+    },
+  });
+  const leaveTypeSourceMap = new Map(
+    leaveTypesBySource
+      .filter((lt) => !!lt.allocationSourceCode)
+      .map((lt) => [String(lt.allocationSourceCode), lt]),
+  );
 
   const DUTY_DEPT_VALUES = ["OPERATIONS", "EDUCATION", "WELFARE"];
-  const DUTY_DEPT_DAYS = 2;
   const DUTY_SOURCE = "DUTY_DEPT";
   const DUTY_LABEL: Record<string, string> = { OPERATIONS: "운영부", EDUCATION: "교육부", WELFARE: "복지부" };
 
@@ -110,16 +140,23 @@ export async function POST(req: Request) {
         const empType = (emp as any).employeeType ?? "FULL";
         if (bonus > 0 && empType !== "FREE" && !(await exists(emp.id, "TENURE_BONUS")))
           items.push({ label: `근속가산(+${bonus}일)`, totalDays: bonus });
-      } else {
-        const months = Math.floor((fyEnd.getTime() - hire.getTime()) / (30 * 24 * 3600 * 1000));
-        if (months > 0 && !(await exists(emp.id, "BASE_ANNUAL")))
-          items.push({ label: `기본연차(월발생 ${Math.min(months, 12)}일)`, totalDays: Math.min(months, 12) });
       }
-      if (!(await exists(emp.id, "CARE"))) items.push({ label: "돌봄휴가", totalDays: 2 });
-      const dutyDept = (emp as { dutyDept?: string | null }).dutyDept ?? null;
-      if (dutyDept && DUTY_DEPT_VALUES.includes(dutyDept) && !(await exists(emp.id, DUTY_SOURCE)))
-        items.push({ label: "직무부서휴가", totalDays: DUTY_DEPT_DAYS });
-      if (!(await exists(emp.id, "HOLIDAY_EXT"))) items.push({ label: "연휴연장휴가", totalDays: 1 });
+      for (const cfg of sourceConfigs) {
+        if (["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"].includes(cfg.sourceCode)) continue;
+        if (cfg.sourceCode.startsWith("MONTHLY_ACCRUAL_")) continue;
+        if (["TENURE_1Y", "TENURE_5Y", "TENURE_10Y", "BIRTHDAY_HALF"].includes(cfg.sourceCode)) continue;
+        const lt = leaveTypeSourceMap.get(cfg.sourceCode);
+        if (lt && lt.validityBasis !== "귀속연도") continue;
+        if (lt && lt.includeInFiscalInit === false) continue;
+        if (cfg.sourceCode === DUTY_SOURCE) {
+          const dutyDept = (emp as { dutyDept?: string | null }).dutyDept ?? null;
+          if (!dutyDept || !DUTY_DEPT_VALUES.includes(dutyDept)) continue;
+        }
+        if (await exists(emp.id, cfg.sourceCode)) continue;
+        const days = cfg.defaultDays ?? lt?.maxPerYear ?? lt?.daysPerUnit ?? null;
+        if (!days || Number(days) <= 0) continue;
+        items.push({ label: cfg.label, totalDays: Number(days) });
+      }
       const tenure1yCarry = await getTenure1yCarryoverDays(prisma, emp.id, fy);
       if (tenure1yCarry > 0) {
         items.push({ label: "1년근속휴가(이월)", totalDays: tenure1yCarry });
@@ -175,84 +212,38 @@ export async function POST(req: Request) {
             created++;
           } else { skipped++; }
         }
-      } else {
-        const months = Math.floor((fyEnd.getTime() - hire.getTime()) / (30 * 24 * 3600 * 1000));
-        if (months > 0) {
-          const monthly = Math.min(months, 12);
-          const exists = await allocExists(tx, emp.id, "BASE_ANNUAL", fy);
-          if (!exists) {
-            await tx.leaveAllocation.create({
-              data: {
-                employeeId: emp.id, sourceCode: "BASE_ANNUAL",
-                label: `기본연차(월발생 ${monthly}일)`,
-                totalDays: monthly, usedDays: 0,
-                validFrom: hire, validUntil: fyEnd, fiscalYear: fy,
-              },
-            });
-            created++;
-          } else { skipped++; }
-        }
       }
 
-      const CARE_DAYS = 2;
-      const careExists = await allocExists(tx, emp.id, "CARE", fy);
-      if (!careExists) {
+      for (const cfg of sourceConfigs) {
+        if (["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"].includes(cfg.sourceCode)) continue;
+        if (cfg.sourceCode.startsWith("MONTHLY_ACCRUAL_")) continue;
+        if (["TENURE_1Y", "TENURE_5Y", "TENURE_10Y", "BIRTHDAY_HALF"].includes(cfg.sourceCode)) continue;
+        const lt = leaveTypeSourceMap.get(cfg.sourceCode);
+        if (lt && lt.validityBasis !== "귀속연도") continue;
+        if (lt && lt.includeInFiscalInit === false) continue;
+        const dutyDept = (emp as { dutyDept?: string | null }).dutyDept ?? null;
+        if (cfg.sourceCode === DUTY_SOURCE && (!dutyDept || !DUTY_DEPT_VALUES.includes(dutyDept))) continue;
+        const exists = await allocExists(tx, emp.id, cfg.sourceCode, fy);
+        if (exists) { skipped++; continue; }
+        const days = cfg.defaultDays ?? lt?.maxPerYear ?? lt?.daysPerUnit ?? null;
+        if (!days || Number(days) <= 0) { skipped++; continue; }
         await tx.leaveAllocation.create({
           data: {
             employeeId: emp.id,
-            sourceCode: "CARE",
-            label: "돌봄휴가",
-            totalDays: CARE_DAYS,
+            sourceCode: cfg.sourceCode,
+            label: cfg.label,
+            totalDays: Number(days),
             usedDays: 0,
             validFrom: fyStart,
             validUntil: fyEnd,
             fiscalYear: fy,
-            note: "연 2일 한도, 사용 시 이 할당에서 차감",
+            note: cfg.sourceCode === DUTY_SOURCE && dutyDept
+              ? `${DUTY_LABEL[dutyDept] ?? dutyDept} 소속 직무부서 휴가 ${Number(days)}일`
+              : (cfg.note ?? null),
           },
         });
         created++;
-      } else { skipped++; }
-
-      const dutyDept = (emp as { dutyDept?: string | null }).dutyDept ?? null;
-      if (dutyDept && DUTY_DEPT_VALUES.includes(dutyDept)) {
-        const dutyExists = await allocExists(tx, emp.id, DUTY_SOURCE, fy);
-        if (!dutyExists) {
-          await tx.leaveAllocation.create({
-            data: {
-              employeeId: emp.id,
-              sourceCode: DUTY_SOURCE,
-              label: "직무부서휴가",
-              totalDays: DUTY_DEPT_DAYS,
-              usedDays: 0,
-              validFrom: fyStart,
-              validUntil: fyEnd,
-              fiscalYear: fy,
-              note: `${DUTY_LABEL[dutyDept] ?? dutyDept} 소속 직무부서 휴가 ${DUTY_DEPT_DAYS}일`,
-            },
-          });
-          created++;
-        } else { skipped++; }
       }
-
-      const HOLIDAY_EXT_DAYS = 1;
-      const HOLIDAY_EXT_SOURCE = "HOLIDAY_EXT";
-      const holidayExtExists = await allocExists(tx, emp.id, HOLIDAY_EXT_SOURCE, fy);
-      if (!holidayExtExists) {
-        await tx.leaveAllocation.create({
-          data: {
-            employeeId: emp.id,
-            sourceCode: HOLIDAY_EXT_SOURCE,
-            label: "연휴연장휴가",
-            totalDays: HOLIDAY_EXT_DAYS,
-            usedDays: 0,
-            validFrom: fyStart,
-            validUntil: fyEnd,
-            fiscalYear: fy,
-            note: "연휴(공휴일 1일 이상 포함) 3일 이상일 때 앞뒤 연속일 사용 가능",
-          },
-        });
-        created++;
-      } else { skipped++; }
 
       const tenure1yCarry = await getTenure1yCarryoverDays(tx, emp.id, fy);
       if (tenure1yCarry > 0) {

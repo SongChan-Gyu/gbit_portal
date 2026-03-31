@@ -37,19 +37,28 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
         // ── 일반 로그인
         if (!credentials?.username || !credentials?.password) return null;
+        const rawUsername = String(credentials.username).trim();
+        const normalizedPhoneUsername = rawUsername.replace(/[^0-9]/g, "");
         const user = await prisma.user.findUnique({
-          where: { username: credentials.username as string },
+          where: { username: rawUsername },
           include: { employee: true },
         });
-        if (!user) return null;
-        const valid = await bcrypt.compare(credentials.password as string, user.passwordHash);
+        const fallbackUser = !user && normalizedPhoneUsername.length >= 8
+          ? await prisma.user.findUnique({
+              where: { username: normalizedPhoneUsername },
+              include: { employee: true },
+            })
+          : null;
+        const loginUser = user ?? fallbackUser;
+        if (!loginUser) return null;
+        const valid = await bcrypt.compare(credentials.password as string, loginUser.passwordHash);
         if (!valid) return null;
-        if (user.employee.status === "INACTIVE") return null;
-        await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+        if (loginUser.employee.status === "INACTIVE") return null;
+        await prisma.user.update({ where: { id: loginUser.id }, data: { lastLoginAt: new Date() } });
         return {
-          id: user.id, name: user.employee.name, email: user.employee.email ?? "",
-          employeeId: user.employee.id, role: user.employee.role,
-          teamId: user.employee.teamId, position: user.employee.position,
+          id: loginUser.id, name: loginUser.employee.name, email: loginUser.employee.email ?? "",
+          employeeId: loginUser.employee.id, role: loginUser.employee.role,
+          teamId: loginUser.employee.teamId, position: loginUser.employee.position,
         };
       },
     }),
