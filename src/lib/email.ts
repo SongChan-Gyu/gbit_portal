@@ -4,7 +4,6 @@
  * - 환경변수: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM(선택)
  * - 네이버: smtp.naver.com, 포트 465(SSL), 비밀번호는 애플리케이션 비밀번호.
  *
- * TEST_EMAIL_OVERRIDE 설정 시: 발신(from)·수신(to) 모두 해당 주소로 강제 (로컬/클라우드 공통).
  */
 
 export interface SendMailOptions {
@@ -23,9 +22,8 @@ export async function sendMail(options: SendMailOptions): Promise<void> {
     throw new Error("이메일 발송이 설정되지 않았습니다. (SMTP_HOST, SMTP_USER, SMTP_PASS 확인)");
   }
 
-  const override = process.env.TEST_EMAIL_OVERRIDE?.trim();
-  const to = override || options.to;
-  const from = override || process.env.SMTP_FROM || user;
+  const to = options.to;
+  const from = process.env.SMTP_FROM || user;
 
   const nodemailer = await import("nodemailer");
   const port = parseInt(process.env.SMTP_PORT ?? "587", 10);

@@ -23,7 +23,7 @@ for (const f of [".env.local", ".env"]) {
   }
 }
 
-const to = process.argv[2] || process.env.TEST_EMAIL_OVERRIDE || "test@example.com";
+const to = process.argv[2] || "test@example.com";
 
 async function main() {
   const host = process.env.SMTP_HOST;

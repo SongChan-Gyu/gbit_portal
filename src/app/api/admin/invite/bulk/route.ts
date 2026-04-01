@@ -25,7 +25,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "employeeIds가 필요합니다." }, { status: 400 });
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
-  const override = process.env.TEST_EMAIL_OVERRIDE?.trim();
 
   const emps = await prisma.employee.findMany({
     where: { id: { in: employeeIds } },
@@ -45,11 +44,7 @@ export async function POST(req: Request) {
       results.push({ employeeId, name: emp.name, status: "SKIPPED", reason: "이미 계정이 있는 사원입니다." });
       continue;
     }
-    if (!override && emp.emailEnabled === false) {
-      results.push({ employeeId, name: emp.name, status: "SKIPPED", reason: "이메일 전송(수신) 미사용" });
-      continue;
-    }
-    const to = override || emp.email?.trim() || "";
+    const to = emp.email?.trim() || "";
     if (!to) {
       results.push({ employeeId, name: emp.name, status: "SKIPPED", reason: "이메일 미등록" });
       continue;

@@ -113,7 +113,7 @@ npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 - `NEXTAUTH_SECRET` — 운영 시 강한 랜덤 시크릿
 - `NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY` — 제주 숙소 지도 (선택, Kakao Developers에서 JavaScript 키 + Web 도메인 등록)
 
-**운영(클라우드) 이메일:** Railway 등 Variables에 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` 입력. 회사 메일 서버(smtp.gmail.com / smtp.office365.com / smtp.naver.com 등)와 발신용 계정·비밀번호만 맞추면 됨. 자세한 예시는 `.env.example` 주석 참고.
+**운영(클라우드) 이메일:** Railway 등 Variables에 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` 입력. 회사 메일 서버(smtp.gmail.com / smtp.office365.com / smtp.naver.com 등)와 발신용 계정·비밀번호만 맞추면 됨. 시스템 메일(아이디 찾기/비밀번호 재설정/초대/관리자 초기화)은 등록 이메일 기준으로 발송됨. 자세한 예시는 `.env.example` 주석 참고.
 
 **카카오 알림톡:** 카카오 비즈니스 채널 개설 후 알리고(Aligo)·비즈고 등 중계 서비스에서 연동·템플릿 검수 후 API 키 발급. **템플릿 코드·본문:** `docs/alimtalk-templates.md`. `.env.example` 하단에 설정 흐름. 미설정 시 알림톡은 스킵되고 로그만 남음.
 

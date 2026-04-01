@@ -73,8 +73,8 @@ export async function PATCH(req: Request) {
     const endDate = new Date(endStr);
     startDate.setHours(0, 0, 0, 0);
     endDate.setHours(0, 0, 0, 0);
-    if (startDate > endDate) {
-      return NextResponse.json({ error: "이용일이 올바르지 않습니다." }, { status: 400 });
+    if (startDate >= endDate) {
+      return NextResponse.json({ error: "제주도 숙소는 1박 이상(퇴실일이 입실일 다음 날 이상)만 선택할 수 있습니다." }, { status: 400 });
     }
     if (!isJejuDateBookable(startDate)) {
       return NextResponse.json({
@@ -87,7 +87,7 @@ export async function PATCH(req: Request) {
         error: "선택한 기간 중 예약이 불가한 날짜가 포함되어 있습니다.",
       }, { status: 400 });
     }
-    const nights = startStr === endStr ? 1 : Math.max(1, calcNights(startDate, endDate));
+    const nights = calcNights(startDate, endDate);
     let maxNights = JEJU_MAX_NIGHTS_DEFAULT;
     const config = await prisma.systemConfig.findUnique({ where: { key: "jejuMaxNights" } });
     if (config?.value) {
