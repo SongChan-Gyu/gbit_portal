@@ -26,11 +26,13 @@ export async function GET() {
   let depositAccount: JejuDepositAccount = { ...JEJU_DEPOSIT_ACCOUNT_DEFAULT };
   let blockedDates: string[] = [];
   let maxNights = JEJU_MAX_NIGHTS_DEFAULT;
+  let notifyConfig: object = { step1: {}, step2: {} };
   try {
-    const [accountConfig, blockedConfig, maxNightsConfig] = await Promise.all([
+    const [accountConfig, blockedConfig, maxNightsConfig, notifyConfigRow] = await Promise.all([
       prisma.systemConfig.findUnique({ where: { key: "jejuDepositAccount" } }),
       prisma.systemConfig.findUnique({ where: { key: "jejuBlockedDates" } }),
       prisma.systemConfig.findUnique({ where: { key: "jejuMaxNights" } }),
+      prisma.systemConfig.findUnique({ where: { key: "jejuApprovalNotify" } }),
     ]);
     if (accountConfig?.value) {
       const parsed = JSON.parse(accountConfig.value) as JejuDepositAccount;
@@ -44,10 +46,13 @@ export async function GET() {
       const n = parseInt(maxNightsConfig.value, 10);
       if (!isNaN(n) && n >= 1) maxNights = n;
     }
+    if (notifyConfigRow?.value) {
+      notifyConfig = JSON.parse(notifyConfigRow.value);
+    }
   } catch {
     // keep defaults
   }
-  return NextResponse.json({ depositAccount, blockedDates, maxNights });
+  return NextResponse.json({ depositAccount, blockedDates, maxNights, notifyConfig });
 }
 
 /** PATCH - 예약금 계좌, 예약 불가일 저장 */
@@ -63,6 +68,7 @@ export async function PATCH(req: Request) {
     depositAccount?: JejuDepositAccount;
     blockedDates?: string[];
     maxNights?: number;
+    notifyConfig?: { step1?: { phone?: string; email?: string }; step2?: { phone?: string; email?: string } };
   };
 
   if (body.depositAccount != null) {
@@ -98,6 +104,25 @@ export async function PATCH(req: Request) {
       where: { key: "jejuMaxNights" },
       create: { key: "jejuMaxNights", value: String(n) },
       update: { value: String(n) },
+    });
+  }
+
+  if (body.notifyConfig != null) {
+    const cfg = body.notifyConfig;
+    const sanitized = {
+      step1: {
+        email: typeof cfg.step1?.email === "string" ? cfg.step1.email.trim() : "",
+        phone: typeof cfg.step1?.phone === "string" ? cfg.step1.phone.trim() : "",
+      },
+      step2: {
+        email: typeof cfg.step2?.email === "string" ? cfg.step2.email.trim() : "",
+        phone: typeof cfg.step2?.phone === "string" ? cfg.step2.phone.trim() : "",
+      },
+    };
+    await prisma.systemConfig.upsert({
+      where: { key: "jejuApprovalNotify" },
+      create: { key: "jejuApprovalNotify", value: JSON.stringify(sanitized) },
+      update: { value: JSON.stringify(sanitized) },
     });
   }
 

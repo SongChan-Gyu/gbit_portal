@@ -6,18 +6,22 @@ import { CalendarDays } from "lucide-react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
 
 const STATUS_KO: Record<string, string> = {
-  PENDING: "승인 대기",
-  APPROVED: "승인",
+  PENDING: "1차 승인 대기",
+  STEP1_APPROVED: "입금확인 대기",
+  APPROVED: "완료",
   REJECTED: "반려",
   CANCELLED: "취소",
   CANCEL_REQUESTED: "취소 요청 중",
+  CANCEL_STEP1_APPROVED: "입금취소 대기",
 };
 const STATUS_CLS: Record<string, string> = {
   PENDING: "badge-warning",
+  STEP1_APPROVED: "badge-info",
   APPROVED: "badge-success",
   REJECTED: "badge-danger",
   CANCELLED: "badge-default",
   CANCEL_REQUESTED: "badge-warning",
+  CANCEL_STEP1_APPROVED: "badge-warning",
 };
 
 type MyRequest = {
@@ -32,10 +36,15 @@ type MyRequest = {
   depositorName: string | null;
   applicantName: string;
   status: string;
+  step1ApprovedAt: string | null;
+  approvedAt: string | null;
+  depositStatus: string;
+  depositConfirmedAt: string | null;
+  rejectStep: number | null;
   rejectComment: string | null;
-  cancelRequestedAt: string | null;
-  cancelReason: string | null;
   cancelledAt: string | null;
+  cancelReason: string | null;
+  cancelRequestedAt: string | null;
   createdAt: string;
 };
 
@@ -57,8 +66,10 @@ export default function JejuMyClient() {
   }, []);
 
   async function cancelRequest(id: string, isApproved: boolean) {
-    if (isApproved && !confirm("승인된 예약을 취소 요청하시겠습니까? (복지부 승인 후 취소됩니다)")) return;
-    if (!isApproved && !confirm("이 숙소 신청을 취소하시겠습니까?")) return;
+    const msg = isApproved
+      ? "승인된 예약을 취소 요청하시겠습니까? (복지부 승인 후 처리됩니다)"
+      : "이 숙소 신청을 취소하시겠습니까?";
+    if (!confirm(msg)) return;
     const res = await fetch("/api/jeju/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -117,7 +128,7 @@ export default function JejuMyClient() {
       <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
         <CalendarDays size={18} className="shrink-0 text-slate-600" /> 예약 신청 내역
       </h2>
-      <p className="text-xs text-gray-500 mb-4">승인 전에는 수정·취소가 가능합니다.</p>
+      <p className="text-xs text-gray-500 mb-4">대기·1차승인 상태에서는 수정·취소가 가능합니다.</p>
       {list.length === 0 ? (
         <p className="text-sm text-gray-500 py-6 text-center">신청 내역이 없습니다.</p>
       ) : (
@@ -127,7 +138,7 @@ export default function JejuMyClient() {
               key={r.id}
               className="rounded-2xl border border-gray-200 bg-white overflow-hidden shadow-sm"
             >
-              {editId === r.id && r.status === "PENDING" ? (
+              {editId === r.id && ["PENDING", "STEP1_APPROVED", "APPROVED"].includes(r.status) ? (
                 <form onSubmit={(e) => submitEdit(e, r.id)} className="p-4 space-y-4">
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">예약 수정</p>
                   <div className="grid grid-cols-1 gap-3">
@@ -233,15 +244,35 @@ export default function JejuMyClient() {
                       )}
                     </dl>
                     {r.reason && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{r.reason}</p>}
+                    {r.status === "STEP1_APPROVED" && (
+                      <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                        1차 승인 완료 · PM 입금확인 대기 중입니다.
+                        {r.step1ApprovedAt && <span className="ml-1 text-xs text-blue-500">({r.step1ApprovedAt.slice(0, 10)})</span>}
+                      </p>
+                    )}
+                    {r.status === "APPROVED" && (
+                      <p className="text-sm text-green-700 bg-green-50 border border-green-100 rounded-lg px-3 py-2">
+                        입금확인 완료 · 예약이 확정되었습니다.
+                        {r.depositConfirmedAt && <span className="ml-1 text-xs text-green-500">({r.depositConfirmedAt.slice(0, 10)})</span>}
+                      </p>
+                    )}
                     {r.status === "REJECTED" && r.rejectComment && (
-                      <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">반려 사유: {r.rejectComment}</p>
+                      <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">
+                        반려 사유{r.rejectStep ? ` (${r.rejectStep}차)` : ""}: {r.rejectComment}
+                      </p>
                     )}
                     {r.status === "CANCEL_REQUESTED" && (
                       <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                        취소 요청이 접수되었습니다. 복지부 승인 후 취소됩니다.
+                        취소 요청이 접수되었습니다. 복지부 승인 후 처리됩니다.
+                      </p>
+                    )}
+                    {r.status === "CANCEL_STEP1_APPROVED" && (
+                      <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                        취소 1차 승인 완료 · PM 입금취소 처리 대기 중입니다.
                       </p>
                     )}
                   </div>
+                  {/* PENDING: 수정·즉시취소 */}
                   {r.status === "PENDING" && (
                     <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
                       <button
@@ -260,9 +291,45 @@ export default function JejuMyClient() {
                       </button>
                     </div>
                   )}
+                  {/* STEP1_APPROVED: 정정(1차부터 재결재) 또는 취소 요청 */}
+                  {r.status === "STEP1_APPROVED" && (
+                    <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditId(r.id)}
+                        className="min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-white touch-manipulation"
+                      >
+                        정정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cancelRequest(r.id, false)}
+                        className="min-h-[44px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-medium hover:bg-rose-50 touch-manipulation"
+                      >
+                        취소 요청
+                      </button>
+                    </div>
+                  )}
+                  {/* APPROVED: 정정(입금확인 유지) 또는 취소 요청 */}
                   {r.status === "APPROVED" && (
                     <div className="border-t border-gray-100 bg-gray-50/90 p-3 space-y-2">
-                      <label className="text-xs font-medium text-gray-600">취소 사유 (선택)</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditId(r.id)}
+                          className="min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-white touch-manipulation"
+                        >
+                          정정
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cancelRequest(r.id, true)}
+                          className="min-h-[44px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-medium hover:bg-rose-50 touch-manipulation"
+                        >
+                          취소 요청
+                        </button>
+                      </div>
+                      <label className="text-xs font-medium text-gray-500">취소 사유 (선택)</label>
                       <input
                         type="text"
                         placeholder="필요 시 입력"
@@ -270,13 +337,6 @@ export default function JejuMyClient() {
                         onChange={(e) => setCancelReasons((prev) => ({ ...prev, [r.id]: e.target.value }))}
                         className="input w-full min-h-[48px] text-base"
                       />
-                      <button
-                        type="button"
-                        onClick={() => cancelRequest(r.id, true)}
-                        className="w-full min-h-[48px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 touch-manipulation"
-                      >
-                        취소 요청
-                      </button>
                     </div>
                   )}
                 </>

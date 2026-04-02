@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { calcNights, isJejuDateBookable, JEJU_MAX_NIGHTS_DEFAULT } from "@/lib/jeju";
+import { sendJejuNotification } from "@/lib/jejuNotify";
 
 async function getBlockedDates(): Promise<string[]> {
   try {
@@ -100,7 +101,7 @@ export async function POST(req: Request) {
       const overlapping = await tx.jejuAccommodation.findFirst({
         where: {
           employeeId: user.employeeId,
-          status: { in: ["PENDING", "APPROVED"] },
+          status: { in: ["PENDING", "STEP1_APPROVED", "APPROVED"] },
           OR: [
             { startDate: { lte: endDate }, endDate: { gte: startDate } },
           ],
@@ -133,6 +134,14 @@ export async function POST(req: Request) {
       after: { startDate, endDate, nights, status: "PENDING" },
       ip: getIp(req) ?? undefined,
     });
+    // 복지부에게 1차 승인 요청 알림
+    const emp = await prisma.employee.findUnique({
+      where: { id: user.employeeId },
+      select: { id: true, name: true, phone: true, alimtalkEnabled: true },
+    });
+    if (emp) {
+      await sendJejuNotification(prisma, "step1_notify", emp, created, 1).catch(console.warn);
+    }
     return NextResponse.json({ ok: true, id: created.id });
   } catch (e: any) {
     if (e?.message === "OVERLAP") {

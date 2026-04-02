@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { formatJejuAccountNumber } from "@/lib/jeju";
 import type { JejuDepositAccount } from "@/lib/jeju";
 
+type NotifyContact = { phone?: string; email?: string };
+type JejuNotifyConfig = { step1?: NotifyContact; step2?: NotifyContact };
+
 export default function JejuSettingsTab() {
   const [depositAccount, setDepositAccount] = useState<JejuDepositAccount>({
     bankName: "신한은행",
@@ -13,6 +16,7 @@ export default function JejuSettingsTab() {
   const [maxNights, setMaxNights] = useState(14);
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [newBlockDate, setNewBlockDate] = useState("");
+  const [notifyConfig, setNotifyConfig] = useState<JejuNotifyConfig>({ step1: {}, step2: {} });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
@@ -20,10 +24,11 @@ export default function JejuSettingsTab() {
   useEffect(() => {
     fetch("/api/admin/jeju-settings")
       .then((r) => r.ok ? r.json() : Promise.reject(new Error("조회 실패")))
-      .then((data: { depositAccount?: JejuDepositAccount; blockedDates?: string[]; maxNights?: number }) => {
+      .then((data: { depositAccount?: JejuDepositAccount; blockedDates?: string[]; maxNights?: number; notifyConfig?: JejuNotifyConfig }) => {
         if (data.depositAccount) setDepositAccount(data.depositAccount);
         if (Array.isArray(data.blockedDates)) setBlockedDates(data.blockedDates);
         if (typeof data.maxNights === "number" && data.maxNights >= 1) setMaxNights(data.maxNights);
+        if (data.notifyConfig) setNotifyConfig(data.notifyConfig);
       })
       .catch(() => setMessage({ type: "err", text: "설정을 불러오지 못했습니다." }))
       .finally(() => setLoading(false));
@@ -68,6 +73,20 @@ export default function JejuSettingsTab() {
     setBlockedDates((prev) => prev.filter((d) => d !== date));
   }
 
+  async function saveNotifyConfig() {
+    setSaving(true);
+    setMessage(null);
+    const res = await fetch("/api/admin/jeju-settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notifyConfig }),
+    });
+    const data = await res.json();
+    setSaving(false);
+    if (res.ok) setMessage({ type: "ok", text: "알림 수신자가 저장되었습니다." });
+    else setMessage({ type: "err", text: data.error || "저장 실패" });
+  }
+
   async function saveMaxNights() {
     setSaving(true);
     setMessage(null);
@@ -97,6 +116,72 @@ export default function JejuSettingsTab() {
           {message.text}
         </p>
       )}
+
+      {/* 결재 단계별 알림 수신자 */}
+      <div className="card max-w-xl">
+        <h3 className="font-semibold text-gray-800 mb-1">결재 알림 수신자</h3>
+        <p className="text-xs text-gray-500 mb-4">
+          각 결재 단계에서 이메일로 알림을 받을 담당자 정보를 입력합니다.
+          알림톡 번호를 입력하면 추후 알림톡 연동 시 사용됩니다.
+        </p>
+        <div className="space-y-4">
+          {/* 1차 (복지부) */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">1차 결재 담당자 (복지부)</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <label className="label">이메일</label>
+                <input
+                  type="email"
+                  className="input w-full"
+                  value={notifyConfig.step1?.email ?? ""}
+                  onChange={(e) => setNotifyConfig((c) => ({ ...c, step1: { ...c.step1, email: e.target.value } }))}
+                  placeholder="welfare@company.com"
+                />
+              </div>
+              <div>
+                <label className="label">전화번호 (알림톡)</label>
+                <input
+                  type="tel"
+                  className="input w-full"
+                  value={notifyConfig.step1?.phone ?? ""}
+                  onChange={(e) => setNotifyConfig((c) => ({ ...c, step1: { ...c.step1, phone: e.target.value } }))}
+                  placeholder="01012345678"
+                />
+              </div>
+            </div>
+          </div>
+          {/* 2차 (PM) */}
+          <div>
+            <p className="text-sm font-medium text-gray-700 mb-2">2차 결재 담당자 (PM — 입금확인)</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <label className="label">이메일</label>
+                <input
+                  type="email"
+                  className="input w-full"
+                  value={notifyConfig.step2?.email ?? ""}
+                  onChange={(e) => setNotifyConfig((c) => ({ ...c, step2: { ...c.step2, email: e.target.value } }))}
+                  placeholder="pm@company.com"
+                />
+              </div>
+              <div>
+                <label className="label">전화번호 (알림톡)</label>
+                <input
+                  type="tel"
+                  className="input w-full"
+                  value={notifyConfig.step2?.phone ?? ""}
+                  onChange={(e) => setNotifyConfig((c) => ({ ...c, step2: { ...c.step2, phone: e.target.value } }))}
+                  placeholder="01011111111"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        <button type="button" onClick={saveNotifyConfig} disabled={saving} className="btn-primary mt-4">
+          {saving ? "저장 중..." : "알림 수신자 저장"}
+        </button>
+      </div>
 
       {/* 예약금 이체 계좌 */}
       <div className="card max-w-xl">

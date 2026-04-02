@@ -26,11 +26,15 @@ export async function GET() {
       depositorName: r.depositorName,
       applicantName: r.employee.name,
       status: r.status,
-      cancelRequestedAt: (r as { cancelRequestedAt?: Date | null }).cancelRequestedAt?.toISOString() ?? null,
-      cancelReason: r.cancelReason,
+      step1ApprovedAt: r.step1ApprovedAt?.toISOString() ?? null,
       approvedAt: r.approvedAt?.toISOString() ?? null,
+      depositStatus: r.depositStatus,
+      depositConfirmedAt: r.depositConfirmedAt?.toISOString() ?? null,
+      rejectStep: r.rejectStep,
       rejectComment: r.rejectComment,
       cancelledAt: r.cancelledAt?.toISOString() ?? null,
+      cancelReason: r.cancelReason,
+      cancelRequestedAt: r.cancelRequestedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
     }))
   );

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { sendLeaveRequestAlimtalk, sendLeaveResultAlimtalk } from "@/lib/kakao";
+import { sendLeaveResultAlimtalk } from "@/lib/kakao";
 import { writeAudit } from "@/lib/audit";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
@@ -39,12 +39,13 @@ export async function POST(req: Request) {
   if (request.status !== "PENDING")
     return NextResponse.json({ error:"진행 중인 신청이 아닙니다." }, { status:400 });
 
+  const emp = request.employee;
+
   if (action === "REJECT") {
     await prisma.$transaction(async (tx) => {
       await tx.leaveApproval.update({ where:{id:approvalId}, data:{status:"REJECTED", comment, approvedAt:new Date()} });
       await tx.leaveRequest.update({ where:{id:request.id}, data:{status:"REJECTED"} });
 
-      // 스탬프·스탬프 장 권한 복원
       const needsStampRelease = request.items.some((i) => i.leaveType.requiresStamp);
       if (needsStampRelease) await releaseStampSlotsForLeaveRequest(tx, request.id);
       await tx.leaveHistory.create({
@@ -52,7 +53,6 @@ export async function POST(req: Request) {
       });
     });
 
-    const emp = request.employee;
     await writeAudit({ entityType:"LeaveRequest", entityId:request.id, action:"REJECTED",
       actorId, note:`${emp.name} 휴가 반려 (${comment})` });
     if (emp.phone && emp.alimtalkEnabled !== false) {
@@ -61,109 +61,57 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok:true });
   }
 
-  // APPROVE
-  const isLastStep = approval.step >= request.totalSteps;
-
+  // APPROVE — 모든 휴가 1단계 결재로 통일, 항상 최종 승인
   await prisma.$transaction(async (tx) => {
     await tx.leaveApproval.update({ where:{id:approvalId}, data:{status:"APPROVED", approvedAt:new Date(), comment: comment ?? null} });
+    await tx.leaveRequest.update({ where:{id:request.id}, data:{status:"APPROVED"} });
 
-    if (isLastStep) {
-      await tx.leaveRequest.update({ where:{id:request.id}, data:{status:"APPROVED"} });
-
-      // 할당 차감: 연차 풀만 만료 시 다른 연차로 대체. 전용 부여 풀(CARE·포상 등)은 대체 없음.
-      const now = new Date();
-      for (const item of request.items) {
-        let allocId = item.allocationId;
-        if (!allocId) continue;
-        const alloc = await tx.leaveAllocation.findUnique({ where: { id: allocId } });
-        if (!alloc) continue;
-        const expired = new Date(alloc.validUntil) < now;
-        if (isAnnualPoolSourceCode(alloc.sourceCode)) {
-          if (!alloc.isActive || expired) {
-            const fallback = await tx.leaveAllocation.findFirst({
-              where: {
-                employeeId: request.employeeId,
-                OR: [
-                  { sourceCode: { in: [...ANNUAL_CORE_SOURCE_CODES] } },
-                  { sourceCode: "ANNUAL" },
-                  { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
-                ],
-                isActive: true,
-                validUntil: { gte: now },
-              },
-              orderBy: { validUntil: "asc" },
-            });
-            allocId = fallback?.id ?? null;
-          }
-        } else if (!alloc.isActive || expired) {
-          allocId = null;
-        }
-        if (allocId) {
-          await tx.leaveAllocation.update({
-            where: { id: allocId },
-            data: { usedDays: { increment: item.days } },
+    // 할당 차감: 연차 풀만 만료 시 다른 연차로 대체. 전용 부여 풀(CARE·포상 등)은 대체 없음.
+    const now = new Date();
+    for (const item of request.items) {
+      let allocId = item.allocationId;
+      if (!allocId) continue;
+      const alloc = await tx.leaveAllocation.findUnique({ where: { id: allocId } });
+      if (!alloc) continue;
+      const expired = new Date(alloc.validUntil) < now;
+      if (isAnnualPoolSourceCode(alloc.sourceCode)) {
+        if (!alloc.isActive || expired) {
+          const fallback = await tx.leaveAllocation.findFirst({
+            where: {
+              employeeId: request.employeeId,
+              OR: [
+                { sourceCode: { in: [...ANNUAL_CORE_SOURCE_CODES] } },
+                { sourceCode: "ANNUAL" },
+                { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+              ],
+              isActive: true,
+              validUntil: { gte: now },
+            },
+            orderBy: { validUntil: "asc" },
           });
+          allocId = fallback?.id ?? null;
         }
+      } else if (!alloc.isActive || expired) {
+        allocId = null;
       }
-
-      await tx.leaveHistory.create({
-        data:{ leaveRequestId:request.id, action:"APPROVED", actorId,
-          snapshot:JSON.stringify({ step:approval.step, isLastStep }) },
-      });
-    } else {
-      // 다음 단계로: currentStep 갱신 후 다음 결재자(PM) 결재 행 생성
-      const nextStep = approval.step + 1;
-      await tx.leaveRequest.update({ where:{id:request.id}, data:{currentStep:nextStep} });
-      const pm = await tx.employee.findFirst({ where: { role: "PM", status: "ACTIVE" } });
-      if (pm) {
-        await tx.leaveApproval.create({
-          data: {
-            leaveRequestId: request.id,
-            approverId: pm.id,
-            step: nextStep,
-            status: "PENDING",
-          },
+      if (allocId) {
+        await tx.leaveAllocation.update({
+          where: { id: allocId },
+          data: { usedDays: { increment: item.days } },
         });
       }
-      await tx.leaveHistory.create({
-        data:{ leaveRequestId:request.id, action:`STEP_${approval.step}_APPROVED`, actorId },
-      });
     }
+
+    await tx.leaveHistory.create({
+      data:{ leaveRequestId:request.id, action:"APPROVED", actorId,
+        snapshot:JSON.stringify({ step:approval.step }) },
+    });
   });
 
-  const emp = request.employee;
-  if (isLastStep) {
-    await writeAudit({ entityType:"LeaveRequest", entityId:request.id, action:"APPROVED",
-      actorId, note:`${emp.name} 휴가 최종 승인 (총 ${request.totalDays}일)` });
-    if (emp.phone && emp.alimtalkEnabled !== false) {
-      await sendLeaveResultAlimtalk(prisma, emp.id, emp.phone, emp.name, "승인", "");
-    }
-  } else {
-    // 다음 단계(예: PM) 결재 요청 알림톡
-    const pm = await prisma.employee.findFirst({
-      where: { role: "PM", status: "ACTIVE" },
-    });
-    if (pm?.phone && pm.alimtalkEnabled !== false) {
-      const typeNames = request.items.map((i) => i.leaveType.name).join("+");
-      const first = request.items[0];
-      const last = request.items[request.items.length - 1];
-      const startStr = first?.startDate.toISOString().slice(0, 10);
-      const endStr = last?.endDate.toISOString().slice(0, 10);
-      try {
-        await sendLeaveRequestAlimtalk(
-          prisma,
-          pm.id,
-          pm.phone,
-          pm.name,
-          emp.name,
-          typeNames,
-          startStr,
-          endStr,
-        );
-      } catch (e) {
-        console.warn("[leave/approve] 2차 결재 알림톡 실패 (결재는 반영됨)", e);
-      }
-    }
+  await writeAudit({ entityType:"LeaveRequest", entityId:request.id, action:"APPROVED",
+    actorId, note:`${emp.name} 휴가 승인 (총 ${request.totalDays}일)` });
+  if (emp.phone && emp.alimtalkEnabled !== false) {
+    await sendLeaveResultAlimtalk(prisma, emp.id, emp.phone, emp.name, "승인", "");
   }
 
   return NextResponse.json({ ok:true });

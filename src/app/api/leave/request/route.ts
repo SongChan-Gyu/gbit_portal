@@ -452,11 +452,25 @@ export async function POST(req: Request) {
       }
     }
 
+    // 결재선: approvalSteps 0 = 자동승인, 1+ = 1단계 결재(역할 기반)
+    // 결재자 = 팀원→팀장, 팀장→PM, PM/ADMIN→자동승인
+    // SystemConfig.leaveApprovalPMId 로 팀장 결재 시 특정 PM 지정 가능
+    const leaveApprovalPMCfg = await prisma.systemConfig.findUnique({ where: { key: "leaveApprovalPMId" } });
+    const designatedPM = leaveApprovalPMCfg?.value
+      ? await prisma.employee.findUnique({ where: { id: leaveApprovalPMCfg.value, status: "ACTIVE" } })
+      : null;
+    const effectivePM = designatedPM ?? pm;
+
+    // approvalSteps 값에 관계없이 0=자동, 1+=1단계로 통일
+    const requiresApproval = (steps: number) => steps > 0;
+
+    // 모든 휴가를 approvalSteps 기준 0(자동) vs 1+(결재필요) 2그룹으로 분류
     const groupByApprovalLine = new Map<number, typeof resolvedItems>();
     for (const it of resolvedItems) {
       const steps = ltMap[it.leaveTypeId]?.approvalSteps ?? 1;
-      if (!groupByApprovalLine.has(steps)) groupByApprovalLine.set(steps, []);
-      groupByApprovalLine.get(steps)!.push(it);
+      const key = steps > 0 ? 1 : 0; // 1이상은 모두 1단계 결재로 통일
+      if (!groupByApprovalLine.has(key)) groupByApprovalLine.set(key, []);
+      groupByApprovalLine.get(key)!.push(it);
     }
 
     type ResolvedItem = (typeof resolvedItems)[number];
@@ -479,12 +493,15 @@ export async function POST(req: Request) {
           Math.max(...groupItems.flatMap((i) => [new Date(i.startDate).getTime(), new Date(i.endDate).getTime()])),
         );
         const groupTotalDays = groupItems.reduce((s, i) => s + i.days, 0);
-        const totalSteps = approvalSteps;
-        const isGroupAutoApprove =
-          isPmOrAdmin || (employee?.role === "TEAM_LEAD" && totalSteps <= 1) || totalSteps === 0;
+        const totalSteps = requiresApproval(approvalSteps) ? 1 : 0;
+        // 자동승인: PM/ADMIN 본인 신청, 또는 결재불필요(approvalSteps=0) 휴가
+        const isGroupAutoApprove = isPmOrAdmin || totalSteps === 0;
+        // 결재자: 팀원→팀장, 팀장→PM (역할 기반 1단계)
         const groupApprover = isGroupAutoApprove
           ? null
-          : (employee?.role === "TEAM_LEAD" ? pm : teamLeader) ?? pm ?? teamLeader;
+          : employee?.role === "TEAM_LEAD"
+            ? effectivePM ?? teamLeader   // 팀장이 신청 시 PM이 결재
+            : teamLeader ?? effectivePM;   // 팀원 신청 시 팀장이 결재, 없으면 PM
 
         const req = await tx.leaveRequest.create({
           data: {

@@ -54,8 +54,10 @@ model Employee {
   auditLogs         AuditLog[]        @relation("AuditActor")
   teamLeaderOf      Team?             @relation("TeamLeader")
   notifications     Notification[]
-  jejuAccommodations JejuAccommodation[]
-  jejuApprovedBy    JejuAccommodation[] @relation("JejuApprover")
+  jejuAccommodations   JejuAccommodation[]
+  jejuApprovedBy       JejuAccommodation[] @relation("JejuApprover")
+  jejuStep1ApprovedBy  JejuAccommodation[] @relation("JejuStep1Approver")
+  jejuDepositConfirmedBy JejuAccommodation[] @relation("JejuDepositConfirmer")
   notices           Notice[]
 
   createdAt    DateTime     @default(now())
@@ -485,19 +487,43 @@ model JejuAccommodation {
   endDate       DateTime
   nights        Int       // 1 이상 (입실일 15시 ~ 퇴실일 11시, 박 단위)
   reason        String?
-  // 필수 입력: 이름·연락처·입실인원 (결제/승인 후 정정 불가)
+  // 필수 입력: 이름·연락처·입실인원
   guestName     String
   guestPhone    String
   guestCount    Int       // 입실 인원
   depositorName String    // 입금자명 (예약금 무통장입금 시 예약자가 입력)
-  status        String    @default("PENDING")  // PENDING / APPROVED / REJECTED / CANCELLED / CANCEL_REQUESTED
+
+  // ── 2단계 결재 상태 ──────────────────────────────────
+  // PENDING: 신청 완료, 1차(복지부) 승인 대기
+  // STEP1_APPROVED: 복지부 승인, 2차(PM 입금확인) 대기
+  // APPROVED: 입금확인 완료 (전체 승인)
+  // REJECTED: 반려
+  // CANCELLED: 취소 완료
+  // CANCEL_REQUESTED: 취소 요청 (1차 취소 승인 대기)
+  // CANCEL_STEP1_APPROVED: 복지부 취소 승인, PM 입금취소 대기
+  status        String    @default("PENDING")
+
+  // 1차 결재 (복지부)
+  step1ApproverId  String?
+  step1Approver    Employee? @relation("JejuStep1Approver", fields: [step1ApproverId], references: [id])
+  step1ApprovedAt  DateTime?
+  rejectStep       Int?      // 반려 발생 단계 (1 or 2)
+
+  // 2차 결재 (PM 입금 확인) — approvedById/approvedAt 재사용
   approvedById  String?
   approvedBy    Employee? @relation("JejuApprover", fields: [approvedById], references: [id])
   approvedAt    DateTime?
+
+  // 입금 상태: NONE / CONFIRMED / CANCELLED
+  depositStatus          String    @default("NONE")
+  depositConfirmedById   String?
+  depositConfirmedBy     Employee? @relation("JejuDepositConfirmer", fields: [depositConfirmedById], references: [id])
+  depositConfirmedAt     DateTime?
+
   rejectComment String?
   cancelledAt   DateTime?
   cancelReason  String?
-  cancelRequestedAt DateTime?  // 취소 요청 시각 (복지부/PM 취소 승인 시 최종 cancelledAt 사용)
+  cancelRequestedAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
