@@ -293,12 +293,27 @@ export async function PATCH(req: Request) {
     }
     if (table === "AllocationSourceConfig") {
       if (!id) return NextResponse.json({ error: "id 필요" }, { status: 400 });
-      const update: { label?: string; sortOrder?: number; isActive?: boolean; defaultDays?: number | null; note?: string | null } = {};
+      const update: {
+        label?: string; sortOrder?: number; isActive?: boolean;
+        defaultDays?: number | null; note?: string | null;
+        tenureYears?: number | null; carryoverThresholdMonths?: number | null;
+        bonusIntervalYears?: number | null; bonusMaxDays?: number | null;
+        skipForFreelancer?: boolean;
+      } = {};
       if (typeof data.label === "string") update.label = data.label;
       if (typeof data.sortOrder === "number") update.sortOrder = data.sortOrder;
       if (typeof data.isActive === "boolean") update.isActive = data.isActive;
+      if (typeof data.skipForFreelancer === "boolean") update.skipForFreelancer = data.skipForFreelancer;
       if (data.defaultDays === null) update.defaultDays = null;
       else if (typeof data.defaultDays === "number") update.defaultDays = data.defaultDays;
+      if (data.tenureYears === null) update.tenureYears = null;
+      else if (typeof data.tenureYears === "number") update.tenureYears = data.tenureYears;
+      if (data.carryoverThresholdMonths === null) update.carryoverThresholdMonths = null;
+      else if (typeof data.carryoverThresholdMonths === "number") update.carryoverThresholdMonths = data.carryoverThresholdMonths;
+      if (data.bonusIntervalYears === null) update.bonusIntervalYears = null;
+      else if (typeof data.bonusIntervalYears === "number") update.bonusIntervalYears = data.bonusIntervalYears;
+      if (data.bonusMaxDays === null) update.bonusMaxDays = null;
+      else if (typeof data.bonusMaxDays === "number") update.bonusMaxDays = data.bonusMaxDays;
       if (data.note !== undefined) update.note = data.note === "" ? null : String(data.note);
       await prisma.allocationSourceConfig.update({ where: { id }, data: update });
       return NextResponse.json({ ok: true });

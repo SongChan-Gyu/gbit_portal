@@ -61,14 +61,19 @@ export async function POST(req: Request) {
   const DUTY_SOURCE = "DUTY_DEPT";
   const DUTY_LABEL: Record<string, string> = { OPERATIONS: "운영부", EDUCATION: "교육부", WELFARE: "복지부" };
 
-  // DB에서 BASE_ANNUAL / TENURE_BONUS 규칙 읽기
+  // DB에서 규칙 읽기 (AllocationSourceConfig)
   const baseAnnualCfg  = sourceConfigs.find((s) => s.sourceCode === "BASE_ANNUAL");
   const tenureBonusCfg = sourceConfigs.find((s) => s.sourceCode === "TENURE_BONUS");
+  const tenure1yCfg    = sourceConfigs.find((s) => s.sourceCode === "TENURE_1Y");
 
-  const BASE_ANNUAL_DAYS    = Number(baseAnnualCfg?.defaultDays   ?? 15);
+  const BASE_ANNUAL_DAYS    = Number(baseAnnualCfg?.defaultDays      ?? 15);
   const BONUS_INTERVAL_YRS  = Number(tenureBonusCfg?.bonusIntervalYears ?? 2);
-  const BONUS_MAX_DAYS      = Number(tenureBonusCfg?.bonusMaxDays  ?? 10);
-  const BONUS_SKIP_FREE     = tenureBonusCfg?.skipForFreelancer ?? true;
+  const BONUS_MAX_DAYS      = Number(tenureBonusCfg?.bonusMaxDays     ?? 10);
+  const BONUS_SKIP_FREE     = tenureBonusCfg?.skipForFreelancer        ?? true;
+  // TENURE_1Y: 귀속연도 마지막 N개월 이내 부여분은 다음 귀속연도로 이월
+  // FY 종료월(4월) 기준: cutoffMonth = 5 - N (N=3 → 2월 이상이면 이월 대상)
+  const TENURE_1Y_CARRYOVER_MONTHS = Number(tenure1yCfg?.carryoverThresholdMonths ?? 3);
+  const TENURE_1Y_CUTOFF_MONTH     = 5 - TENURE_1Y_CARRYOVER_MONTHS; // 귀속연도 종료 N개월 전 시작 월
 
   async function allocExists(
     tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
@@ -113,7 +118,9 @@ export async function POST(req: Request) {
     let days = 0;
     for (const a of prev) {
       const month = new Date(a.validFrom).getMonth() + 1; // 1~12
-      if (month < 2 || month > 4) continue; // FY 마지막 3개월(2~4월) 부여분만 특례
+      // FY 종료월(4월) 기준 마지막 TENURE_1Y_CARRYOVER_MONTHS 개월 이내 부여분만 이월 특례
+      // FY가 5월~4월이므로: cutoffMonth = 5 - N, endMonth = 4
+      if (month < TENURE_1Y_CUTOFF_MONTH || month > 4) continue;
       const remaining = Number(a.totalDays) - Number(a.usedDays);
       if (remaining > 0) days += remaining;
     }
@@ -320,7 +327,7 @@ export async function POST(req: Request) {
             validFrom: fyStart,
             validUntil: fyEnd,
             fiscalYear: fy,
-            note: `${TENURE_1Y_CARRYOVER_NOTE_KEY}:${prevFy} (2~4월 부여분 잔여 이월)`,
+            note: `${TENURE_1Y_CARRYOVER_NOTE_KEY}:${prevFy} (마지막 ${TENURE_1Y_CARRYOVER_MONTHS}개월 부여분 잔여 이월)`,
           },
         });
         created++;

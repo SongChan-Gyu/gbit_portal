@@ -167,7 +167,9 @@ export default function DataEditorTab() {
         : table === "Team"
           ? ["name", "sortOrder", "leaderName", "leaderId"]
           : table === "AllocationSourceConfig"
-            ? ["sourceCode", "label", "sortOrder", "isActive", "defaultDays", "note"]
+            ? ["sourceCode", "label", "sortOrder", "isActive", "defaultDays",
+               "tenureYears", "carryoverThresholdMonths",
+               "bonusIntervalYears", "bonusMaxDays", "skipForFreelancer", "note"]
             : ["jobKey", "name", "description", "sortOrder", "isActive"])
     : (rows[0] ? Object.keys(rows[0]) : []);
 
@@ -183,6 +185,11 @@ export default function DataEditorTab() {
     label: "표시명",
     isActive: "사용",
     defaultDays: "기본일수",
+    tenureYears: "근속주년(년)",
+    carryoverThresholdMonths: "이월임계(개월)",
+    bonusIntervalYears: "가산간격(년)",
+    bonusMaxDays: "가산최대(일)",
+    skipForFreelancer: "프리랜서제외",
     note: "비고",
     jobKey: "작업키",
     description: "설명",
@@ -346,7 +353,83 @@ export default function DataEditorTab() {
                     className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
                   />
                 </div>
-                <div className="flex items-center gap-2">
+                {/* 근속주년 (TENURE_1Y/5Y/10Y용) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <FieldLabel tableId={table} fieldKey="tenureYears" />
+                    <span className="ml-1 text-gray-400 font-normal">(스케줄러 자동부여 기념일년수)</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="없음"
+                    value={(editForm.tenureYears as number) ?? ""}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        tenureYears: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                {/* 이월 임계 개월수 (TENURE_1Y용) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <FieldLabel tableId={table} fieldKey="carryoverThresholdMonths" />
+                    <span className="ml-1 text-gray-400 font-normal">(FY말 N개월이내 부여 시 이월)</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="없음"
+                    value={(editForm.carryoverThresholdMonths as number) ?? ""}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        carryoverThresholdMonths: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                {/* 근속가산 간격·최대 (TENURE_BONUS용) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <FieldLabel tableId={table} fieldKey="bonusIntervalYears" />
+                    <span className="ml-1 text-gray-400 font-normal">(N년마다 +1일)</span>
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="없음"
+                    value={(editForm.bonusIntervalYears as number) ?? ""}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        bonusIntervalYears: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <FieldLabel tableId={table} fieldKey="bonusMaxDays" />
+                    <span className="ml-1 text-gray-400 font-normal">(최대 가산일수)</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    placeholder="없음"
+                    value={(editForm.bonusMaxDays as number) ?? ""}
+                    onChange={(e) =>
+                      setEditForm((f) => ({
+                        ...f,
+                        bonusMaxDays: e.target.value === "" ? null : Number(e.target.value),
+                      }))
+                    }
+                    className="w-24 rounded border border-gray-300 px-2 py-1.5 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-4">
                   <label className="flex items-center gap-1.5 text-sm">
                     <input
                       type="checkbox"
@@ -355,6 +438,15 @@ export default function DataEditorTab() {
                       className="rounded border-gray-300"
                     />
                     <FieldLabel tableId={table} fieldKey="isActive" />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!editForm.skipForFreelancer}
+                      onChange={(e) => setEditForm((f) => ({ ...f, skipForFreelancer: e.target.checked }))}
+                      className="rounded border-gray-300"
+                    />
+                    <FieldLabel tableId={table} fieldKey="skipForFreelancer" />
                   </label>
                 </div>
               </div>

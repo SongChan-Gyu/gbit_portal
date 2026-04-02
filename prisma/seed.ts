@@ -121,41 +121,33 @@ async function main() {
   // ── 귀속연도 자동 부여 구분 (휴가관리에서 추가/제거 용이)
   const initSources: {
     sourceCode: string; label: string; sortOrder: number; defaultDays: number | null;
-    tenureYears?: number | null; bonusIntervalYears?: number | null; bonusMaxDays?: number | null;
+    tenureYears?: number | null; carryoverThresholdMonths?: number | null;
+    bonusIntervalYears?: number | null; bonusMaxDays?: number | null;
     skipForFreelancer?: boolean; note?: string | null;
   }[] = [
-    {
-      sourceCode: "BASE_ANNUAL", label: "기본연차", sortOrder: 1,
-      defaultDays: 15,   // 1년 이상 15일
-      note: "1년 이상 15일, 미만 시 월별 발생",
-    },
-    {
-      sourceCode: "TENURE_BONUS", label: "근속가산", sortOrder: 2,
-      defaultDays: null, // 근속연수에 따라 계산
-      bonusIntervalYears: 2, bonusMaxDays: 10, skipForFreelancer: true,
-      note: "2년마다 +1일, 최대 10일 (프리랜서 제외)",
-    },
-    { sourceCode: "CARE",       label: "돌봄휴가",     sortOrder: 3, defaultDays: 2,  note: "전원 2일" },
-    { sourceCode: "HOLIDAY_EXT",label: "연휴연장휴가", sortOrder: 4, defaultDays: 1,  note: "전원 1일" },
-    { sourceCode: "DUTY_DEPT",  label: "직무부서휴가", sortOrder: 5, defaultDays: 2,  note: "운영부/교육부/복지부 2일" },
-    { sourceCode: "AWARD",      label: "포상휴가",     sortOrder: 6, defaultDays: null, note: "PM·관리자가 사원별 부여" },
+    { sourceCode: "BASE_ANNUAL",  label: "기본연차",     sortOrder: 1, defaultDays: 15,   note: "1년 이상 15일, 미만 시 월별 발생" },
+    { sourceCode: "TENURE_BONUS", label: "근속가산",     sortOrder: 2, defaultDays: null, bonusIntervalYears: 2, bonusMaxDays: 10, skipForFreelancer: true, note: "2년마다 +1일, 최대 10일 (프리랜서 제외)" },
+    { sourceCode: "CARE",         label: "돌봄휴가",     sortOrder: 3, defaultDays: 2,    note: "전원 2일" },
+    { sourceCode: "HOLIDAY_EXT",  label: "연휴연장휴가", sortOrder: 4, defaultDays: 1,    note: "전원 1일" },
+    { sourceCode: "DUTY_DEPT",    label: "직무부서휴가", sortOrder: 5, defaultDays: 2,    note: "운영부/교육부/복지부 2일" },
+    { sourceCode: "AWARD",        label: "포상휴가",     sortOrder: 6, defaultDays: null, note: "PM·관리자가 사원별 부여" },
     // 근속 기념일 기반 특별부여 (tenureYears: 스케줄러가 해당 주년에 자동 부여)
-    { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1  },
+    { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1,  carryoverThresholdMonths: 3 },
     { sourceCode: "TENURE_5Y",  label: "5년근속휴가",  sortOrder: 8, defaultDays: 5,  tenureYears: 5  },
     { sourceCode: "TENURE_10Y", label: "10년근속휴가", sortOrder: 9, defaultDays: 10, tenureYears: 10 },
   ];
   for (const s of initSources) {
     const existing = await prisma.allocationSourceConfig.findUnique({ where: { sourceCode: s.sourceCode } });
     if (existing) {
-      // 새 메타 필드만 업데이트 (기존 데이터 유지, 없을 때만 채움)
       await prisma.allocationSourceConfig.update({
         where: { sourceCode: s.sourceCode },
         data: {
-          defaultDays:        s.defaultDays        ?? existing.defaultDays,
-          tenureYears:        s.tenureYears        ?? existing.tenureYears,
-          bonusIntervalYears: s.bonusIntervalYears ?? existing.bonusIntervalYears,
-          bonusMaxDays:       s.bonusMaxDays       ?? existing.bonusMaxDays,
-          skipForFreelancer:  s.skipForFreelancer  ?? existing.skipForFreelancer,
+          defaultDays:              s.defaultDays              ?? existing.defaultDays,
+          tenureYears:              s.tenureYears              ?? existing.tenureYears,
+          carryoverThresholdMonths: s.carryoverThresholdMonths ?? existing.carryoverThresholdMonths,
+          bonusIntervalYears:       s.bonusIntervalYears       ?? existing.bonusIntervalYears,
+          bonusMaxDays:             s.bonusMaxDays             ?? existing.bonusMaxDays,
+          skipForFreelancer:        s.skipForFreelancer        ?? existing.skipForFreelancer,
         },
       });
     } else {

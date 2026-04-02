@@ -140,6 +140,7 @@ async function seedAllocationSourceConfigs() {
     sourceCode: string; label: string; sortOrder: number;
     defaultDays?: number | null;
     tenureYears?: number | null;
+    carryoverThresholdMonths?: number | null;
     bonusIntervalYears?: number | null;
     bonusMaxDays?: number | null;
     skipForFreelancer?: boolean;
@@ -152,7 +153,7 @@ async function seedAllocationSourceConfigs() {
     { sourceCode: "DUTY_DEPT",    label: "직무부서휴가", sortOrder: 5, defaultDays: 2,   note: "운영부/교육부/복지부 2일" },
     { sourceCode: "AWARD",        label: "포상휴가",     sortOrder: 6, defaultDays: null, note: "PM·관리자가 사원별 부여" },
     // 근속 기념일 기반 (tenureYears 설정 → 스케줄러가 해당 주년에 자동 부여)
-    { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1  },
+    { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1, carryoverThresholdMonths: 3 },
     { sourceCode: "TENURE_5Y",  label: "5년근속휴가",  sortOrder: 8, defaultDays: 5,  tenureYears: 5  },
     { sourceCode: "TENURE_10Y", label: "10년근속휴가", sortOrder: 9, defaultDays: 10, tenureYears: 10 },
   ];
@@ -161,24 +162,26 @@ async function seedAllocationSourceConfigs() {
     await prisma.allocationSourceConfig.upsert({
       where: { sourceCode: cfg.sourceCode },
       update: {
-        label:              cfg.label,
-        defaultDays:        cfg.defaultDays        ?? null,
-        tenureYears:        cfg.tenureYears        ?? null,
-        bonusIntervalYears: cfg.bonusIntervalYears ?? null,
+        label:                    cfg.label,
+        defaultDays:              cfg.defaultDays              ?? null,
+        tenureYears:              cfg.tenureYears              ?? null,
+        carryoverThresholdMonths: cfg.carryoverThresholdMonths ?? null,
+        bonusIntervalYears:       cfg.bonusIntervalYears       ?? null,
         bonusMaxDays:       cfg.bonusMaxDays       ?? null,
         skipForFreelancer:  cfg.skipForFreelancer  ?? false,
         note:               cfg.note               ?? null,
       },
       create: {
-        sourceCode:         cfg.sourceCode,
-        label:              cfg.label,
-        sortOrder:          cfg.sortOrder,
-        defaultDays:        cfg.defaultDays        ?? null,
-        tenureYears:        cfg.tenureYears        ?? null,
-        bonusIntervalYears: cfg.bonusIntervalYears ?? null,
-        bonusMaxDays:       cfg.bonusMaxDays       ?? null,
-        skipForFreelancer:  cfg.skipForFreelancer  ?? false,
-        note:               cfg.note               ?? null,
+        sourceCode:               cfg.sourceCode,
+        label:                    cfg.label,
+        sortOrder:                cfg.sortOrder,
+        defaultDays:              cfg.defaultDays              ?? null,
+        tenureYears:              cfg.tenureYears              ?? null,
+        carryoverThresholdMonths: cfg.carryoverThresholdMonths ?? null,
+        bonusIntervalYears:       cfg.bonusIntervalYears       ?? null,
+        bonusMaxDays:             cfg.bonusMaxDays             ?? null,
+        skipForFreelancer:        cfg.skipForFreelancer        ?? false,
+        note:                     cfg.note                     ?? null,
       },
     });
   }

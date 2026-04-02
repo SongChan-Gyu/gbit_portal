@@ -366,6 +366,8 @@ model AllocationSourceConfig {
   // 근속 기념일 기반 특별 부여 (TENURE_1Y/5Y/10Y)
   // tenureYears가 설정된 sourceCode는 해당 입사 N주년에 스케줄러가 자동 부여한다.
   tenureYears      Int?   // 기념일 연수 (1, 5, 10 등). null이면 기념일 기반 아님.
+  // 귀속연도 말미 N개월 이내 부여분을 다음 귀속연도로 이월하는 임계값
+  carryoverThresholdMonths Int? // 이월 임계 개월수 (TENURE_1Y=3: 귀속연도 마지막 3개월 부여 시 자동 이월)
 
   // 근속 가산 규칙 (TENURE_BONUS)
   // bonusIntervalYears/bonusMaxDays가 설정되면 귀속연도 초기화 시 공식 계산
