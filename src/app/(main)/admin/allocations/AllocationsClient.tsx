@@ -76,6 +76,10 @@ export default function AllocationsClient({ employees, initialAllocations, selec
 
   async function save() {
     if (!editTarget) return;
+    if (form.totalDays == null || form.usedDays == null || Number.isNaN(Number(form.totalDays)) || Number.isNaN(Number(form.usedDays))) {
+      setMsg({ type: "err", text: "부여일수/사용일수를 숫자로 입력해 주세요." });
+      return;
+    }
     setSaving(true); setMsg(null);
     const res = await fetch(`/api/admin/allocations/${editTarget.id}`, {
       method: "PATCH",
@@ -338,7 +342,7 @@ export default function AllocationsClient({ employees, initialAllocations, selec
                   <input type={t} step={t === "number" ? "0.5" : undefined}
                     className="input"
                     value={t === "date" ? String(form[k as keyof typeof form] ?? "").slice(0, 10) : (form[k as keyof typeof form] as string) ?? ""}
-                    onChange={e => setForm(p => ({ ...p, [k]: t === "number" ? parseFloat(e.target.value) : e.target.value }))} />
+                    onChange={e => setForm(p => ({ ...p, [k]: t === "number" ? (e.target.value === "" ? 0 : parseFloat(e.target.value)) : e.target.value }))} />
                 </div>
               ))}
               <div>

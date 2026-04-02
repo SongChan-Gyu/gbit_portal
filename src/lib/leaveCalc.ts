@@ -1,37 +1,68 @@
+/** 근속 마일스톤 설정 타입 (AllocationSourceConfig 기반) */
+export interface TenureMilestoneConfig {
+  years: number;
+  code:  string;
+  label: string;
+  days:  number;
+}
+
+/** 기본연차·가산 규칙 설정 타입 (AllocationSourceConfig 기반) */
+export interface AnnualLeaveConfig {
+  baseDays:          number; // 기본 연차 일수 (e.g. 15)
+  bonusIntervalYears: number; // 가산 기준 연수 (e.g. 2 = 2년마다 +1)
+  bonusMaxDays:      number; // 가산 최대 일수 (e.g. 10)
+}
+
+/** fallback: DB 조회 실패 시 사용하는 기본값 */
+export const DEFAULT_ANNUAL_CONFIG: AnnualLeaveConfig = {
+  baseDays: 15,
+  bonusIntervalYears: 2,
+  bonusMaxDays: 10,
+};
+
+/** fallback: DB 조회 실패 시 사용하는 기본 마일스톤 목록 */
+export const DEFAULT_TENURE_MILESTONES: TenureMilestoneConfig[] = [
+  { years: 1,  label: "1년근속휴가",  days: 3,  code: "TENURE_1Y"  },
+  { years: 5,  label: "5년근속휴가",  days: 5,  code: "TENURE_5Y"  },
+  { years: 10, label: "10년근속휴가", days: 10, code: "TENURE_10Y" },
+];
+
 /**
  * 연차 일수 계산 (귀속연도 기준)
- * - 1년 미만: 월별 1일씩 (별도 처리)
- * - 정규직: 기본 15 + 2년마다 1일 추가, 최대 25일
- * - 프리랜서: 항상 15일
+ * - 1년 미만: 0 반환 (월별 1일씩 별도 처리)
+ * - 프리랜서(FREE): baseDays 고정 (근속가산 없음)
+ * - config를 생략하면 DEFAULT_ANNUAL_CONFIG 사용 (폴백용, 운영에서는 DB 조회값 전달 권장)
  */
-export function calcAnnualDays(hireDate: Date, fiscalYearStart: Date, employeeType = "FULL"): number {
-  if (employeeType !== "FULL") return 15;
+export function calcAnnualDays(
+  hireDate: Date,
+  fiscalYearStart: Date,
+  employeeType = "FULL",
+  config: AnnualLeaveConfig = DEFAULT_ANNUAL_CONFIG,
+): number {
+  const { baseDays, bonusIntervalYears, bonusMaxDays } = config;
+  if (employeeType !== "FULL") return baseDays;
 
   const ms = fiscalYearStart.getTime() - hireDate.getTime();
   const yearsOfService = Math.floor(ms / (365.25 * 24 * 3600 * 1000));
   if (yearsOfService < 1) return 0; // 월별 발생
 
-  const base  = 15;
-  const bonus = Math.min(Math.floor(yearsOfService / 2), 10); // 2년마다 +1, 최대 +10
-  return Math.min(base + bonus, 25);
+  const bonus = bonusIntervalYears > 0
+    ? Math.min(Math.floor(yearsOfService / bonusIntervalYears), bonusMaxDays)
+    : 0;
+  return baseDays + bonus;
 }
 
 /**
- * 근속 마일스톤 체크: 특정 귀속연도에 1/5/10년 근속이 해당하는지
- * 귀속연도 내(fyStart ~ fyEnd)에 N주년 기념일이 있으면 해당 근속휴가를 부여
+ * 근속 마일스톤 체크: 특정 귀속연도에 해당하는 근속 기념일 반환
+ * - milestoneConfigs를 생략하면 DEFAULT_TENURE_MILESTONES 사용 (폴백용, 운영에서는 DB 조회값 전달 권장)
  */
 export function getTenureMilestones(
   hireDate: Date,
-  fyStart: Date,  // e.g. 2025-05-01
-  fyEnd:   Date,  // e.g. 2026-04-30
+  fyStart: Date,
+  fyEnd:   Date,
+  milestoneConfigs: TenureMilestoneConfig[] = DEFAULT_TENURE_MILESTONES,
 ): { years: number; label: string; days: number; code: string; grantDate: Date }[] {
-  const milestones: { years: number; label: string; days: number; code: string }[] = [
-    { years: 1,  label: "1년근속휴가",  days: 3,  code: "TENURE_1Y"  },
-    { years: 5,  label: "5년근속휴가",  days: 5,  code: "TENURE_5Y"  },
-    { years: 10, label: "10년근속휴가", days: 10, code: "TENURE_10Y" },
-  ];
-
-  return milestones
+  return milestoneConfigs
     .map((m) => {
       const anniversary = new Date(hireDate);
       anniversary.setFullYear(hireDate.getFullYear() + m.years);
@@ -40,7 +71,7 @@ export function getTenureMilestones(
       }
       return null;
     })
-    .filter(Boolean) as any[];
+    .filter(Boolean) as { years: number; label: string; days: number; code: string; grantDate: Date }[];
 }
 
 /** 귀속연도 시작/종료일 */

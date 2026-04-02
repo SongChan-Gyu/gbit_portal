@@ -17,32 +17,6 @@ export function getFiscalPeriod(fiscalYear: number) {
   };
 }
 
-/** 입사일 기준 연차 기본 일수 계산 */
-export function calcAnnualDays(
-  hireDate: Date,
-  fiscalYear: number,
-  employeeType: string
-): number {
-  if (employeeType === "FREE") return 15; // 프리랜서 고정
-
-  const fiscalStart = new Date(`${fiscalYear}-05-01`);
-  const hireDateNorm = new Date(hireDate);
-
-  // 입사일 1~5일이면 월말 입사로 간주
-  if (hireDateNorm.getDate() <= 5) {
-    hireDateNorm.setDate(1);
-  }
-
-  const yearsWorked = Math.floor(
-    (fiscalStart.getTime() - hireDateNorm.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
-  );
-
-  if (yearsWorked < 1) return 0; // 1년 미만: 월별 1일씩 (별도 처리)
-  // 기본 15일, 2년마다 1일 가산, 최대 25일
-  const extra = Math.floor((yearsWorked - 1) / 2);
-  return Math.min(15 + extra, 25);
-}
-
 /** 영업일 수 계산 (공휴일 배열 포함) */
 export function calcWorkingDays(
   start: Date,

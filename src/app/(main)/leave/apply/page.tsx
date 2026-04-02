@@ -13,6 +13,10 @@ export default async function LeaveApplyPage() {
   const user = session!.user as any;
   const fy = getFiscalYear();
   const now = new Date();
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(now);
+  dayEnd.setHours(23, 59, 59, 999);
 
   const self = await prisma.employee.findUnique({
     where: { id: user.employeeId },
@@ -27,8 +31,8 @@ export default async function LeaveApplyPage() {
         where: {
           employeeId: user.employeeId,
           isActive: true,
-          validFrom:  { lte: now },
-          validUntil: { gte: now },
+          validFrom:  { lte: dayEnd },
+          validUntil: { gte: dayStart },
         },
         orderBy: [{ fiscalYear: "desc" }, { sourceCode: "asc" }],
       }),
@@ -47,7 +51,7 @@ export default async function LeaveApplyPage() {
   );
   const totalAssetRemain = allocations
     .filter((a) => assetSourceCodes.has(a.sourceCode) || isAnnualPoolSourceCode(a.sourceCode) || a.sourceCode === "DUTY_DEPT")
-    .filter((a) => new Date(a.validFrom) <= now && new Date(a.validUntil) >= now)
+    .filter((a) => new Date(a.validFrom) <= dayEnd && new Date(a.validUntil) >= dayStart)
     .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0);
 
   // 이번 달 하프데이 사용 횟수

@@ -39,11 +39,12 @@ export default function Sidebar({
 
   const [expanded, setExpanded] = useState<string | null>(expandedByPath);
 
+  // 경로 변경 시 항상 동기화 (null 포함) — 다른 섹션으로 이동하면 열렸던 그룹 자동 접힘
   useEffect(() => {
-    if (expandedByPath) setExpanded(expandedByPath);
+    setExpanded(expandedByPath);
   }, [expandedByPath]);
 
-  const isOpen = (groupKey: string) => expanded === groupKey || expandedByPath === groupKey;
+  const isOpen = (groupKey: string) => expanded === groupKey;
 
   const sections = ["main", "admin", "dev"] as const;
 

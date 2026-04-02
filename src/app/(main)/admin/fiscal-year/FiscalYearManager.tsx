@@ -105,8 +105,19 @@ export default function FiscalYearManager({
   }
 
   async function saveGrant() {
-    if (!grantModal || !form.sourceCode || !form.label || !form.totalDays || !form.validFrom || !form.validUntil) {
+    if (
+      !grantModal ||
+      !form.sourceCode ||
+      !form.label ||
+      form.totalDays == null ||
+      form.usedDays == null ||
+      !form.validFrom ||
+      !form.validUntil
+    ) {
       setErr("필수 항목을 입력하세요."); return;
+    }
+    if (Number.isNaN(Number(form.totalDays)) || Number.isNaN(Number(form.usedDays))) {
+      setErr("부여일수/사용일수는 숫자여야 합니다."); return;
     }
     setSaving(true); setErr("");
     const isNew = !grantModal.alloc;
@@ -257,6 +268,33 @@ export default function FiscalYearManager({
         const activeAllocs = emp.leaveAllocations.filter((a) => a.isActive !== false);
         const total = activeAllocs.reduce((s,a)=>s+a.totalDays,0);
         const used  = activeAllocs.reduce((s,a)=>s+a.usedDays,0);
+        const monthlyAccrualRows = emp.leaveAllocations.filter(
+          (a) => a.sourceCode === "BASE_ANNUAL" && (a.note ?? "").includes("MONTHLY_ACCRUAL:"),
+        );
+        const displayAllocs =
+          monthlyAccrualRows.length >= 2
+            ? [
+                ...emp.leaveAllocations.filter(
+                  (a) => !(a.sourceCode === "BASE_ANNUAL" && (a.note ?? "").includes("MONTHLY_ACCRUAL:")),
+                ),
+                {
+                  ...monthlyAccrualRows[0],
+                  id: `monthly-agg-${emp.id}`,
+                  label: "기본연차(월별적립 묶음)",
+                  totalDays: monthlyAccrualRows.reduce((s, a) => s + a.totalDays, 0),
+                  usedDays: monthlyAccrualRows.reduce((s, a) => s + a.usedDays, 0),
+                  note: `${monthlyAccrualRows.length}건 통합 표시`,
+                  validFrom: monthlyAccrualRows.reduce(
+                    (min, a) => new Date(a.validFrom) < new Date(min) ? a.validFrom : min,
+                    monthlyAccrualRows[0].validFrom,
+                  ),
+                  validUntil: monthlyAccrualRows.reduce(
+                    (max, a) => new Date(a.validUntil) > new Date(max) ? a.validUntil : max,
+                    monthlyAccrualRows[0].validUntil,
+                  ),
+                } as Alloc,
+              ]
+            : emp.leaveAllocations;
         return (
           <div key={emp.id} className="card">
             <div className="flex items-center justify-between mb-3">
@@ -273,13 +311,14 @@ export default function FiscalYearManager({
               </div>
             </div>
 
-            {emp.leaveAllocations.length === 0 ? (
+            {displayAllocs.length === 0 ? (
               <p className="text-xs text-gray-400">할당 없음</p>
             ) : (
               <div className="space-y-2">
-                {emp.leaveAllocations.map((a) => {
+                {displayAllocs.map((a) => {
                   const active = a.isActive !== false;
                   const remaining = a.totalDays - a.usedDays;
+                  const isSyntheticMonthlyAgg = a.id.startsWith("monthly-agg-");
                   const canCarryover = active && remaining > 0 &&
                     ["BASE_ANNUAL","CARRYOVER","TENURE_BONUS","DEPT_BONUS"].includes(a.sourceCode);
                   return (
@@ -295,14 +334,17 @@ export default function FiscalYearManager({
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs text-gray-600">{(a.totalDays-a.usedDays)}/{a.totalDays}일</span>
                         <button onClick={() => openGrant(emp, a)}
+                          disabled={isSyntheticMonthlyAgg}
                           className="text-xs text-blue-500 hover:underline">수정</button>
                         {canCarryover && (
                           <button onClick={() => openCarryover(emp, a)}
+                            disabled={isSyntheticMonthlyAgg}
                             className="text-xs text-teal-600 hover:underline inline-flex items-center gap-0.5">
                             <ArrowRightCircle size={11}/> 이월
                           </button>
                         )}
                         <button onClick={() => toggleActive(emp, a)}
+                          disabled={isSyntheticMonthlyAgg}
                           className={`text-xs inline-flex items-center gap-0.5 ${active ? "text-orange-600 hover:underline" : "text-teal-600 hover:underline"}`}>
                           {active ? <><ToggleLeft size={11}/> 비활성화</> : <><ToggleRight size={11}/> 재활성화</>}
                         </button>

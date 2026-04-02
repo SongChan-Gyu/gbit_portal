@@ -11,7 +11,7 @@
 import prisma from "@/lib/db";
 import { writeAudit, writeSchedulerLog } from "@/lib/audit";
 import { getFiscalYear } from "@/lib/workdays";
-import { getTenureMilestones, fiscalPeriod } from "@/lib/leaveCalc";
+import { getTenureMilestones, fiscalPeriod, DEFAULT_TENURE_MILESTONES, type TenureMilestoneConfig } from "@/lib/leaveCalc";
 
 export interface AccrualItem {
   employeeId: string;
@@ -206,11 +206,27 @@ export async function runMonthlyAccrual(
 // ──────────────────────────────────────────────────────
 // 2. 근속 기념일 체크
 // ──────────────────────────────────────────────────────
-const TENURE_MILESTONES = [
-  { years: 1,  code: "TENURE_1Y",  label: "1년근속휴가",  days: 3 },
-  { years: 5,  code: "TENURE_5Y",  label: "5년근속휴가",  days: 5 },
-  { years: 10, code: "TENURE_10Y", label: "10년근속휴가", days: 10 },
-] as const;
+
+/** AllocationSourceConfig에서 근속 마일스톤 목록 로드 (tenureYears != null인 항목) */
+async function loadTenureMilestones(): Promise<TenureMilestoneConfig[]> {
+  try {
+    const configs = await prisma.allocationSourceConfig.findMany({
+      where: { isActive: true, tenureYears: { not: null } },
+      orderBy: { tenureYears: "asc" },
+    });
+    if (configs.length > 0) {
+      return configs.map((c) => ({
+        years: c.tenureYears!,
+        code:  c.sourceCode,
+        label: c.label,
+        days:  Number(c.defaultDays ?? 0),
+      }));
+    }
+  } catch {
+    // DB 조회 실패 시 기본값 사용
+  }
+  return DEFAULT_TENURE_MILESTONES;
+}
 
 export async function runTenureCheck(
   targetDate?: string,
@@ -219,6 +235,8 @@ export async function runTenureCheck(
   actorId?: string,
 ): Promise<TenureResult> {
   const result: TenureResult = { granted: [], skipped: [], errors: [], isDryRun: dryRun };
+
+  const TENURE_MILESTONES = await loadTenureMilestones();
 
   const target = targetDate ? new Date(targetDate) : new Date();
   target.setHours(0, 0, 0, 0);
@@ -320,6 +338,8 @@ export async function runTenureCheck(
 // 향후 N일 이내 기념일 예정자 조회
 // ──────────────────────────────────────────────────────
 export async function getUpcomingAnniversaries(days = 30) {
+  const TENURE_MILESTONES = await loadTenureMilestones();
+
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const until = new Date(today); until.setDate(until.getDate() + days);
 
@@ -376,6 +396,7 @@ export interface TenureScheduleRow {
 }
 
 export async function getTenureScheduleForFiscalYears(fy?: number): Promise<TenureScheduleRow[]> {
+  const milestoneCfgs = await loadTenureMilestones();
   const currentFy = fy ?? getFiscalYear();
   const rows: TenureScheduleRow[] = [];
 
@@ -391,7 +412,7 @@ export async function getTenureScheduleForFiscalYears(fy?: number): Promise<Tenu
     for (const yearOffset of [0, 1] as const) {
       const targetFy = currentFy + yearOffset;
       const { start: fyStart, end: fyEnd } = fiscalPeriod(targetFy);
-      const milestones = getTenureMilestones(hire, fyStart, fyEnd);
+      const milestones = getTenureMilestones(hire, fyStart, fyEnd, milestoneCfgs);
 
       for (const m of milestones) {
         const grantDateStr = m.grantDate.toISOString().slice(0, 10);
@@ -455,7 +476,14 @@ export async function runBirthdayHalf(
   }
   const yearMonthStr = `${tYear}-${String(tMonth).padStart(2, "0")}`;
   const monthStart = new Date(tYear, tMonth - 1, 1);
-  const monthEnd = new Date(tYear, tMonth, 0);
+
+  // 유효기간: LeaveType.validityMonths (BIRTHDAY_HALF) 기준, 없으면 3개월 폴백
+  const birthdayHalfLT = await prisma.leaveType.findFirst({
+    where: { code: "BIRTHDAY_HALF", isActive: true },
+    select: { validityMonths: true, daysPerUnit: true },
+  });
+  const validityMonths = birthdayHalfLT?.validityMonths ?? 3;
+  const daysPerUnit = Number(birthdayHalfLT?.daysPerUnit ?? 0.5);
 
   const employees = await prisma.employee.findMany({
     where: { status: "ACTIVE", birthDate: { not: null }, employeeType: { not: "EXTERNAL" } },
@@ -491,18 +519,22 @@ export async function runBirthdayHalf(
     }
 
     try {
+      const validUntil = new Date(monthStart);
+      validUntil.setMonth(validUntil.getMonth() + validityMonths);
+      validUntil.setDate(validUntil.getDate() - 1);
+      validUntil.setHours(23, 59, 59, 999);
       await prisma.leaveAllocation.create({
         data: {
           employeeId: emp.id,
           sourceCode: "BIRTHDAY_HALF",
           label: "생일반차",
-          totalDays: 0.5,
+          totalDays: daysPerUnit,
           usedDays: 0,
           validFrom: monthStart,
-          validUntil: monthEnd,
+          validUntil,
           fiscalYear: null,
           isActive: true,
-          note: `${tYear}년 ${tMonth}월 생일반차`,
+          note: `${tYear}년 ${tMonth}월 생일반차 (부여일 기준 ${validityMonths}개월)`,
         },
       });
       await writeAudit({

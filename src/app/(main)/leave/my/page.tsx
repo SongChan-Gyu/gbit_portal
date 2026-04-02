@@ -26,13 +26,18 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const fyStart = new Date(`${fy}-05-01`);
   const fyEnd   = new Date(`${fy+1}-04-30`);
   const fyRangeLabel = `${formatYMD(fyStart)} ~ ${formatYMD(fyEnd)}`;
+  const dayStart = new Date();
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date();
+  dayEnd.setHours(23, 59, 59, 999);
 
-  const [allocations, requests, tenureScheduleAll, reasonNoPoolLeaveTypes, assetPoolLeaveTypes] = await Promise.all([
+  const [allocations, requests, tenureScheduleAll, reasonNoPoolLeaveTypes, assetPoolLeaveTypes, tenureMilestoneCodes] = await Promise.all([
     prisma.leaveAllocation.findMany({
       where: {
         employeeId: user.employeeId,
         isActive: true,
-        validFrom: { lte: new Date() },  // 아직 시작 안 된 미래 귀속연도 제외
+        validFrom: { lte: dayEnd },  // 날짜 기준 활성(당일 시작 포함)
+        validUntil: { gte: dayStart },
       },
       orderBy: [{ fiscalYear:"desc" }, { sourceCode:"asc" }],
     }),
@@ -65,6 +70,11 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
       },
       select: { allocationSourceCode: true },
     }),
+    // 근속 마일스톤 sourceCode 목록 (tenureYears != null인 AllocationSourceConfig)
+    prisma.allocationSourceConfig.findMany({
+      where: { isActive: true, tenureYears: { not: null } },
+      select: { sourceCode: true },
+    }).then((cfgs) => new Set(cfgs.map((c) => c.sourceCode))),
   ]);
 
   // 이번·다음 귀속연도 중 본인 근속휴가 부여 예정 (언제부터 쓸 수 있는지 보여주기 위함)
@@ -73,8 +83,9 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const tenureNextFy = myTenureSchedule.filter((r) => r.fiscalYear === fy + 1);
 
   const now = new Date();
-  // 같은 귀속연도에 근속휴가(TENURE_1Y/5Y/10Y)가 fiscalYear null + fy 두 개 있으면 하나만 표시 (init 중복 방지)
-  const TENURE_CODES = new Set(["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"]);
+  // 같은 귀속연도에 근속휴가가 fiscalYear null + fy 두 개 있으면 하나만 표시 (init 중복 방지)
+  // tenureMilestoneCodes: AllocationSourceConfig.tenureYears != null 기반으로 동적 로드
+  const TENURE_CODES = tenureMilestoneCodes;
   const rawFyAllocs = allocations.filter((a) => a.fiscalYear === fy || !a.fiscalYear);
   const byTenureSource = new Map<string, (typeof rawFyAllocs)[0]>();
   const fyAllocs: (typeof rawFyAllocs)[0][] = [];

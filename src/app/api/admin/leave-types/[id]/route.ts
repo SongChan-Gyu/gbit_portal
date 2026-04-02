@@ -35,6 +35,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     requiresStamp:body.requiresStamp, stampCount:body.stampCount??null,
     allowsFullDay, allowsHalfDay, halfDayAmPm: hd,
     includeInFiscalInit: body.includeInFiscalInit ?? undefined,
+    carryoverEligible: body.carryoverEligible ?? undefined,
+    autoCarryoverOnFiscalInit: body.autoCarryoverOnFiscalInit ?? undefined,
     isHalf: legacy.isHalf, isAmOnly: legacy.isAmOnly, isPmOnly: legacy.isPmOnly,
     validityBasis:body.validityBasis, validityMonths:body.validityMonths??null,
     isActive:body.isActive, sortOrder:body.sortOrder, color:body.color,

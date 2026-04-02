@@ -47,6 +47,8 @@ export async function POST(req: Request) {
       usageCategory,
       displayHint,
       includeInFiscalInit: body.includeInFiscalInit ?? true,
+      carryoverEligible: body.carryoverEligible ?? false,
+      autoCarryoverOnFiscalInit: body.autoCarryoverOnFiscalInit ?? false,
       isHalf: legacy.isHalf, isAmOnly: legacy.isAmOnly, isPmOnly: legacy.isPmOnly,
       validityBasis:body.validityBasis??"FISCAL", validityMonths:body.validityMonths??null,
       isActive:body.isActive??true, sortOrder:body.sortOrder??99, color:body.color??"#3b82f6",

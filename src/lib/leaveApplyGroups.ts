@@ -51,10 +51,10 @@ export const APPLY_GROUP_META: Record<
   { label: string; meta: string; color: string; borderClass: string }
 > = {
   annual: { label: "연차", meta: "연차 차감", color: "#2563eb", borderClass: "border-blue-500" },
-  condolence: { label: "경조", meta: "연차 미차감", color: "#f59e0b", borderClass: "border-amber-500" },
+  condolence: { label: "경조", meta: "", color: "#f59e0b", borderClass: "border-amber-500" },
   care: { label: "돌봄휴가", meta: "연 2일 한도", color: "#059669", borderClass: "border-emerald-500" },
-  public: { label: "공가", meta: "연차 미차감", color: "#64748b", borderClass: "border-slate-600" },
-  recognition: { label: "인정휴가", meta: "연차 미차감", color: "#475569", borderClass: "border-slate-500" },
+  public: { label: "공가", meta: "", color: "#64748b", borderClass: "border-slate-600" },
+  recognition: { label: "인정휴가", meta: "", color: "#475569", borderClass: "border-slate-500" },
   halfday: { label: "하프데이", meta: "수요일 오후", color: "#0284c7", borderClass: "border-sky-500" },
   sick: { label: "병가", meta: "미차감 (급여만 감액)", color: "#dc2626", borderClass: "border-red-500" },
   stamp: { label: "스탬프", meta: "힐링데이·오후인정", color: "#d97706", borderClass: "border-amber-500" },

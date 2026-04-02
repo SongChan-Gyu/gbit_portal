@@ -96,21 +96,21 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     key: "holidayExt", label: "연휴연장휴가", meta: "",
     color: "#0ea5e9", borderClass: "border-sky-500",
     subs: [
-      { label: "선택", code: "HOLIDAY_EXT", desc: "연휴 3일 이상 시 앞뒤 연속일 사용 가능" },
+      { label: "선택", code: "HOLIDAY_EXT" },
     ],
   },
   {
     key: "stamp", label: "스탬프", meta: "",
     color: "#d97706", borderClass: "border-amber-500",
     subs: [
-      { label: "힐링데이",   code: "HEALING", desc: "스탬프 메뉴에서 신청 (장당 1회)" },
-      { label: "오후 인정", code: "PM_RECOG_STAMP", desc: "10칸 완성 장당 1회" },
+      { label: "힐링데이",   code: "HEALING_DAY" },
+      { label: "오후 인정", code: "PM_RECOG_STAMP" },
     ],
   },
   {
     key: "halfday", label: "하프데이", meta: "",
     color: "#0284c7", borderClass: "border-sky-500",
-    subs: [{ label: "하프데이", code: "PM_HALF_MONTH", desc: "월 1회" }],
+    subs: [{ label: "하프데이", code: "PM_HALF_MONTH" }],
   },
   {
     key: "sick", label: "병가", meta: "",
@@ -135,7 +135,7 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     key: "birthday", label: "생일반차", meta: "",
     color: "#ec4899", borderClass: "border-pink-500",
     subs: [
-      { label: "선택", code: "BIRTHDAY_HALF", desc: "0.5일" },
+      { label: "선택", code: "BIRTHDAY_HALF" },
     ],
   },
 ];
@@ -243,7 +243,9 @@ export default function LeaveApplyForm({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const now = new Date().toISOString();
+  const todayYmd = todayStr();
+  const isAllocationUsableToday = (a: Alloc) =>
+    a.validFrom.slice(0, 10) <= todayYmd && a.validUntil.slice(0, 10) >= todayYmd;
 
   const ltByCode = useMemo(
     () => Object.fromEntries(leaveTypes.filter(t => !HIDDEN_LT_CODES.has(t.code)).map((t) => [t.code, t])),
@@ -252,9 +254,9 @@ export default function LeaveApplyForm({
 
   const annualPoolAllocs = useMemo(
     () => allocations
-      .filter((a) => isAnnualPoolSourceCode(a.sourceCode) && a.validUntil >= now)
+      .filter((a) => isAnnualPoolSourceCode(a.sourceCode) && isAllocationUsableToday(a))
       .sort((x, y) => x.validUntil < y.validUntil ? -1 : 1),
-    [allocations, now]
+    [allocations, todayYmd]
   );
   const baseAnnualDisplayTotal = useMemo(
     () => annualPoolAllocs
@@ -270,11 +272,11 @@ export default function LeaveApplyForm({
   const poolRemainingBySource = useMemo(() => {
     const m: Record<string, number> = {};
     for (const a of allocations) {
-      if (a.validUntil < now) continue;
+      if (!isAllocationUsableToday(a)) continue;
       m[a.sourceCode] = (m[a.sourceCode] ?? 0) + Math.max(0, a.totalDays - a.usedDays);
     }
     return m;
-  }, [allocations, now]);
+  }, [allocations, todayYmd]);
 
   const isSelectableCode = (code: string) => {
     if (!ltByCode[code]) return false;
@@ -328,9 +330,18 @@ export default function LeaveApplyForm({
   const visibleLeaveGroups = useMemo(() => {
     return dynamicLeaveGroups
       .map((g) => {
-        if (g.key === "stamp") return g; // 힐링/스탬프는 코드 유무와 무관하게 안내/선택 유지
-        const subs = g.subs.filter((s) => isSelectableCode(s.code) || s.code === "HEALING");
-        return { ...g, subs };
+        const mappedSubs = g.subs.map((s) => {
+          const t = ltByCode[s.code];
+          const hint = t?.displayHint?.trim();
+          return { ...s, desc: hint || s.desc };
+        });
+        const groupMeta =
+          g.meta ||
+          mappedSubs.find((s) => Boolean(s.desc))?.desc ||
+          "";
+        if (g.key === "stamp") return { ...g, meta: groupMeta, subs: mappedSubs }; // 힐링/스탬프는 코드 유무와 무관하게 안내/선택 유지
+        const subs = mappedSubs.filter((s) => isSelectableCode(s.code));
+        return { ...g, meta: groupMeta, subs };
       })
       .filter((g) => g.subs.length > 0);
   }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource]);
@@ -362,7 +373,7 @@ export default function LeaveApplyForm({
   }
 
   function selectLeaveType(idx: number, code: string, groupKey?: string) {
-    if (code === "HEALING") {
+    if (code === "HEALING" || code === "HEALING_DAY") {
       setItems((prev) => prev.map((it, i) =>
         i === idx ? { ...it, leaveTypeId: "", _groupKey: groupKey ?? "stamp", _healingSelected: true, days: 0 } : it
       ));

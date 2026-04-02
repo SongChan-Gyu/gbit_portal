@@ -31,7 +31,7 @@ async function seedLeaveTypes() {
     ["TENURE_10Y", "10년근속휴가", 1, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 19],
     ["AWARD", "포상휴가", 1, false, 2, null, null, false, null, false, false, false, "부여일기준", 12, "#f59e0b", 20],
     ["HOLIDAY_EXT", "연휴연장휴가", 1, false, 1, null, null, false, null, false, false, false, "귀속연도", null, "#0ea5e9", 21],
-    ["BIRTHDAY_HALF", "생일반차", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 12, "#ec4899", 25],
+    ["BIRTHDAY_HALF", "생일반차", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 3, "#ec4899", 25],
   ] as const;
 
   const DUAL_TIME_SLOT_CODES = new Set([
@@ -54,11 +54,17 @@ async function seedLeaveTypes() {
     if (["PUBLIC", "RECOGNITION", "SICK", "CONDOLENCE"].includes(code)) return "REASON";
     return "ASSET";
   }
+  function carryoverEligibleForCode(code: string): boolean {
+    return ["CARE", "HOLIDAY_EXT", "AWARD", "BIRTHDAY_HALF"].includes(code);
+  }
+  function autoCarryoverOnFiscalInitForCode(code: string): boolean {
+    return false;
+  }
   function displayHintForCode(code: string): string | null {
     if (code === "CARE") return "연 2일 한도";
     if (code === "HOLIDAY_EXT") return "연휴 3일 이상 시 앞뒤 연속일 사용 가능";
     if (code === "PM_HALF_MONTH") return "수요일 오후";
-    if (code === "BIRTHDAY_HALF") return "생일 해당 월 자동 부여 0.5일";
+    if (code === "BIRTHDAY_HALF") return "생일 월 자동 부여 0.5일 (부여일 기준 3개월)";
     if (code === "AWARD") return "별도 부여";
     return null;
   }
@@ -101,6 +107,8 @@ async function seedLeaveTypes() {
       allocationSourceCode: allocationSourceForCode(code),
       usageCategory: usageCategoryForCode(code),
       displayHint: displayHintForCode(code),
+      carryoverEligible: carryoverEligibleForCode(code),
+      autoCarryoverOnFiscalInit: autoCarryoverOnFiscalInitForCode(code),
       allowsFullDay,
       allowsHalfDay,
       halfDayAmPm,
@@ -122,6 +130,61 @@ async function seedLeaveTypes() {
   console.log("  ✅ 휴가유형 upsert 완료");
 }
 
+async function seedAllocationSourceConfigs() {
+  /**
+   * AllocationSourceConfig: 귀속연도 초기화 및 스케줄러에서 사용하는 부여 규칙 메타.
+   * - 이미 존재하면 새 메타 필드(defaultDays, tenureYears, bonusIntervalYears 등)만 업데이트.
+   * - 없으면 새로 생성.
+   */
+  const configs: {
+    sourceCode: string; label: string; sortOrder: number;
+    defaultDays?: number | null;
+    tenureYears?: number | null;
+    bonusIntervalYears?: number | null;
+    bonusMaxDays?: number | null;
+    skipForFreelancer?: boolean;
+    note?: string;
+  }[] = [
+    { sourceCode: "BASE_ANNUAL",  label: "기본연차",     sortOrder: 1, defaultDays: 15,  note: "1년 이상 15일, 미만 시 월별 발생" },
+    { sourceCode: "TENURE_BONUS", label: "근속가산",     sortOrder: 2, defaultDays: null, bonusIntervalYears: 2, bonusMaxDays: 10, skipForFreelancer: true, note: "2년마다 +1일, 최대 10일 (프리랜서 제외)" },
+    { sourceCode: "CARE",         label: "돌봄휴가",     sortOrder: 3, defaultDays: 2,   note: "전원 2일" },
+    { sourceCode: "HOLIDAY_EXT",  label: "연휴연장휴가", sortOrder: 4, defaultDays: 1,   note: "전원 1일" },
+    { sourceCode: "DUTY_DEPT",    label: "직무부서휴가", sortOrder: 5, defaultDays: 2,   note: "운영부/교육부/복지부 2일" },
+    { sourceCode: "AWARD",        label: "포상휴가",     sortOrder: 6, defaultDays: null, note: "PM·관리자가 사원별 부여" },
+    // 근속 기념일 기반 (tenureYears 설정 → 스케줄러가 해당 주년에 자동 부여)
+    { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1  },
+    { sourceCode: "TENURE_5Y",  label: "5년근속휴가",  sortOrder: 8, defaultDays: 5,  tenureYears: 5  },
+    { sourceCode: "TENURE_10Y", label: "10년근속휴가", sortOrder: 9, defaultDays: 10, tenureYears: 10 },
+  ];
+
+  for (const cfg of configs) {
+    await prisma.allocationSourceConfig.upsert({
+      where: { sourceCode: cfg.sourceCode },
+      update: {
+        label:              cfg.label,
+        defaultDays:        cfg.defaultDays        ?? null,
+        tenureYears:        cfg.tenureYears        ?? null,
+        bonusIntervalYears: cfg.bonusIntervalYears ?? null,
+        bonusMaxDays:       cfg.bonusMaxDays       ?? null,
+        skipForFreelancer:  cfg.skipForFreelancer  ?? false,
+        note:               cfg.note               ?? null,
+      },
+      create: {
+        sourceCode:         cfg.sourceCode,
+        label:              cfg.label,
+        sortOrder:          cfg.sortOrder,
+        defaultDays:        cfg.defaultDays        ?? null,
+        tenureYears:        cfg.tenureYears        ?? null,
+        bonusIntervalYears: cfg.bonusIntervalYears ?? null,
+        bonusMaxDays:       cfg.bonusMaxDays       ?? null,
+        skipForFreelancer:  cfg.skipForFreelancer  ?? false,
+        note:               cfg.note               ?? null,
+      },
+    });
+  }
+  console.log("  ✅ AllocationSourceConfig upsert 완료");
+}
+
 async function main() {
   console.log("🌱 기초데이터만 시드 (휴가유형 + 공휴일 API 동기화)...");
 
@@ -132,6 +195,7 @@ async function main() {
   else console.log("  ✅ 휴일 동기화:", hResult.synced, "건");
 
   await seedLeaveTypes();
+  await seedAllocationSourceConfigs();
 
   console.log("✅ 기초데이터 시드 완료 (사원/할당/신청 내역은 변경 없음)");
 }

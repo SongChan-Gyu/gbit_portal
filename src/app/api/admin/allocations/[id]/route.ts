@@ -16,6 +16,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
 
     const totalDays = body.totalDays != null ? parseFloat(body.totalDays) : prev.totalDays;
     const usedDays  = body.usedDays  != null ? parseFloat(body.usedDays)  : prev.usedDays;
+    if (Number.isNaN(totalDays) || Number.isNaN(usedDays)) {
+      return NextResponse.json({ error: "부여일수/사용일수는 숫자여야 합니다." }, { status: 400 });
+    }
     const remaining = totalDays - usedDays;
     if (remaining < -0.001) {
       return NextResponse.json({

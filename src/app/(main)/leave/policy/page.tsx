@@ -5,22 +5,7 @@ import { redirect } from "next/navigation";
 
 export const metadata = { title: "휴가 규정 안내 | GBIT Portal" };
 
-// ─────────────────── 규정 데이터 ───────────────────
 const FISCAL_NOTE = "귀속기간: 매년 5월 1일 ~ 다음해 4월 30일";
-
-const ANNUAL_RULES = [
-  { label:"기본 연차",           value:"15일 (입사 1년 이상 정규/프리랜서 공통)" },
-  { label:"근속 가산",           value:"2년마다 +1일 (최대 25일)" },
-  { label:"1년 미만 (입사 첫해)", value:"매월 만근 시 1일 발생 (최대 11일)" },
-  { label:"귀속연도",            value:"매년 5월 1일 초기화" },
-  { label:"프리랜서",            value:"2023/9/1부터 정규직 동일 적용" },
-];
-
-const TENURE_LEAVES = [
-  { milestone:"1년 근속",  days:"3일",  note:"만근일 기준 해당 귀속연도 내 사용" },
-  { milestone:"5년 근속",  days:"5일",  note:"만근일 기준 1년 이내 사용" },
-  { milestone:"10년 근속", days:"10일", note:"만근일 기준 1년 이내 사용" },
-];
 
 const CONDOLENCE_LEAVES = [
   { event:"본인 결혼",                    days:"5일",  category:"경조" },
@@ -152,11 +137,42 @@ function Section({ title, children }: { title:string; children:React.ReactNode }
 export default async function LeavePolicyPage() {
   const session = await auth();
   const user = session!.user as any;
-  const self = await prisma.employee.findUnique({
-    where: { id: user.employeeId },
-    select: { employeeType: true },
-  });
+  const [self, sourceConfigs] = await Promise.all([
+    prisma.employee.findUnique({
+      where: { id: user.employeeId },
+      select: { employeeType: true },
+    }),
+    prisma.allocationSourceConfig.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
   if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
+
+  const baseAnnualCfg  = sourceConfigs.find((s) => s.sourceCode === "BASE_ANNUAL");
+  const tenureBonusCfg = sourceConfigs.find((s) => s.sourceCode === "TENURE_BONUS");
+  const BASE_DAYS      = Number(baseAnnualCfg?.defaultDays ?? 15);
+  const BONUS_INTERVAL = Number(tenureBonusCfg?.bonusIntervalYears ?? 2);
+  const BONUS_MAX      = Number(tenureBonusCfg?.bonusMaxDays ?? 10);
+  const MAX_TOTAL      = BASE_DAYS + BONUS_MAX;
+
+  const ANNUAL_RULES = [
+    { label:"기본 연차",           value:`${BASE_DAYS}일 (입사 1년 이상 정규/프리랜서 공통)` },
+    { label:"근속 가산",           value:`${BONUS_INTERVAL}년마다 +1일 (최대 ${MAX_TOTAL}일)` },
+    { label:"1년 미만 (입사 첫해)", value:"매월 만근 시 1일 발생 (최대 11일)" },
+    { label:"귀속연도",            value:"매년 5월 1일 초기화" },
+    { label:"프리랜서",            value:"2023/9/1부터 정규직 동일 적용" },
+  ];
+
+  const tenureMilestoneCfgs = sourceConfigs.filter((s) => s.tenureYears != null)
+    .sort((a, b) => (a.tenureYears ?? 0) - (b.tenureYears ?? 0));
+  const TENURE_LEAVES = tenureMilestoneCfgs.map((s) => ({
+    milestone: `${s.tenureYears}년 근속`,
+    days:      `${s.defaultDays ?? 0}일`,
+    note:      s.tenureYears === 1
+      ? "만근일 기준 해당 귀속연도 내 사용"
+      : "만근일 기준 1년 이내 사용",
+  }));
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 px-4 py-6">

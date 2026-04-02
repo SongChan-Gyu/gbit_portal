@@ -13,6 +13,8 @@ interface LT {
   usageCategory:string;
   displayHint:string|null;
   includeInFiscalInit:boolean;
+  carryoverEligible:boolean;
+  autoCarryoverOnFiscalInit:boolean;
   validityBasis:string; validityMonths:number|null;
   isActive:boolean; sortOrder:number; color:string;
   /** LeaveAllocation.sourceCode 와 동일하면 그 부여 풀에서만 차감 */
@@ -44,6 +46,8 @@ function newBlank(): Partial<LT> {
     allowsFullDay:true, allowsHalfDay:false, halfDayAmPm:"BOTH", applyGroupKey:null,
     usageCategory:"ASSET", displayHint:null,
     includeInFiscalInit:true,
+    carryoverEligible:false,
+    autoCarryoverOnFiscalInit:false,
     isHalf:false, isAmOnly:false, isPmOnly:false,
     validityBasis:"귀속연도", validityMonths:null, isActive:true, sortOrder:99, color:"#3b82f6",
   };
@@ -493,6 +497,8 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
                   {([
                     ["requiresStamp", "스탬프 쿠폰 필요"],
                     ["includeInFiscalInit", "귀속연도 초기화 포함"],
+                    ["carryoverEligible", "이월 가능"],
+                    ["autoCarryoverOnFiscalInit", "귀속연도 초기화 시 자동 이월"],
                     ["isActive",      "활성화"],
                   ] as [keyof LT, string][]).map(([k,l]) => (
                     <label key={k as string} className="flex items-center gap-2 text-sm cursor-pointer py-1">

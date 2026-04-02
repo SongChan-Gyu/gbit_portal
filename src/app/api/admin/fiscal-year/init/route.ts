@@ -34,21 +34,10 @@ export async function POST(req: Request) {
     },
     include: { team: true },
   });
-  const sourceConfigsDb = await prisma.allocationSourceConfig.findMany({
+  const sourceConfigs = await prisma.allocationSourceConfig.findMany({
     where: { isActive: true },
     orderBy: { sortOrder: "asc" },
   });
-  const requiredDefaults = [
-    { sourceCode: "CARE", label: "돌봄휴가", defaultDays: 2, sortOrder: 3, isActive: true },
-    { sourceCode: "HOLIDAY_EXT", label: "연휴연장휴가", defaultDays: 1, sortOrder: 4, isActive: true },
-    { sourceCode: "DUTY_DEPT", label: "직무부서휴가", defaultDays: 2, sortOrder: 5, isActive: true },
-  ];
-  const sourceConfigs = [...sourceConfigsDb];
-  for (const d of requiredDefaults) {
-    if (!sourceConfigs.some((s) => s.sourceCode === d.sourceCode)) {
-      sourceConfigs.push(d as any);
-    }
-  }
   const leaveTypesBySource = await prisma.leaveType.findMany({
     where: { isActive: true, allocationSourceCode: { not: null } },
     select: {
@@ -58,6 +47,8 @@ export async function POST(req: Request) {
       maxPerYear: true,
       validityBasis: true,
       includeInFiscalInit: true,
+      carryoverEligible: true,
+      autoCarryoverOnFiscalInit: true,
     },
   });
   const leaveTypeSourceMap = new Map(
@@ -70,6 +61,15 @@ export async function POST(req: Request) {
   const DUTY_SOURCE = "DUTY_DEPT";
   const DUTY_LABEL: Record<string, string> = { OPERATIONS: "운영부", EDUCATION: "교육부", WELFARE: "복지부" };
 
+  // DB에서 BASE_ANNUAL / TENURE_BONUS 규칙 읽기
+  const baseAnnualCfg  = sourceConfigs.find((s) => s.sourceCode === "BASE_ANNUAL");
+  const tenureBonusCfg = sourceConfigs.find((s) => s.sourceCode === "TENURE_BONUS");
+
+  const BASE_ANNUAL_DAYS    = Number(baseAnnualCfg?.defaultDays   ?? 15);
+  const BONUS_INTERVAL_YRS  = Number(tenureBonusCfg?.bonusIntervalYears ?? 2);
+  const BONUS_MAX_DAYS      = Number(tenureBonusCfg?.bonusMaxDays  ?? 10);
+  const BONUS_SKIP_FREE     = tenureBonusCfg?.skipForFreelancer ?? true;
+
   async function allocExists(
     tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
     employeeId: string,
@@ -81,9 +81,9 @@ export async function POST(req: Request) {
     });
   }
 
-  const BASE_ANNUAL_DAYS = 15;
   const TENURE_1Y_CARRYOVER_LABEL = "1년근속휴가(이월)";
   const TENURE_1Y_CARRYOVER_NOTE_KEY = "TENURE_1Y_CARRYOVER_FROM";
+  const AUTO_CARRYOVER_NOTE_KEY = "AUTO_CARRYOVER_FROM";
 
   async function getTenure1yCarryoverDays(
     finder: any,
@@ -119,6 +119,57 @@ export async function POST(req: Request) {
     }
     return days;
   }
+  const autoCarryoverSourceCodes = [
+    ...new Set(
+      leaveTypesBySource
+        .filter(
+          (lt) =>
+            !!lt.allocationSourceCode &&
+            lt.carryoverEligible === true &&
+            lt.autoCarryoverOnFiscalInit === true,
+        )
+        .map((lt) => String(lt.allocationSourceCode)),
+    ),
+  ];
+  const sourceLabelMap = new Map<string, string>();
+  for (const cfg of sourceConfigs) sourceLabelMap.set(cfg.sourceCode, cfg.label);
+  for (const lt of leaveTypesBySource) {
+    if (lt.allocationSourceCode && !sourceLabelMap.has(lt.allocationSourceCode)) {
+      sourceLabelMap.set(lt.allocationSourceCode, lt.name);
+    }
+  }
+
+  async function getAutoCarryoverDaysBySource(
+    finder: any,
+    employeeId: string,
+    targetFy: number,
+    sourceCode: string,
+  ): Promise<number> {
+    const already = await finder.leaveAllocation.findFirst({
+      where: {
+        employeeId,
+        sourceCode,
+        fiscalYear: targetFy,
+        note: { contains: `${AUTO_CARRYOVER_NOTE_KEY}:${prevFy}:${sourceCode}` },
+      },
+      select: { id: true },
+    });
+    if (already) return 0;
+
+    const prevRows = await finder.leaveAllocation.findMany({
+      where: {
+        employeeId,
+        sourceCode,
+        fiscalYear: prevFy,
+        isActive: true,
+      },
+      select: { totalDays: true, usedDays: true },
+    });
+    return prevRows.reduce((s: number, a: { totalDays: number; usedDays: number }) => {
+      const remain = Number(a.totalDays) - Number(a.usedDays);
+      return remain > 0 ? s + remain : s;
+    }, 0);
+  }
 
   /** dryRun: 미리보기만 반환 (DB 변경 없음) */
   if (dryRun === true) {
@@ -135,16 +186,19 @@ export async function POST(req: Request) {
       if (yearsOfService >= 1) {
         if (!(await exists(emp.id, "BASE_ANNUAL")))
           items.push({ label: "기본연차", totalDays: BASE_ANNUAL_DAYS });
-        const bonus = Math.min(Math.floor(yearsOfService / 2), 10);
-        // 프리랜서(employeeType=FREE)는 2년 가산(TENURE_BONUS) 제외
+        const bonus = BONUS_INTERVAL_YRS > 0
+          ? Math.min(Math.floor(yearsOfService / BONUS_INTERVAL_YRS), BONUS_MAX_DAYS)
+          : 0;
         const empType = (emp as any).employeeType ?? "FULL";
-        if (bonus > 0 && empType !== "FREE" && !(await exists(emp.id, "TENURE_BONUS")))
+        const skipBonus = BONUS_SKIP_FREE && empType === "FREE";
+        if (bonus > 0 && !skipBonus && !(await exists(emp.id, "TENURE_BONUS")))
           items.push({ label: `근속가산(+${bonus}일)`, totalDays: bonus });
       }
       for (const cfg of sourceConfigs) {
         if (["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"].includes(cfg.sourceCode)) continue;
         if (cfg.sourceCode.startsWith("MONTHLY_ACCRUAL_")) continue;
-        if (["TENURE_1Y", "TENURE_5Y", "TENURE_10Y", "BIRTHDAY_HALF"].includes(cfg.sourceCode)) continue;
+        // tenureYears가 있는 sourceCode(근속특별휴가)는 스케줄러가 부여하므로 귀속연도 초기화에서 제외
+        if (cfg.tenureYears != null) continue;
         const lt = leaveTypeSourceMap.get(cfg.sourceCode);
         if (lt && lt.validityBasis !== "귀속연도") continue;
         if (lt && lt.includeInFiscalInit === false) continue;
@@ -160,6 +214,12 @@ export async function POST(req: Request) {
       const tenure1yCarry = await getTenure1yCarryoverDays(prisma, emp.id, fy);
       if (tenure1yCarry > 0) {
         items.push({ label: "1년근속휴가(이월)", totalDays: tenure1yCarry });
+      }
+      for (const src of autoCarryoverSourceCodes) {
+        const days = await getAutoCarryoverDaysBySource(prisma, emp.id, fy, src);
+        if (days > 0) {
+          items.push({ label: `${sourceLabelMap.get(src) ?? src}(자동이월)`, totalDays: Number(days.toFixed(1)) });
+        }
       }
 
       if (items.length > 0) preview.push({ name: emp.name, items });
@@ -195,10 +255,12 @@ export async function POST(req: Request) {
           created++;
         } else { skipped++; }
 
-        const bonus = Math.min(Math.floor(yearsOfService / 2), 10);
-        // 프리랜서(employeeType=FREE)는 2년 가산(TENURE_BONUS) 제외
+        const bonus = BONUS_INTERVAL_YRS > 0
+          ? Math.min(Math.floor(yearsOfService / BONUS_INTERVAL_YRS), BONUS_MAX_DAYS)
+          : 0;
         const empType = (emp as any).employeeType ?? "FULL";
-        if (bonus > 0 && empType !== "FREE") {
+        const skipBonus = BONUS_SKIP_FREE && empType === "FREE";
+        if (bonus > 0 && !skipBonus) {
           const bonusExists = await allocExists(tx, emp.id, "TENURE_BONUS", fy);
           if (!bonusExists) {
             await tx.leaveAllocation.create({
@@ -217,7 +279,8 @@ export async function POST(req: Request) {
       for (const cfg of sourceConfigs) {
         if (["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"].includes(cfg.sourceCode)) continue;
         if (cfg.sourceCode.startsWith("MONTHLY_ACCRUAL_")) continue;
-        if (["TENURE_1Y", "TENURE_5Y", "TENURE_10Y", "BIRTHDAY_HALF"].includes(cfg.sourceCode)) continue;
+        // tenureYears가 있는 sourceCode(근속특별휴가)는 스케줄러가 부여하므로 귀속연도 초기화에서 제외
+        if (cfg.tenureYears != null) continue;
         const lt = leaveTypeSourceMap.get(cfg.sourceCode);
         if (lt && lt.validityBasis !== "귀속연도") continue;
         if (lt && lt.includeInFiscalInit === false) continue;
@@ -258,6 +321,24 @@ export async function POST(req: Request) {
             validUntil: fyEnd,
             fiscalYear: fy,
             note: `${TENURE_1Y_CARRYOVER_NOTE_KEY}:${prevFy} (2~4월 부여분 잔여 이월)`,
+          },
+        });
+        created++;
+      }
+      for (const src of autoCarryoverSourceCodes) {
+        const carryDays = await getAutoCarryoverDaysBySource(tx, emp.id, fy, src);
+        if (carryDays <= 0) continue;
+        await tx.leaveAllocation.create({
+          data: {
+            employeeId: emp.id,
+            sourceCode: src,
+            label: `${sourceLabelMap.get(src) ?? src}(자동이월)`,
+            totalDays: Number(carryDays.toFixed(1)),
+            usedDays: 0,
+            validFrom: fyStart,
+            validUntil: fyEnd,
+            fiscalYear: fy,
+            note: `${AUTO_CARRYOVER_NOTE_KEY}:${prevFy}:${src}`,
           },
         });
         created++;
