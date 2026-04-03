@@ -55,8 +55,8 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     section: "admin",
     children: [
       { key: "admin_organization", label: "인사 관리", href: "/admin/organization" },
-      { key: "admin_leave_settings", label: "휴가 설정", href: "/admin/leave-settings" },
-      { key: "admin_leave_mgmt", label: "휴가 관리", href: "/admin/leave-management" },
+      { key: "admin_leave_settings", label: "휴가 유형 설정", href: "/admin/leave-settings" },
+      { key: "admin_leave_mgmt", label: "휴가 부여·현황", href: "/admin/leave-management" },
       { key: "admin_forms", label: "양식 관리", href: "/admin/forms" },
       { key: "admin_notices", label: "공지사항", href: "/admin/notices" },
       { key: "admin_system", label: "시스템 설정", href: "/admin/system" },

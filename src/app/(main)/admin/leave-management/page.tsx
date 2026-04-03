@@ -7,7 +7,7 @@ import LeaveApprovalsTab from "@/app/(main)/admin/leave-management/LeaveApproval
 import { getFiscalYear } from "@/lib/workdays";
 import { serializeDates } from "@/lib/serialize";
 
-export const metadata = { title: "휴가 관리 | GBIT Portal" };
+export const metadata = { title: "휴가 부여·현황 | GBIT Portal" };
 
 export default async function LeaveManagementPage({
   searchParams,
@@ -53,8 +53,8 @@ export default async function LeaveManagementPage({
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="page-title">휴가 관리</h1>
-        <p className="page-subtitle">귀속연도별 휴가 현황, 일괄 초기화·할당 추가/수정/이월/비활성화, 자동 스케줄러를 한 곳에서 관리합니다.</p>
+        <h1 className="page-title">휴가 부여·현황</h1>
+        <p className="page-subtitle">귀속연도별 잔여·사용 현황, 일괄 초기화·할당 조정·이월, 자동 스케줄러·결재 내역을 한 곳에서 관리합니다.</p>
       </div>
 
       {/* 탭 */}
