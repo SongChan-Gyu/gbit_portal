@@ -441,9 +441,13 @@ export async function runBirthdayHalf(
       continue;
     }
 
-    // 실제 생일 날짜 (해당 연도)
-    const birthdayThisYear = new Date(tYear, birth.getMonth(), birth.getDate());
-    const birthdayDateStr = birthdayThisYear.toISOString().slice(0, 10);
+    // 실제 생일 날짜 (해당 연도) — 2월 29일 윤년 보정: 해당 연도에 29일이 없으면 28일로 처리
+    const birthMonth = birth.getMonth(); // 0-indexed
+    const birthDay = birth.getDate();
+    const maxDay = new Date(tYear, birthMonth + 1, 0).getDate(); // 해당 월의 마지막 날
+    const safeDay = Math.min(birthDay, maxDay);
+    const birthdayThisYear = new Date(tYear, birthMonth, safeDay);
+    const birthdayDateStr = `${tYear}-${String(birthMonth + 1).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
 
     const existing = await prisma.leaveAllocation.findFirst({
       where: {
