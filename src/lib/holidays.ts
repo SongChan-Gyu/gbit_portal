@@ -4,8 +4,6 @@
  * - "다음 귀속년도까지" 커버: 현재 귀속연도 + 1년 (캘린더 기준으로 해당 연도들 수집)
  */
 
-import type { PrismaClient } from "@prisma/client";
-
 const NAGER_API = "https://date.nager.at/api/v3/PublicHolidays";
 
 export interface HolidayItem {
@@ -51,8 +49,11 @@ const SUPPLEMENT_HOLIDAYS_KR: HolidayItem[] = [
  * DB에 휴일 반영 (upsert). API 결과 + 대체공휴일 보강 반영.
  * - fromYear, toYear: 캘린더 연도 (예: 2025, 2026)
  */
+/** holiday.upsert만 사용하므로 raw PrismaClient·확장 DB 모두 허용 */
+type HolidayWriter = { holiday: { upsert(args: any): Promise<any> } };
+
 export async function syncHolidaysToDb(
-  prisma: PrismaClient,
+  prisma: HolidayWriter,
   fromYear: number,
   toYear: number
 ): Promise<{ synced: number; failed?: string }> {

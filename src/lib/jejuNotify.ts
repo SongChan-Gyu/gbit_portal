@@ -12,8 +12,8 @@
  * 미설정 시 콘솔 로그만 남기고 에러를 내지 않는다.
  */
 
-import type { PrismaClient } from "@prisma/client";
 import { sendMail } from "@/lib/email";
+import type { DB } from "@/lib/db";
 
 type NotifyType =
   | "step1_notify"          // 복지부에게 1차 승인 요청
@@ -41,7 +41,7 @@ interface NotifyRow {
   depositorName: string;
 }
 
-async function getNotifyConfig(prisma: PrismaClient): Promise<{ step1?: { phone?: string; email?: string }; step2?: { phone?: string; email?: string } }> {
+async function getNotifyConfig(prisma: DB): Promise<{ step1?: { phone?: string; email?: string }; step2?: { phone?: string; email?: string } }> {
   try {
     const cfg = await (prisma as any).systemConfig.findUnique({ where: { key: "jejuApprovalNotify" } });
     if (cfg?.value) return JSON.parse(cfg.value);
@@ -58,7 +58,7 @@ function dateLabel(row: NotifyRow): string {
 }
 
 export async function sendJejuNotification(
-  prisma: PrismaClient,
+  prisma: DB,
   type: NotifyType,
   employee: NotifyEmployee | null,
   row: NotifyRow,

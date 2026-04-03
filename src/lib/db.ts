@@ -71,3 +71,15 @@ export const prisma = globalForPrisma.prisma ?? makeClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 export default prisma;
+
+/**
+ * $extends() 이후 실제 prisma 인스턴스 타입.
+ * lib 함수 파라미터에서 PrismaClient 대신 사용.
+ */
+export type DB = typeof prisma;
+
+/**
+ * $transaction 콜백의 tx 타입.
+ * lib 함수 파라미터에서 Prisma.TransactionClient 대신 사용.
+ */
+export type DBTx = Omit<DB, "$connect" | "$disconnect" | "$on" | "$transaction" | "$extends">;

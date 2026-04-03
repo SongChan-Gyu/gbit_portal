@@ -1,9 +1,9 @@
-import type { PrismaClient } from "@prisma/client";
+import type { DB } from "@/lib/db";
 
 /**
  * 기존 사번 중 E + 숫자 패턴의 최대값을 구한 뒤, 다음 번호를 반환 (예: E001, E002, ... E099, E100)
  */
-export async function getNextEmpNo(prisma: PrismaClient): Promise<string> {
+export async function getNextEmpNo(prisma: DB): Promise<string> {
   const employees = await prisma.employee.findMany({
     select: { empNo: true },
   });

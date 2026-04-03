@@ -3,8 +3,8 @@
  * 스케줄러·귀속연도 초기화가 동일 규칙으로 맞춘다.
  */
 
-import type { Prisma } from "@prisma/client";
 import prisma from "@/lib/db";
+import type { DB, DBTx } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 import { getFiscalYear } from "@/lib/workdays";
 import { fiscalPeriod } from "@/lib/leaveCalc";
@@ -12,7 +12,7 @@ import { fiscalPeriod } from "@/lib/leaveCalc";
 export const MONTHLY_ACCRUAL_POOL_MARKER = "MONTHLY_ACCRUAL_POOL";
 const ACCURED_PREFIX = "ACCURED_MONTHS:";
 
-export type MonthlyAccrualDb = Prisma.TransactionClient | typeof prisma;
+export type MonthlyAccrualDb = DBTx | DB;
 
 export function isPoolNote(note: string | null | undefined): boolean {
   return !!(note && note.includes(MONTHLY_ACCRUAL_POOL_MARKER));

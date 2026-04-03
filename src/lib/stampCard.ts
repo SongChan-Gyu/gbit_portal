@@ -1,8 +1,8 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import type { DB, DBTx } from "@/lib/db";
 
 /** 휴가 취소·반려·철회 시 장 권한 + 구버전 쿠폰 used 복원 */
 export async function releaseStampSlotsForLeaveRequest(
-  tx: Prisma.TransactionClient,
+  tx: DBTx,
   leaveRequestId: string,
 ) {
   await tx.stampCard.updateMany({
@@ -21,7 +21,7 @@ export async function releaseStampSlotsForLeaveRequest(
 
 /** 팀장 승인 1건 → 현재 채우는 장에 칸 1 추가 */
 export async function appendStampCouponToCard(
-  tx: Prisma.TransactionClient,
+  tx: DBTx,
   employeeId: string,
   stampDate: Date,
 ): Promise<{ stampId: string; stampCardId: string }> {
@@ -50,7 +50,7 @@ export async function appendStampCouponToCard(
 }
 
 export async function findHealingStampCard(
-  tx: Prisma.TransactionClient,
+  tx: DBTx,
   employeeId: string,
 ) {
   return tx.stampCard.findFirst({
@@ -64,7 +64,7 @@ export async function findHealingStampCard(
 }
 
 export async function findAfternoonStampCard(
-  tx: Prisma.TransactionClient,
+  tx: DBTx,
   employeeId: string,
 ) {
   return tx.stampCard.findFirst({
@@ -77,13 +77,13 @@ export async function findAfternoonStampCard(
   });
 }
 
-export function countHealingEligible(db: PrismaClient, employeeId: string) {
+export function countHealingEligible(db: DB, employeeId: string) {
   return db.stampCard.count({
     where: { employeeId, filledCount: { gte: 5 }, healingUsed: false },
   });
 }
 
-export function countAfternoonEligible(db: PrismaClient, employeeId: string) {
+export function countAfternoonEligible(db: DB, employeeId: string) {
   return db.stampCard.count({
     where: { employeeId, filledCount: { gte: 10 }, afternoonUsed: false },
   });

@@ -8,8 +8,8 @@
 
 - **표시(휴가 현황)**: `BASE_ANNUAL`이면서 노트에 `MONTHLY_ACCRUAL:`가 있거나, `sourceCode`가 `MONTHLY_ACCRUAL_*`인 행은 **한 열로 묶어** 합산한다. (`src/lib/leaveOverviewTable.ts`, `OVERVIEW_MONTHLY_BUNDLE_KEY`)
 - **유효기간(의도)**: N월에 부여되면 **N월 1일 ~ 해당 귀속연도 말(4/30)**까지 쓸 수 있는 구조. (코드는 `src/lib/scheduler.ts` 등에서 확인·유지)
-- **귀속연도 일괄 초기화(`fiscal-year/init`)**: 입사 1년 미만 월별 적립은 **스케줄러와 동일 규칙**으로 `syncMonthlyAccrualPoolForFiscalInit`가 한 번에 맞춘다(적립 상한 시점: **실행일 기준 “이전 달 말”**까지, `monthlyAccrualCapDate`).
-- **“이월”**: 연 단일 이월 객체가 아니라, **월별로 쌓이는 할당 + 각자 유효기간**에 가깝다. 현황 표에서는 위 묶음 열로 합쳐 보여 준다.
+- **귀속연도 일괄 초기화(`fiscal-year/init`)**: 입사 1년 미만 월별 적립은 **스케줄러와 동일 규칙**으로 `syncMonthlyAccrualPoolForFiscalInit`가 한 번에 맞춘다(적립 상한 시점: **실행일 기준 "이전 달 말"**까지, `monthlyAccrualCapDate`).
+- **"이월"**: 연 단일 이월 객체가 아니라, **월별로 쌓이는 할당 + 각자 유효기간**에 가깝다. 현황 표에서는 위 묶음 열로 합쳐 보여 준다.
 
 ---
 
@@ -20,33 +20,50 @@
 
 ---
 
-## 3. 이미 반영된 구현(대화 기준)
+## 3. 이미 반영된 구현
 
 - [x] 휴가 현황: 소스별 열 **메타 전부 고정** + 메타 `sortOrder`, `BASE_ANNUAL` 다음 월별 적립 열 항상 표시
 - [x] 귀속 초기화 dryRun: `previewMatrix` (행=사원, 열=부여 소스), `FiscalYearManager` UI
 - [x] 일수 표시: 정수는 `3`, 소수만 `0.5` 형태; 소스 셀 없음 → `0` 스타일 표현
 - [x] `BIRTHDAY_HALF`: AllocationSourceConfig 시드 + 폴백 라벨 (`leaveOverviewTable`)
 - [x] 메뉴: 월별 근태·스탬프를 휴가 하위로 이동 등 (별도 UX)
+- [x] `db.ts`: `$allModels.$allOperations`로 중첩 include된 employee도 phone/email 자동 복호화
+- [x] `authGuard.ts`: `requireRole` / `requireAdmin` / `requirePMOrAdmin` 공통 헬퍼, API route 전체 적용
+- [x] `DUTY_DEPT_CODES` / `DUTY_DEPT_TO_LABEL` 상수를 `employeeExcel.ts`로 이전(하드코딩 제거)
+- [x] `MobileNav.tsx` 삭제 (Header가 Sidebar overlay로 대체, 미사용 데드코드)
+- [x] TypeScript 에러 0: `DB`, `DBTx` 타입 export → lib 파일 파라미터 타입 교체, `production-wipe.ts` requestLog 제거
 
 ---
 
-## 4. 다시 물을 때 “안 된 것만” 보려면
+## 4. 내일 이어서 할 것 (우선순위 순)
 
-아래는 **확인·미완 가능성**이 있어서 질문 시 체크하면 좋은 항목이다.
+### HIGH — 런타임 영향 있는 것
 
-- [ ] **월별 적립 유효기간**이 모든 생성 경로(스케줄러·수동 입력·마이그레이션)에서 **항상** “부여월 1일 ~ 귀속 말일”과 일치하는지 코드 재검증
-- [ ] **귀속 초기화** 실행 시, 스케줄러 미실행분만 “같이 초기화”되는지 같은 표현을 **정책 문서/관리자 안내**로 명문화할지 (코드는 역할 분리가 맞음)
-- [ ] **AllocationSourceConfig 전용 관리 UI**가 없다면, 신규 `sourceCode` 추가 시 **시드·DB 수동** 절차를 팀에 공유할지
-- [x] 휴가 현황 **열 = 활성 메타 전부 고정** (`buildOverviewColumns` — 할당 없어도 열·`0/0` 표시)
+- [ ] **날짜 문자열/생성자 혼용 통일** (MED, 런타임 오류 가능성)
+  - `fiscalPeriod`는 `new Date(\`${fy}-05-01\`)` → UTC 자정 해석
+  - `monthlyAccrualPool.ts`의 `new Date(\`${fy + 1}-04-30\`)` → UTC 자정
+  - 반면 `new Date(y, m, d)`는 **로컬** 시간 → 서버 TZ=Asia/Seoul로 고정되어 있으면 괜찮으나, 통일이 필요
+  - 파일: `src/lib/leaveCalc.ts` (78–82), `src/lib/monthlyAccrualPool.ts` (229–231, 276–277)
+  - 권장 방법: `workdays.ts`의 `toKSTDateStr` / KST 헬퍼로 통일
 
----
+### MED — 검토 필요
 
-## 4b. 월별 적립 데이터 모델 (구현됨, `src/lib/monthlyAccrualPool.ts`)
+- [ ] **Prisma `$extends` + nested include 복호화 통합 테스트**
+  - `prisma.leaveRequest.findMany({ include: { employee: true } })` 실행 시 `employee.phone`/`email`이 실제로 복호화되는지 수동 확인 필요
+  - 알림톡(`kakao.ts`), 제주 알림(`jejuNotify.ts`)에서 `employee.phone` 사용 시 정상 복호화 여부
+  - 현재 `$allModels.$allOperations`로 구현됨 (`src/lib/db.ts`)
 
-- **귀속연도당 1행**: `BASE_ANNUAL` + 노트 `MONTHLY_ACCRUAL_POOL · ACCURED_MONTHS:YYYY-MM,...` — `totalDays` = 적립된 월 수, `validFrom` = **첫 적립월 1일**, `validUntil` = 해당 귀속연도 4/30.
-- **스케줄러**: `appendMonthlyAccrualMonth` — 해당 월이 이미 목록에 있으면 스킵, 없으면 **같은 행**에 월 추가·`totalDays` 갱신. 레거시(월별 노트·`MONTHLY_ACCRUAL_*`) 다건이면 **머지** 후 POOL로 정규화.
-- **귀속연도 초기화**: `syncMonthlyAccrualPoolForFiscalInit` — 위와 같은 **기대 월 목록**으로 맞춤(스케줄 미실행분 보정).
-- **소스 메타 코드 체계**(`sourceCode` vs 표시명): 별도로 정리 예정.
+- [ ] **AllocationSourceConfig 전용 관리 UI 부재**
+  - 현재 시드 또는 DB 직접 수정으로만 소스 메타 추가 가능
+  - 신규 `sourceCode` 추가 절차를 팀에 공유하거나 관리 UI 제작 검토
+
+### LOW — 코드 품질
+
+- [ ] **`stamp/approve` route**: `requirePMOrAdmin`이 아니라 `TEAM_LEAD`도 포함하는데 현재 `requirePMOrAdmin`으로 바뀌어 있음 → 실제 정책 확인 후 `requireRole(actor, ["TEAM_LEAD","PM","ADMIN"])` 여부 결정
+  - 파일: `src/app/api/stamp/approve/route.ts`
+  - **주의**: 기존 코드가 `["TEAM_LEAD","PM","ADMIN"]` 이었는데 배치 스크립트로 `requirePMOrAdmin`으로 교체됨. 확인 필요.
+
+- [ ] **`src/app/api/leave/request/route.ts` 내 `schedule/cron` 형태의 역할 체크** 미변환 → 복잡한 비즈니스 로직과 섞여 있어 수동 확인 후 정리
 
 ---
 
@@ -60,6 +77,9 @@
 | 초기화 미리보기 UI | `src/app/(main)/admin/fiscal-year/FiscalYearManager.tsx` |
 | 월별 적립 생성 | `src/lib/scheduler.ts` |
 | 소스 메타 시드 | `prisma/seed.ts`, `prisma/seed-base.ts` |
+| 공통 역할 가드 | `src/lib/authGuard.ts` |
+| PII 암호화/복호화 | `src/lib/db.ts`, `src/lib/fieldCrypto.ts` |
+| DUTY_DEPT 상수 | `src/lib/employeeExcel.ts` (`DUTY_DEPT_CODES`, `DUTY_DEPT_TO_LABEL`) |
 
 ---
 
@@ -90,6 +110,11 @@
 - [ ] **관리**: `유동 양식 관리`, `공지사항 관리` 라벨
 - [ ] **월별 근태 현황** 페이지 제목·모바일 메뉴 이름
 
+### 암호화 확인
+
+- [ ] 관리자 사원 목록에서 전화번호·이메일이 **정상 복호화**되어 보이는지
+- [ ] `prisma.leaveRequest.findMany({ include: { employee: true } })` 경로 (휴가 결재, 알림톡 등)에서 `employee.phone`이 암호문이 아닌 원문으로 오는지
+
 ### 시드·DB
 
 - [ ] 로컬/스테이징에서 `prisma` 시드 또는 `seed-base` 돌린 뒤 **AllocationSourceConfig**에 `BIRTHDAY_HALF` 생기는지 (이미 돌린 DB는 생략 가능)
@@ -97,7 +122,3 @@
 ---
 
 *이 섹션은 기능 바꿀 때마다 **날짜 갱신 + 항목 추가/삭제**해 두면 테스트 범위를 안 잃는다.*
-
----
-
-*마지막으로 사용자가 “3번·코드값 관리”를 다시 말해 줄 경우, 이 문서 1·2절을 갱신하거나 4절 체크박스만 업데이트하면 된다.*

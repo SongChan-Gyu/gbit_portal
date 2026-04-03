@@ -92,7 +92,6 @@ async function main() {
 
     auditLogs: await prisma.auditLog.count(),
     schedulerLogs: await prisma.schedulerLog.count(),
-    requestLogs: await prisma.requestLog.count(),
 
     noticesReassignAuthor: await prisma.notice.count({
       where: { authorId: { notIn: keepEmpIds } },
@@ -158,7 +157,6 @@ async function main() {
     // 로그
     await tx.auditLog.deleteMany({});
     await tx.schedulerLog.deleteMany({});
-    await tx.requestLog.deleteMany({});
 
     // 공지: 삭제하지 않음 — 작성자가 곧 삭제될 사원이면 유지 계정으로 이관 (Notice.authorId FK)
     const fallbackAuthorId =

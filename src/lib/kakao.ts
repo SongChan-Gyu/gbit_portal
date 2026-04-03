@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@prisma/client";
+import type { DB } from "@/lib/db";
 
 /**
  * 카카오 알림톡 발송 (Aligo 연동)
@@ -17,7 +17,7 @@ import type { PrismaClient } from "@prisma/client";
  *   예: 01044234532
  */
 async function sendAlimtalk(
-  prisma: PrismaClient,
+  prisma: DB,
   targetId: string,
   phone: string,
   templateCode: string,
@@ -218,7 +218,7 @@ GBIT Portal에서 상세내역을 확인해 주세요.
 }
 
 export async function sendInviteAlimtalk(
-  prisma: PrismaClient, employeeId: string, phone: string, name: string, url: string
+  prisma: DB, employeeId: string, phone: string, name: string, url: string
 ) {
   // 현재 회원가입 초대는 이메일로만 운영(알림톡 템플릿 미사용) — 필요 시 다시 연결
   await sendAlimtalk(prisma, employeeId, phone, "INVITE_REGISTER", { 수신자명: name, 가입링크: url });
@@ -232,7 +232,7 @@ function dowLabel(ymd: string): string {
 }
 
 export async function sendLeaveRequestAlimtalk(
-  prisma: PrismaClient, approverId: string, phone: string,
+  prisma: DB, approverId: string, phone: string,
   approverName: string, applicantName: string,
   leaveTypeName: string, startDate: string, endDate: string
 ) {
@@ -249,7 +249,7 @@ export async function sendLeaveRequestAlimtalk(
 
 /** 승인 전 신청자 철회 시 결재자에게 (알리고 템플릿 LEAVE_WITHDRAWN 별도 등록) */
 export async function sendLeaveWithdrawAlimtalk(
-  prisma: PrismaClient,
+  prisma: DB,
   approverId: string,
   phone: string,
   approverName: string,
@@ -264,7 +264,7 @@ export async function sendLeaveWithdrawAlimtalk(
 }
 
 export async function sendLeaveResultAlimtalk(
-  prisma: PrismaClient, employeeId: string, phone: string,
+  prisma: DB, employeeId: string, phone: string,
   name: string, result: string, comment: string
 ) {
   await sendAlimtalk(prisma, employeeId, phone, "LEAVE_RESULT", {
