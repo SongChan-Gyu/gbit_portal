@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, CalendarDays, BarChart3 } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { buildHolidayDisplaySet } from "@/lib/calendarHolidayDisplay";
 
 // ── 약어 매핑
 const ABBR: Record<string, string> = {
@@ -60,7 +61,7 @@ export default function AttendanceClient({
 }: Props) {
   const router = useRouter();
   const [view, setView] = useState(initView); // "monthly" | "annual"
-  const holidaySet = useMemo(() => new Set(holidays), [holidays]);
+  const holidaySet = useMemo(() => buildHolidayDisplaySet(holidays), [holidays]);
 
   // ── 이전/다음 달 이동
   const prev = month === 1 ? { y:year-1, m:12 } : { y:year, m:month-1 };

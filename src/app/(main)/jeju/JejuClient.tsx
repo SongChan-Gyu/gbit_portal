@@ -7,6 +7,11 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { formatJejuAccountNumber } from "@/lib/jeju";
 import { todayYMD, addDaysYMD, toYMD } from "@/lib/dateUtils";
+import {
+  buildHolidayDisplaySet,
+  isRedCalendarDay,
+  CALENDAR_HOLIDAY_COLOR,
+} from "@/lib/calendarHolidayDisplay";
 
 type JejuConfig = {
   maxNights: number;
@@ -78,7 +83,13 @@ function getValidCheckOutDates(
 
 const fetcher = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))));
 
-export default function JejuClient({ welfare }: { welfare: boolean }) {
+export default function JejuClient({
+  welfare,
+  holidayYmds,
+}: {
+  welfare: boolean;
+  holidayYmds: string[];
+}) {
   const router = useRouter();
   const now = new Date();
   const todayYmd = todayYMD();
@@ -129,6 +140,8 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
     if (!checkInDate) return [];
     return getValidCheckOutDates(checkInDate, occupiedDates, blockedSet, maxNights);
   }, [checkInDate, occupiedDates, blockedSet, maxNights]);
+
+  const holidaySet = useMemo(() => buildHolidayDisplaySet(holidayYmds), [holidayYmds]);
 
   const daysInMonth = new Date(year, month, 0).getDate();
   const firstDay = new Date(year, month - 1, 1).getDay();
@@ -274,8 +287,13 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
           <div className="h-64 flex items-center justify-center text-gray-400">로딩 중...</div>
         ) : (
           <div className="grid grid-cols-7 gap-1 text-sm">
-            {DAYS_KO.map((d) => (
-              <div key={d} className="text-center text-gray-500 font-medium py-1">{d}</div>
+            {DAYS_KO.map((d, wi) => (
+              <div
+                key={d}
+                className={`text-center font-medium py-1 ${wi === 0 ? "text-red-500" : "text-gray-500"}`}
+              >
+                {d}
+              </div>
             ))}
             {calendarDays.map((dateStr, i) => {
               if (!dateStr) return <div key={`e-${i}`} />;
@@ -285,6 +303,7 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
               const isChkOut = dateStr === checkOutDate;
               const clickable = !unavailable || validOut;
               const detail = occupied.welfare && occupied.byDate?.[dateStr];
+              const isRedDay = isRedCalendarDay(dateStr, holidaySet);
               return (
                 <button
                   type="button"
@@ -306,7 +325,16 @@ export default function JejuClient({ welfare }: { welfare: boolean }) {
                     unavailable ? getUnavailableLabel(dateStr, detail) : "입실일로 선택"
                   }
                 >
-                  <span className="font-medium">{parseInt(dateStr.slice(8, 10), 10)}</span>
+                  <span
+                    className={`font-medium ${isChkIn || isChkOut ? "text-white" : ""}`}
+                    style={
+                      !isChkIn && !isChkOut && isRedDay
+                        ? { color: CALENDAR_HOLIDAY_COLOR, fontWeight: 600 }
+                        : undefined
+                    }
+                  >
+                    {parseInt(dateStr.slice(8, 10), 10)}
+                  </span>
                   {isChkIn && <span className="text-[10px]">입실</span>}
                   {isChkOut && <span className="text-[10px]">퇴실</span>}
                   {unavailable && !validOut && (

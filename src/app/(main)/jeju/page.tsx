@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
+import { holidayDateToYmd } from "@/lib/dateUtils";
 import { isWelfareDept } from "@/lib/jeju";
 import JejuClient from "./JejuClient";
 
@@ -17,6 +18,9 @@ export default async function JejuPage() {
   });
   const welfare = isWelfareDept(employee);
 
+  const holRows = await prisma.holiday.findMany({ select: { date: true } });
+  const holidayYmds = holRows.map((h) => holidayDateToYmd(h.date));
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div>
@@ -25,7 +29,7 @@ export default async function JejuPage() {
           달력에서 입실일을 클릭한 뒤 퇴실일을 클릭하세요. (1박 이상, 이미 예약된 기간과 겹칠 수 없습니다.) 선택 후 아래에서 상세 정보를 입력해 예약하기를 누르면 신청됩니다.
         </p>
       </div>
-      <JejuClient welfare={welfare} />
+      <JejuClient welfare={welfare} holidayYmds={holidayYmds} />
     </div>
   );
 }

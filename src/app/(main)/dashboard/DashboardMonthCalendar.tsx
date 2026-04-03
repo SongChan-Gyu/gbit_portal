@@ -1,6 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
+import {
+  buildHolidayDisplaySet,
+  isRedCalendarDay,
+  CALENDAR_HOLIDAY_COLOR,
+} from "@/lib/calendarHolidayDisplay";
 
 type ByDay = Record<string, { name: string; status: string }[]>;
 
@@ -25,7 +30,7 @@ export default function DashboardMonthCalendar({
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const holidaySet = useMemo(() => new Set(holidayYmds), [holidayYmds]);
+  const holidaySet = useMemo(() => buildHolidayDisplaySet(holidayYmds), [holidayYmds]);
 
   const firstDow = new Date(year, month - 1, 1).getDay();
   const pad = Array(firstDow).fill(null);
@@ -76,11 +81,7 @@ export default function DashboardMonthCalendar({
           const dayList = byDay[dateStr] ?? [];
           const hasLeave = dayList.length > 0;
           const isToday = dateStr === todayStr;
-          const [cy, cm, cd] = dateStr.split("-").map((x: string) => parseInt(x, 10));
-          const dow = new Date(cy, cm - 1, cd).getDay();
-          const isSun = dow === 0;
-          const isHol = holidaySet.has(dateStr);
-          const isRedDay = isHol || isSun;
+          const isRedDay = isRedCalendarDay(dateStr, holidaySet);
           return (
             <button
               key={dateStr}
@@ -99,7 +100,7 @@ export default function DashboardMonthCalendar({
                       ? "text-blue-700"
                       : "text-gray-700"
                 }
-                style={isRedDay ? { color: "#c62828" } : undefined}
+                style={isRedDay ? { color: CALENDAR_HOLIDAY_COLOR } : undefined}
               >
                 {dateStr.slice(8, 10)}
               </span>

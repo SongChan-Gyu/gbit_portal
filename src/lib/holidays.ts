@@ -47,6 +47,20 @@ const SUPPLEMENT_HOLIDAYS_KR: HolidayItem[] = [
   { date: "2027-02-10", name: "대체공휴일" },
 ];
 
+/** 달력 UI 등: DB 목록에 없어도 빨간색으로 표시할 보강 공휴일 YYYY-MM-DD */
+export function getSupplementHolidayYmds(): string[] {
+  return SUPPLEMENT_HOLIDAYS_KR.map((h) => h.date);
+}
+
+/** DB에서 온 공휴일 YMD + 보강 목록 합집합 (달력 빨간색 표시용) */
+export function mergePublicHolidayYmds(dbYmds: string[]): Set<string> {
+  const s = new Set(dbYmds);
+  for (const y of getSupplementHolidayYmds()) {
+    s.add(y);
+  }
+  return s;
+}
+
 /**
  * DB에 휴일 반영 (upsert). API 결과 + 대체공휴일 보강 반영.
  * - fromYear, toYear: 캘린더 연도 (예: 2025, 2026)

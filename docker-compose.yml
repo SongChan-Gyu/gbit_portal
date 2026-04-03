@@ -1,0 +1,18 @@
+# 로컬 테스트용 MySQL (.env.example 의 DATABASE_URL 과 맞춤)
+# 사용: npm run docker:up
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: gbit_portal_mysql
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: hrm_secret
+      MYSQL_DATABASE: hrm_web
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    volumes:
+      - gbit_mysql_data:/var/lib/mysql
+
+volumes:
+  gbit_mysql_data:

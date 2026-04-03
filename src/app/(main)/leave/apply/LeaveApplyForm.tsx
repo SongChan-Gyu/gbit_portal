@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
 import { calcHolidayExtFullDays } from "@/lib/holidayExt";
@@ -8,6 +8,7 @@ import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { buildHolidayDisplaySet, isRedCalendarDay, CALENDAR_HOLIDAY_COLOR } from "@/lib/calendarHolidayDisplay";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
 
 // ── 타입 ──────────────────────────────────────────────────────
@@ -253,7 +254,7 @@ export default function LeaveApplyForm({
     [leaveTypes]
   );
 
-  const holidaySet = useMemo(() => new Set(holidays), [holidays]);
+  const holidaySet = useMemo(() => buildHolidayDisplaySet(holidays), [holidays]);
 
   /** 연휴연장: 징검다리·공휴일 하루도 1일로 표시 (API와 동일) */
   function fullDaysForLeaveType(lt: LT | undefined, start: string, end: string) {
@@ -467,6 +468,32 @@ export default function LeaveApplyForm({
   const [calendarPickedStart, setCalendarPickedStart] = useState<string | null>(null);
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth() + 1);
+  /** 달력 팝업: DB만으로 부족할 수 있어 연도별 Nager+보강을 API로 합침 */
+  const [calendarDisplayYmds, setCalendarDisplayYmds] = useState<string[]>([]);
+  const holidaySetForCalendar = useMemo(() => {
+    const s = new Set(holidaySet);
+    for (const d of calendarDisplayYmds) s.add(d);
+    return s;
+  }, [holidaySet, calendarDisplayYmds]);
+
+  useEffect(() => {
+    if (calendarItemIdx == null) return;
+    let cancelled = false;
+    setCalendarDisplayYmds([]);
+    (async () => {
+      try {
+        const res = await fetch(`/api/public/holidays-kr?year=${calendarYear}`);
+        const j = await res.json();
+        const dates = Array.isArray(j.dates) ? (j.dates as string[]) : [];
+        if (!cancelled) setCalendarDisplayYmds(dates);
+      } catch {
+        if (!cancelled) setCalendarDisplayYmds([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [calendarItemIdx, calendarYear]);
 
   function openCalendar(idx: number) {
     const it = items[idx];
@@ -1224,33 +1251,34 @@ export default function LeaveApplyForm({
                   const isPast = dateStr < today;
                   const isStart = dateStr === start;
                   const isInRange = calendarStep === "end" && start && dateStr >= start;
-                  const [cy, cm, cd] = dateStr.split("-").map((x) => parseInt(x, 10));
-                  const dow = new Date(cy, cm - 1, cd).getDay();
-                  const isSun = dow === 0;
-                  const isHol = holidaySet.has(dateStr);
-                  const isRedDay = isHol || isSun;
-                  const redStyle =
-                    !isStart && !isInRange && isRedDay
-                      ? ({ color: "#c62828", fontWeight: 600 } as const)
-                      : undefined;
+                  const isRedDay = isRedCalendarDay(dateStr, holidaySetForCalendar);
+                  /** 글자색은 인라인으로만 지정 (Tailwind !text-* 가 빌드/상속에 따라 먹지 않는 경우 방지) */
+                  const spanStyle: React.CSSProperties = isStart
+                    ? { color: "#fff", fontWeight: 600 }
+                    : isRedDay
+                      ? { color: CALENDAR_HOLIDAY_COLOR, fontWeight: 600 }
+                      : isInRange
+                        ? { color: "#1e40af" }
+                        : isPast
+                          ? { color: "#6b7280" }
+                          : { color: "#374151" };
                   return (
                     <button key={dateStr} type="button"
                       onClick={() => onCalendarDateClick(dateStr)}
-                      style={redStyle}
                       className={`aspect-square rounded text-sm font-medium transition-colors ${
                         isStart
-                          ? "bg-blue-600 text-white hover:bg-blue-700"
+                          ? "bg-blue-600 hover:bg-blue-700"
                           : isInRange
-                            ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                            ? "bg-blue-100 hover:bg-blue-200"
                             : isPast
-                              ? isRedDay
-                                ? "hover:bg-gray-100"
-                                : "text-gray-500 hover:bg-gray-100"
+                              ? "hover:bg-gray-100"
                               : isRedDay
                                 ? "hover:bg-red-50"
-                                : "text-gray-700 hover:bg-gray-100"
+                                : "hover:bg-gray-100"
                       }`}>
-                      {dateStr.slice(8, 10)}
+                      <span style={spanStyle}>
+                        {dateStr.slice(8, 10)}
+                      </span>
                     </button>
                   );
                 })}

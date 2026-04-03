@@ -7,4 +7,4 @@ if lsof -i :3000 >/dev/null 2>&1; then
   exit 0
 fi
 
-exec npx next dev
+exec npx next dev --turbo

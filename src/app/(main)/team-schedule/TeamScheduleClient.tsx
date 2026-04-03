@@ -2,6 +2,11 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  buildHolidayDisplaySet,
+  isRedCalendarDay,
+  CALENDAR_HOLIDAY_COLOR,
+} from "@/lib/calendarHolidayDisplay";
 
 type DayStatus = "AM" | "PM" | "FULL" | null;
 
@@ -53,7 +58,7 @@ export default function TeamScheduleClient({
   isAdminOrPm?: boolean;
 }) {
   const router = useRouter();
-  const holidaySet = useMemo(() => new Set(holidayYmds), [holidayYmds]);
+  const holidaySet = useMemo(() => buildHolidayDisplaySet(holidayYmds), [holidayYmds]);
 
   function shiftWeek(delta: number) {
     const next = weekOffset + delta;
@@ -162,8 +167,7 @@ export default function TeamScheduleClient({
               const [cy, cm, cd] = dateStr.split("-").map((x) => parseInt(x, 10));
               const dayOfWeek = new Date(cy, cm - 1, cd).getDay();
               const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-              const isRedDay =
-                !isToday && (holidaySet.has(dateStr) || dayOfWeek === 0);
+              const isRedDay = !isToday && isRedCalendarDay(dateStr, holidaySet);
               return (
                 <div
                   key={dateStr}
@@ -173,7 +177,7 @@ export default function TeamScheduleClient({
                     className={`text-xs font-semibold mb-1 ${
                       isToday ? "text-blue-600" : isRedDay ? "" : "text-gray-700"
                     }`}
-                    style={isRedDay ? { color: "#c62828" } : undefined}
+                    style={isRedDay ? { color: CALENDAR_HOLIDAY_COLOR } : undefined}
                   >
                     {dayNum}
                     {isToday && <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />}
@@ -211,13 +215,18 @@ export default function TeamScheduleClient({
                 {weekDates.map((d, i) => {
                   const isWeekend = i >= 5;
                   const isToday   = d === todayStr;
+                  const wd = parseInt(d.slice(8, 10), 10);
+                  const isRedHeader = !isToday && isRedCalendarDay(d, holidaySet);
                   return (
                     <th key={d} className={`px-2 py-3 text-center text-xs font-semibold w-16 ${
-                      isToday ? "text-blue-600" : isWeekend ? "text-gray-400" : "text-gray-600"
+                      isToday ? "text-blue-600" : isRedHeader ? "" : isWeekend ? "text-gray-400" : "text-gray-600"
                     }`}>
                       <div>{DAY_NAMES[i]}</div>
-                      <div className={`text-[11px] mt-0.5 font-normal ${isToday ? "font-bold" : ""}`}>
-                        {new Date(d).getDate()}
+                      <div
+                        className={`text-[11px] mt-0.5 font-normal ${isToday ? "font-bold" : ""}`}
+                        style={isRedHeader ? { color: CALENDAR_HOLIDAY_COLOR } : undefined}
+                      >
+                        {wd}
                       </div>
                       {isToday && <div className="w-1 h-1 rounded-full bg-blue-500 mx-auto mt-0.5" />}
                     </th>
