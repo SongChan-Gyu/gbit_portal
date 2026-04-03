@@ -5,7 +5,7 @@ import Link from "next/link";
 import { getFiscalYear } from "@/lib/workdays";
 import { Bell, Calendar, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { isWelfareDept } from "@/lib/jeju";
-import { formatMDWithDay } from "@/lib/dateUtils";
+import { formatMDWithDay, holidayDateToYmd, ymdRangeUtcBounds } from "@/lib/dateUtils";
 import { itemSlotLabelKo } from "@/lib/leaveTimeSlot";
 import DashboardMonthCalendar from "./DashboardMonthCalendar";
 import { redirect } from "next/navigation";
@@ -159,7 +159,13 @@ export default async function DashboardPage({
 
   // 팀 주간 일정 (팀이 있는 모든 직원)
   // 팀 월간 일정: 팀 소속이면 팀만, ADMIN/PM이면 팀 없어도 전사 일정 표시
-  type MonthData = { year: number; month: number; dates: string[]; byDay: Record<string, { name: string; status: string }[]> };
+  type MonthData = {
+    year: number;
+    month: number;
+    dates: string[];
+    byDay: Record<string, { name: string; status: string }[]>;
+    holidayYmds: string[];
+  };
   let teamMonthData: MonthData | null = null;
   const showTeamCalendar = !isExternal && (employee?.teamId || (user.role === "ADMIN" || user.role === "PM"));
   if (showTeamCalendar) {
@@ -170,6 +176,12 @@ export default async function DashboardPage({
     const last = dates[dates.length - 1];
     const firstDt = new Date(`${first}T00:00:00.000Z`);
     const lastDt = new Date(`${last}T23:59:59.999Z`);
+    const { gte: holGte, lte: holLte } = ymdRangeUtcBounds(first, last);
+    const holRows = await prisma.holiday.findMany({
+      where: { date: { gte: holGte, lte: holLte } },
+      select: { date: true },
+    });
+    const holidayYmds = holRows.map((h) => holidayDateToYmd(h.date));
     type LeaveRow = LeaveRequest & { employee: Employee; items: (LeaveRequestItem & { leaveType: LeaveType })[] };
     const leaves: LeaveRow[] = await prisma.leaveRequest.findMany({
       where: {
@@ -200,7 +212,7 @@ export default async function DashboardPage({
         }
       }
     }
-    teamMonthData = { year, month, dates, byDay };
+    teamMonthData = { year, month, dates, byDay, holidayYmds };
   }
 
   const recentNotices = await prisma.notice.findMany({
@@ -420,6 +432,7 @@ export default async function DashboardPage({
               month={teamMonthData.month}
               dates={teamMonthData.dates}
               byDay={teamMonthData.byDay}
+              holidayYmds={teamMonthData.holidayYmds}
               todayStr={now.toISOString().slice(0, 10)}
             />
           </div>

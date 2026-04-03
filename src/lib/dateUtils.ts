@@ -33,6 +33,28 @@ export function toYMD(date: Date): string {
 }
 
 /**
+ * 공휴일 테이블(Prisma DateTime) → 한국 달력 YYYY-MM-DD.
+ * MySQL DATETIME + toISOString().slice(0,10)만 쓰면 KST 자정이 전날 UTC로 떨어져
+ * 5/25 대체공휴일이 5/24로 잡히는 등 연휴연장·영업일 계산이 깨질 수 있음.
+ */
+export function holidayDateToYmd(d: Date): string {
+  return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
+}
+
+/**
+ * 캘린더 YYYY-MM-DD 구간 → UTC DateTime 경계 (Prisma Holiday.date 범위 조회).
+ * 서버 프로세스 TZ(미국 등)와 무관하게 같은 달력 구간을 조회한다.
+ */
+export function ymdRangeUtcBounds(ymdStart: string, ymdEnd: string): { gte: Date; lte: Date } {
+  const [ys, ms, ds] = ymdStart.slice(0, 10).split("-").map(Number);
+  const [ye, me, de] = ymdEnd.slice(0, 10).split("-").map(Number);
+  return {
+    gte: new Date(Date.UTC(ys, ms - 1, ds, 0, 0, 0, 0)),
+    lte: new Date(Date.UTC(ye, me - 1, de, 23, 59, 59, 999)),
+  };
+}
+
+/**
  * 상대 시간 표현 (예: "3분 전", "2시간 전", "어제")
  */
 export function formatDistanceToNow(dateStr: string | Date): string {

@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { holidayDateToYmd } from "@/lib/dateUtils";
 import AttendanceClient from "./AttendanceClient";
 import { redirect } from "next/navigation";
 
@@ -134,7 +135,7 @@ export default async function AttendancePage({
         sourceCode: a.sourceCode, label: a.label,
         totalDays: a.totalDays, usedDays: a.usedDays,
       }))}
-      holidays={holidays.map((h) => h.date.toISOString().slice(0,10))}
+      holidays={holidays.map((h) => holidayDateToYmd(h.date))}
       leaveTypes={leaveTypes.map((lt) => ({ id:lt.id, code:lt.code, name:lt.name, color:lt.color, isHalf:lt.isHalf }))}
       year={year} month={month} fy={fy}
       isAdmin={isAdmin}

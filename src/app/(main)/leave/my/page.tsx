@@ -163,6 +163,12 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
       <div>
         <h1 className="page-title">내 휴가 현황</h1>
         <p className="page-subtitle">{fy}년도 ({fyRangeLabel})</p>
+        <p className="text-xs text-gray-500 mt-1.5 max-w-xl leading-relaxed">
+          신청 내역은 <strong>선택한 귀속연도</strong>와 휴가 일정이 겹치는 건만 보입니다. 지금 탭 범위:{" "}
+          <span className="text-gray-600 font-medium">{fyRangeLabel}</span>.
+          안 보이면 상단에서 이전·다음 귀속연도를 눌러 보세요.
+          「월별」은 <strong>승인 완료</strong>된 휴만 집계합니다. 결재 중이면 「목록」을 보세요.
+        </p>
       </div>
 
       {/* 귀속연도 탭 */}
@@ -447,8 +453,11 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
             fy={fy}
           />
         ) : requests.length === 0 ? (
-          <div className="panel-body text-center py-10 text-gray-400">
+          <div className="panel-body text-center py-10 text-gray-400 space-y-2">
             <p>신청 내역이 없습니다.</p>
+            <p className="text-xs text-gray-500 max-w-sm mx-auto">
+              선택한 귀속연도({fy}년)와 휴가 날짜가 겹치지 않으면 표시되지 않습니다. 상단 연도 버튼을 바꿔 보세요.
+            </p>
           </div>
         ) : (
           <ul className="p-3 space-y-3 md:p-0 md:space-y-0 md:divide-y md:divide-gray-100">

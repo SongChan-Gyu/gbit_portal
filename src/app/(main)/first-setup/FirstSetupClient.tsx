@@ -71,7 +71,14 @@ export default function FirstSetupClient({ initialUsername }: { initialUsername:
     }
     setOk(data.message ?? "설정 완료");
     setTimeout(() => {
-      void signOut({ callbackUrl: "/login" });
+      void (async () => {
+        try {
+          await signOut({ callbackUrl: "/login", redirect: false });
+        } catch {
+          /* ignore */
+        }
+        window.location.replace("/login");
+      })();
     }, 700);
   }
 

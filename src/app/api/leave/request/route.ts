@@ -1,25 +1,16 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { isWednesdayYMD } from "@/lib/dateUtils";
+import { isWednesdayYMD, holidayDateToYmd, addDaysYMD, ymdRangeUtcBounds } from "@/lib/dateUtils";
 import { sendLeaveRequestAlimtalk } from "@/lib/kakao";
 import { writeAudit, getIp } from "@/lib/audit";
 import { countAfternoonEligible, findAfternoonStampCard } from "@/lib/stampCard";
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
 import { calcWorkingDays } from "@/lib/workdays";
+import { calcHolidayExtFullDays, isHolidayOrWeekendYmd, isValidHolidayExtDay } from "@/lib/holidayExt";
 import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
 import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
-
-function ymdLocal(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function plusDays(ymd: string, delta: number): string {
-  const d = new Date(ymd);
-  d.setDate(d.getDate() + delta);
-  return ymdLocal(d);
-}
 
 export async function POST(req: Request) {
   try {
@@ -52,9 +43,6 @@ export async function POST(req: Request) {
     const leaveTypes = await prisma.leaveType.findMany({ where: { id: { in: ltIds } } });
     const ltMap = Object.fromEntries(leaveTypes.map((t) => [t.id, t]));
 
-    const allDates = items.flatMap((i) => [new Date(i.startDate), new Date(i.endDate)]);
-    const startDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
-    const endDate = new Date(Math.max(...allDates.map((d) => d.getTime())));
     const now = new Date();
 
     const poolAllocs = await prisma.leaveAllocation.findMany({
@@ -114,51 +102,22 @@ export async function POST(req: Request) {
       allocsBySource.set(a.sourceCode, list);
     }
 
-    const startOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    const endOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999);
-    const holidayLookupStart = new Date(startOnly);
-    holidayLookupStart.setDate(holidayLookupStart.getDate() - 15);
-    const holidayLookupEnd = new Date(endOnly);
-    holidayLookupEnd.setDate(holidayLookupEnd.getDate() + 15);
+    /** 공휴일 조회: 신청일 YMD 문자열 기준 ±15일 (서버 TZ에 따라 new Date('YYYY-MM-DD') 해석이 달라져 5월 휴일이 빠지는 문제 방지) */
+    const itemYmds = items.flatMap((i) => [i.startDate.slice(0, 10), i.endDate.slice(0, 10)]);
+    const minYmd = itemYmds.reduce((a, b) => (a < b ? a : b));
+    const maxYmd = itemYmds.reduce((a, b) => (a > b ? a : b));
+    const lookupStartYmd = addDaysYMD(minYmd, -15);
+    const lookupEndYmd = addDaysYMD(maxYmd, 15);
+    const { gte: holidayGte, lte: holidayLte } = ymdRangeUtcBounds(lookupStartYmd, lookupEndYmd);
     const rangeHolidays = await prisma.holiday.findMany({
-      where: { date: { gte: holidayLookupStart, lte: holidayLookupEnd } },
+      where: { date: { gte: holidayGte, lte: holidayLte } },
     });
-    const holidaySet = new Set(rangeHolidays.map((h) => h.date.toISOString().slice(0, 10)));
+    const holidaySet = new Set(rangeHolidays.map((h) => holidayDateToYmd(h.date)));
     const holidayList = Array.from(holidaySet);
     const sourceLabel = (sourceCode: string) => {
       const fromType = Object.values(ltMap).find((t) => t.allocationSourceCode === sourceCode)?.name;
       const fromAlloc = (allocsBySource.get(sourceCode) ?? [])[0]?.label;
       return fromType || fromAlloc || sourceCode;
-    };
-    const isHolidayOrWeekend = (ymd: string) => {
-      const d = new Date(ymd);
-      const dow = d.getDay();
-      return dow === 0 || dow === 6 || holidaySet.has(ymd);
-    };
-    const holidayBlockLengthForward = (startYmd: string) => {
-      let n = 0;
-      let cur = startYmd;
-      while (isHolidayOrWeekend(cur)) {
-        n += 1;
-        cur = plusDays(cur, 1);
-      }
-      return n;
-    };
-    const holidayBlockLengthBackward = (endYmd: string) => {
-      let n = 0;
-      let cur = endYmd;
-      while (isHolidayOrWeekend(cur)) {
-        n += 1;
-        cur = plusDays(cur, -1);
-      }
-      return n;
-    };
-    const isValidHolidayExtDay = (targetYmd: string) => {
-      const next = plusDays(targetYmd, 1);
-      const prev = plusDays(targetYmd, -1);
-      const rightBlock = holidayBlockLengthForward(next);
-      const leftBlock = holidayBlockLengthBackward(prev);
-      return rightBlock >= 3 || leftBlock >= 3;
     };
 
     type WorkItem = {
@@ -193,7 +152,8 @@ export async function POST(req: Request) {
       const e = it.endDate.slice(0, 10);
       let days = 0;
       if (slot === "FULL") {
-        days = calcWorkingDays(s, e, holidayList);
+        days =
+          lt.code === "HOLIDAY_EXT" ? calcHolidayExtFullDays(s, e, holidayList) : calcWorkingDays(s, e, holidayList);
         if (days <= 0) {
           return NextResponse.json(
             { error: `${lt.name}: 신청 기간에 포함된 영업일이 없습니다.` },
@@ -207,17 +167,22 @@ export async function POST(req: Request) {
             { status: 400 },
           );
         }
-        if (isHolidayOrWeekend(s)) {
-          return NextResponse.json({ error: `${lt.name}: 반차는 영업일에만 신청할 수 있습니다.` }, { status: 400 });
+        if (isHolidayOrWeekendYmd(s, holidaySet)) {
+          if (!(lt.code === "HOLIDAY_EXT" && isValidHolidayExtDay(s, holidaySet))) {
+            return NextResponse.json({ error: `${lt.name}: 반차는 영업일에만 신청할 수 있습니다.` }, { status: 400 });
+          }
         }
         days = 0.5;
       }
       if (lt.code === "HOLIDAY_EXT") {
         const checkDates = slot === "FULL" ? [s, e] : [s];
         for (const d of checkDates) {
-          if (!isValidHolidayExtDay(d)) {
+          if (!isValidHolidayExtDay(d, holidaySet)) {
             return NextResponse.json(
-              { error: "연휴연장휴가는 공휴일/주말이 3일 이상 연속된 구간의 앞/뒤 하루에만 신청할 수 있습니다." },
+              {
+                error:
+                  "연휴연장휴가는 공휴일/주말이 3일 이상 연속된 구간의 앞/뒤 하루이거나, 징검다리로 연휴가 이어지는 날에만 신청할 수 있습니다.",
+              },
               { status: 400 },
             );
           }

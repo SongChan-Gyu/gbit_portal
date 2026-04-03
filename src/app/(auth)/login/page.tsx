@@ -126,6 +126,10 @@ export default function LoginPage() {
               <p className="font-semibold text-gray-700">테스트 계정</p>
               <p>admin / admin1234! · pm / password1!</p>
               <p>team1 / password1! · staff1 / password1!</p>
+              <p className="text-amber-900/90 leading-snug border-t border-amber-200/70 pt-2.5 mt-2">
+                Cursor·VS Code <span className="font-medium">내장 브라우저</span>는 쿠키 제한으로 로그인 세션이 유지되지 않을 수 있습니다.{" "}
+                <span className="font-medium">Chrome·Edge</span>에서 <code className="text-[11px] bg-amber-100/80 px-1 rounded">http://localhost:3000</code> 을 여세요.
+              </p>
             </div>
           </div>
         </div>

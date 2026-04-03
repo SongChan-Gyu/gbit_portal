@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -35,6 +35,7 @@ export default function TeamScheduleClient({
   monthDates,
   schedule,
   byDay,
+  holidayYmds,
   todayStr,
   weekOffset,
   isAdminOrPm = false,
@@ -46,11 +47,13 @@ export default function TeamScheduleClient({
   monthDates: string[];
   schedule: Record<string, Record<string, DayStatus>>;
   byDay: Record<string, { name: string; status: DayStatus }[]>;
+  holidayYmds: string[];
   todayStr: string;
   weekOffset: number;
   isAdminOrPm?: boolean;
 }) {
   const router = useRouter();
+  const holidaySet = useMemo(() => new Set(holidayYmds), [holidayYmds]);
 
   function shiftWeek(delta: number) {
     const next = weekOffset + delta;
@@ -141,8 +144,13 @@ export default function TeamScheduleClient({
         /* 월간 달력 */
         <div className="card overflow-x-auto p-0">
           <div className="grid grid-cols-7 text-sm">
-            {DAY_NAMES_CAL.map((d) => (
-              <div key={d} className="text-center py-2 text-gray-500 font-medium border-b border-gray-100">
+            {DAY_NAMES_CAL.map((d, wi) => (
+              <div
+                key={d}
+                className={`text-center py-2 font-medium border-b border-gray-100 ${
+                  wi === 0 ? "text-red-600" : "text-gray-500"
+                }`}
+              >
                 {d}
               </div>
             ))}
@@ -151,14 +159,22 @@ export default function TeamScheduleClient({
               const isToday = dateStr === todayStr;
               const list = byDay[dateStr] ?? [];
               const dayNum = parseInt(dateStr.slice(8, 10), 10);
-              const dayOfWeek = new Date(dateStr).getDay();
+              const [cy, cm, cd] = dateStr.split("-").map((x) => parseInt(x, 10));
+              const dayOfWeek = new Date(cy, cm - 1, cd).getDay();
               const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+              const isRedDay =
+                !isToday && (holidaySet.has(dateStr) || dayOfWeek === 0);
               return (
                 <div
                   key={dateStr}
                   className={`min-h-[80px] border-b border-r border-gray-100 p-1.5 ${isWeekend ? "bg-gray-50/50" : "bg-white"}`}
                 >
-                  <div className={`text-xs font-semibold mb-1 ${isToday ? "text-blue-600" : "text-gray-700"}`}>
+                  <div
+                    className={`text-xs font-semibold mb-1 ${
+                      isToday ? "text-blue-600" : isRedDay ? "" : "text-gray-700"
+                    }`}
+                    style={isRedDay ? { color: "#c62828" } : undefined}
+                  >
                     {dayNum}
                     {isToday && <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />}
                   </div>

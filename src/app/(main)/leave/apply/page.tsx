@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getFiscalYear } from "@/lib/workdays";
 import { redirect } from "next/navigation";
-import { formatYMD } from "@/lib/dateUtils";
+import { formatYMD, holidayDateToYmd } from "@/lib/dateUtils";
 import LeaveApplyForm from "./LeaveApplyForm";
 import { serializeDates } from "@/lib/serialize";
 import { countAfternoonEligible, countHealingEligible } from "@/lib/stampCard";
@@ -117,7 +117,7 @@ export default async function LeaveApplyPage() {
         afternoonStampSlots={afternoonStampSlots}
         healingStampSlots={healingStampSlots}
         halfDayUsed={halfDayUsed}
-        holidays={holidays.map((h) => h.date.toISOString().slice(0, 10))}
+        holidays={holidays.map((h) => holidayDateToYmd(h.date))}
       />
     </div>
   );

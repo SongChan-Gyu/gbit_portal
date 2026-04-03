@@ -2,6 +2,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
+import { calcHolidayExtFullDays } from "@/lib/holidayExt";
 import { formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
@@ -252,6 +253,14 @@ export default function LeaveApplyForm({
     [leaveTypes]
   );
 
+  const holidaySet = useMemo(() => new Set(holidays), [holidays]);
+
+  /** 연휴연장: 징검다리·공휴일 하루도 1일로 표시 (API와 동일) */
+  function fullDaysForLeaveType(lt: LT | undefined, start: string, end: string) {
+    if (lt?.code === "HOLIDAY_EXT") return calcHolidayExtFullDays(start, end, holidays);
+    return calcWorkingDays(start, end, holidays);
+  }
+
   const annualPoolAllocs = useMemo(
     () => allocations
       .filter((a) => isAnnualPoolSourceCode(a.sourceCode) && isAllocationUsableToday(a))
@@ -385,8 +394,8 @@ export default function LeaveApplyForm({
       if (i !== idx) return it;
       const pol = leaveTypeWithPolicy(lt);
       let timeSlot = "";
-      if (pol.allowsFullDay && pol.allowsHalfDay) timeSlot = "";
-      else if (pol.allowsFullDay && !pol.allowsHalfDay) timeSlot = "FULL";
+      /** 종일 가능 유형: 기본 종일(종일+반차 겸용 시에도 미선택으로 일수 0 방지) */
+      if (pol.allowsFullDay) timeSlot = "FULL";
       else if (pol.halfDayAmPm === "AM_ONLY") timeSlot = "AM";
       else if (pol.halfDayAmPm === "PM_ONLY") timeSlot = "PM";
       else timeSlot = "";
@@ -395,7 +404,7 @@ export default function LeaveApplyForm({
       const days = single || isHalfDay
         ? (timeSlot ? 0.5 : 0)
         : timeSlot === "FULL" || (pol.allowsFullDay && !pol.allowsHalfDay)
-          ? calcWorkingDays(it.startDate, it.endDate, holidays)
+          ? fullDaysForLeaveType(lt, it.startDate, it.endDate)
           : 0;
       return {
         ...it, leaveTypeId: lt.id,
@@ -414,7 +423,7 @@ export default function LeaveApplyForm({
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       if (!lt) return it;
       const days = slot === "FULL"
-        ? calcWorkingDays(it.startDate, it.endDate, holidays)
+        ? fullDaysForLeaveType(lt, it.startDate, it.endDate)
         : 0.5;
       const endDate = slot === "FULL" ? it.endDate : it.startDate;
       return { ...it, timeSlot: slot, days, endDate };
@@ -434,11 +443,11 @@ export default function LeaveApplyForm({
       if (ts === "AM" || ts === "PM" || (pol && pol.allowsHalfDay && !pol.allowsFullDay && (pol.halfDayAmPm === "AM_ONLY" || pol.halfDayAmPm === "PM_ONLY"))) {
         days = 0.5;
       } else if (ts === "FULL" || (pol && pol.allowsFullDay && !pol.allowsHalfDay)) {
-        days = calcWorkingDays(newStart, newEnd, holidays);
+        days = fullDaysForLeaveType(lt ?? undefined, newStart, newEnd);
       } else if (pol && pol.allowsHalfDay && !pol.allowsFullDay && pol.halfDayAmPm === "BOTH") {
         days = ts === "AM" || ts === "PM" ? 0.5 : 0;
       } else if (pol && pol.allowsFullDay && pol.allowsHalfDay) {
-        days = ts === "FULL" ? calcWorkingDays(newStart, newEnd, holidays) : (ts === "AM" || ts === "PM" ? 0.5 : 0);
+        days = ts === "FULL" ? fullDaysForLeaveType(lt ?? undefined, newStart, newEnd) : (ts === "AM" || ts === "PM" ? 0.5 : 0);
       }
       return { ...it, startDate: newStart, endDate: newEnd, days };
     }));
@@ -532,7 +541,14 @@ export default function LeaveApplyForm({
       if (!it.leaveTypeId?.trim()) { setError("작성 중인 항목에 휴가 유형을 선택해 주세요."); return; }
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       const actualDays = lt?.isHalf ? 0.5 : it.days;
-      if (actualDays <= 0) { setError("휴가 일수를 확인해 주세요."); return; }
+      if (actualDays <= 0) {
+        setError(
+          lt?.code === "HOLIDAY_EXT"
+            ? "연휴연장휴가 일수가 0입니다. 「종일(기간)·오전·오후」를 선택했는지 확인하세요. 날짜가 연휴 규칙에 맞지 않거나, 공휴일·대체공휴일이 DB에 없으면 일수가 0이 됩니다. (로컬: npm run db:seed:base 등으로 휴일 반영)"
+            : "휴가 일수를 확인해 주세요.",
+        );
+        return;
+      }
       if (lt?.code === "PM_RECOG_STAMP" && afternoonStampSlots < 1) {
         setError(`${lt.name}: 10칸 완성·오후 미사용인 스탬프 장이 없습니다.`);
         return;
@@ -1195,25 +1211,44 @@ export default function LeaveApplyForm({
                   className="p-1.5 rounded hover:bg-gray-100 text-gray-600">›</button>
               </div>
               <div className="grid grid-cols-7 gap-0.5 text-center">
-                {weekDays.map((w) => (
-                  <div key={w} className="text-[10px] font-medium text-gray-400 py-1">{w}</div>
+                {weekDays.map((w, wi) => (
+                  <div
+                    key={w}
+                    className={`text-[10px] font-medium py-1 ${wi === 0 ? "text-red-400" : "text-gray-400"}`}
+                  >
+                    {w}
+                  </div>
                 ))}
                 {cells.map((dateStr, i) => {
                   if (!dateStr) return <div key={`e-${i}`} />;
                   const isPast = dateStr < today;
                   const isStart = dateStr === start;
                   const isInRange = calendarStep === "end" && start && dateStr >= start;
+                  const [cy, cm, cd] = dateStr.split("-").map((x) => parseInt(x, 10));
+                  const dow = new Date(cy, cm - 1, cd).getDay();
+                  const isSun = dow === 0;
+                  const isHol = holidaySet.has(dateStr);
+                  const isRedDay = isHol || isSun;
+                  const redStyle =
+                    !isStart && !isInRange && isRedDay
+                      ? ({ color: "#c62828", fontWeight: 600 } as const)
+                      : undefined;
                   return (
                     <button key={dateStr} type="button"
                       onClick={() => onCalendarDateClick(dateStr)}
+                      style={redStyle}
                       className={`aspect-square rounded text-sm font-medium transition-colors ${
                         isStart
                           ? "bg-blue-600 text-white hover:bg-blue-700"
                           : isInRange
                             ? "bg-blue-100 text-blue-800 hover:bg-blue-200"
                             : isPast
-                              ? "text-gray-500 hover:bg-gray-100"
-                              : "text-gray-700 hover:bg-gray-100"
+                              ? isRedDay
+                                ? "hover:bg-gray-100"
+                                : "text-gray-500 hover:bg-gray-100"
+                              : isRedDay
+                                ? "hover:bg-red-50"
+                                : "text-gray-700 hover:bg-gray-100"
                       }`}>
                       {dateStr.slice(8, 10)}
                     </button>

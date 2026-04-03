@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 
 type ByDay = Record<string, { name: string; status: string }[]>;
 
@@ -11,17 +11,21 @@ export default function DashboardMonthCalendar({
   month,
   dates,
   byDay,
+  holidayYmds,
   todayStr,
 }: {
   year: number;
   month: number;
   dates: string[];
   byDay: ByDay;
+  holidayYmds: string[];
   todayStr: string;
 }) {
   const [tooltipDate, setTooltipDate] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const holidaySet = useMemo(() => new Set(holidayYmds), [holidayYmds]);
 
   const firstDow = new Date(year, month - 1, 1).getDay();
   const pad = Array(firstDow).fill(null);
@@ -29,9 +33,12 @@ export default function DashboardMonthCalendar({
 
   useEffect(() => {
     if (!tooltipDate) return;
-    const handler = () => setTooltipDate(null);
-    document.addEventListener("click", handler, true);
-    return () => document.removeEventListener("click", handler, true);
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current?.contains(e.target as Node)) return;
+      setTooltipDate(null);
+    };
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
   }, [tooltipDate]);
 
   function handleCellClick(e: React.MouseEvent, dateStr: string) {
@@ -54,25 +61,48 @@ export default function DashboardMonthCalendar({
   return (
     <div ref={containerRef} className="border border-gray-200 rounded-lg p-2 sm:p-3 bg-gray-50/50 max-w-2xl mx-auto">
       <div className="grid grid-cols-7 gap-0.5 sm:gap-1 text-center">
-        {DAYS_KO.map((d) => (
-          <div key={d} className="text-[10px] sm:text-xs font-semibold text-gray-500 py-0.5">{d}</div>
+        {DAYS_KO.map((d, wi) => (
+          <div
+            key={d}
+            className={`text-[10px] sm:text-xs font-semibold py-0.5 ${
+              wi === 0 ? "text-red-500" : "text-gray-500"
+            }`}
+          >
+            {d}
+          </div>
         ))}
         {cells.map((dateStr, i) => {
           if (!dateStr) return <div key={`e-${i}`} />;
           const dayList = byDay[dateStr] ?? [];
           const hasLeave = dayList.length > 0;
           const isToday = dateStr === todayStr;
+          const [cy, cm, cd] = dateStr.split("-").map((x: string) => parseInt(x, 10));
+          const dow = new Date(cy, cm - 1, cd).getDay();
+          const isSun = dow === 0;
+          const isHol = holidaySet.has(dateStr);
+          const isRedDay = isHol || isSun;
           return (
             <button
               key={dateStr}
               type="button"
               onClick={(e) => handleCellClick(e, dateStr)}
               className={`min-h-[40px] sm:min-h-[44px] flex flex-col items-center justify-center rounded text-[11px] sm:text-xs p-0.5 touch-manipulation ${
-                isToday ? "ring-1 ring-blue-400 bg-blue-50 font-bold text-blue-700" : "text-gray-700"
+                isToday ? "ring-1 ring-blue-400 bg-blue-50 font-bold" : ""
               } ${hasLeave ? "bg-red-50/80" : ""} ${hasLeave ? "cursor-pointer hover:bg-red-100/80" : ""}`}
               title={hasLeave ? `${dateStr}: ${dayList.map((x) => `${x.name} ${x.status}`).join(", ")}` : undefined}
             >
-              <span>{dateStr.slice(8, 10)}</span>
+              <span
+                className={
+                  isRedDay
+                    ? "font-semibold"
+                    : isToday
+                      ? "text-blue-700"
+                      : "text-gray-700"
+                }
+                style={isRedDay ? { color: "#c62828" } : undefined}
+              >
+                {dateStr.slice(8, 10)}
+              </span>
               {hasLeave && (
                 <span className="mt-0.5 text-[10px] font-medium text-red-600">
                   {dayList.length}명

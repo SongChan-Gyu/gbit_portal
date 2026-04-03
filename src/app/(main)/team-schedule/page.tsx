@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { holidayDateToYmd, ymdRangeUtcBounds } from "@/lib/dateUtils";
 import { itemSlotForSchedule } from "@/lib/leaveTimeSlot";
 import TeamScheduleClient from "./TeamScheduleClient";
 
@@ -143,6 +144,15 @@ export default async function TeamSchedulePage({
   const dateList = view === "week" ? weekDates : monthDates;
   const { schedule, byDay } = buildSchedule(leaveRequests, dateList);
 
+  const rangeStart = view === "week" ? weekDates[0]! : monthDates[0]!;
+  const rangeEnd = view === "week" ? weekDates[6]! : monthDates[monthDates.length - 1]!;
+  const { gte: holGte, lte: holLte } = ymdRangeUtcBounds(rangeStart, rangeEnd);
+  const holRows = await prisma.holiday.findMany({
+    where: { date: { gte: holGte, lte: holLte } },
+    select: { date: true },
+  });
+  const holidayYmds = holRows.map((h) => holidayDateToYmd(h.date));
+
   const members = membersSource.map((m: { id: string; name: string; position?: string; team?: { name: string } | null }) => ({
     id: m.id,
     name: m.name,
@@ -168,6 +178,7 @@ export default async function TeamSchedulePage({
         monthDates={monthDates}
         schedule={schedule}
         byDay={byDay}
+        holidayYmds={holidayYmds}
         todayStr={new Date().toISOString().slice(0, 10)}
         weekOffset={weekOffset}
         isAdminOrPm={isAdminOrPm}

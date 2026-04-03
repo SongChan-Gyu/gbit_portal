@@ -42,6 +42,8 @@ export async function fetchHolidays(fromYear: number, toYear: number): Promise<H
 const SUPPLEMENT_HOLIDAYS_KR: HolidayItem[] = [
   { date: "2025-03-02", name: "대체공휴일" },
   { date: "2026-01-02", name: "대체공휴일" },
+  /** Nager에 없음: 2026년 부처님 오신 날 5/24(일) → 5/25(월) 대체공휴일 */
+  { date: "2026-05-25", name: "대체공휴일" },
   { date: "2027-02-10", name: "대체공휴일" },
 ];
 

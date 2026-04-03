@@ -12,9 +12,9 @@
   }
   * { @apply box-border; }
   body { @apply bg-slate-50 text-gray-900 text-[13px] leading-relaxed; }
-  /* 노트북·데스크톱: 전체 크기 약 1.5배 가독성 확대 */
+  /* 데스크톱: 브라우저 기본(16px) 기준 — 예전처럼 더 크게 보이게 하려면 브라우저 확대(Ctrl +) 사용 */
   @media (min-width: 769px) {
-    html { font-size: 125%; }
+    html { font-size: 100%; }
     body { font-size: 1rem; line-height: 1.6; }
   }
   @media (max-width: 768px) {

@@ -33,10 +33,10 @@ export async function GET(req: Request) {
   } else if (fy) {
     const fyNum = parseInt(fy, 10);
     if (!isNaN(fyNum)) {
-      const fyStart = new Date(fyNum, 4, 1);
-      const fyEnd = new Date(fyNum + 1, 3, 30);
-      where.startDate = { gte: fyStart };
-      where.endDate = { lte: fyEnd };
+      const fyStart = new Date(fyNum, 4, 1, 0, 0, 0, 0);
+      const fyEnd = new Date(fyNum + 1, 3, 30, 23, 59, 59, 999);
+      // 귀속 구간과 겹치는 신청 (내 휴가 현황 /api와 동일한 overlap 기준)
+      where.AND = [{ startDate: { lte: fyEnd } }, { endDate: { gte: fyStart } }];
     }
   }
 

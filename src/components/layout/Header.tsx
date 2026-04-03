@@ -1,6 +1,7 @@
 "use client";
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { LogOut, Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import NotificationBell from "./NotificationBell";
@@ -13,12 +14,38 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
   const { data: session } = useSession();
   const user = session?.user as any;
   const [open, setOpen] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
+
+  /** overflow:hidden 조상 때문에 fixed 레이어가 전체 화면·클릭을 가리는 문제 방지 + 데스크톱에서 메뉴 상태 정리 */
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => {
+      if (mq.matches) setOpen(false);
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  async function handleSignOut() {
+    try {
+      await signOut({ callbackUrl: "/login", redirect: false });
+    } catch {
+      /* 응답 형식 오류 등 — 아래에서 전체 이동으로 정리 */
+    }
+    window.location.replace("/login");
+  }
 
   return (
     <>
       <header className="bg-white border-b border-gray-200 px-4 flex items-center justify-between h-12 shrink-0">
         <div className="flex items-center gap-3">
           <button
+            type="button"
             className="md:hidden p-3 -m-1 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center text-gray-600 touch-manipulation"
             onClick={() => setOpen(true)}
             aria-label="메뉴 열기"
@@ -38,8 +65,10 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
               <p className="text-[11px] text-gray-400">{ROLE_LABEL[user?.role ?? "STAFF"]}</p>
             </div>
           </div>
+          <NotificationBell />
           <button
-            onClick={() => signOut({ callbackUrl: typeof window !== "undefined" ? `${window.location.origin}/login` : "/login" })}
+            type="button"
+            onClick={() => void handleSignOut()}
             className="flex items-center gap-1.5 text-[12px] text-gray-500 hover:text-red-600 hover:bg-red-50 active:bg-red-100 min-h-[44px] min-w-[44px] md:min-w-0 px-3 py-2 rounded-lg transition-colors touch-manipulation"
             aria-label="로그아웃"
           >
@@ -49,27 +78,31 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
         </div>
       </header>
 
-      {/* 모바일 드로어 */}
-      {open && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-0 h-full w-64 bg-white shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between px-4 h-12 border-b border-gray-200 shrink-0">
-              <span className="font-semibold text-gray-800 text-[13px]">메뉴</span>
-              <button
-                onClick={() => setOpen(false)}
-                className="p-3 -m-1 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center touch-manipulation"
-                aria-label="메뉴 닫기"
-              >
-                <X size={20} className="text-gray-600" />
-              </button>
+      {/* 모바일 드로어: body로 포털 — 레이아웃 overflow:hidden 안에 두면 클릭/레이어가 어긋나는 경우 방지 */}
+      {portalReady &&
+        open &&
+        createPortal(
+          <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-modal="true" aria-label="모바일 메뉴">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+            <div className="absolute left-0 top-0 h-full w-[min(18rem,85vw)] max-w-[85vw] bg-white shadow-2xl flex flex-col pointer-events-auto">
+              <div className="flex items-center justify-between px-4 h-12 border-b border-gray-200 shrink-0">
+                <span className="font-semibold text-gray-800 text-[13px]">메뉴</span>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="p-3 -m-1 min-w-[44px] min-h-[44px] rounded-lg hover:bg-gray-100 active:bg-gray-200 flex items-center justify-center touch-manipulation"
+                  aria-label="메뉴 닫기"
+                >
+                  <X size={20} className="text-gray-600" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto min-h-0">
+                <Sidebar allowedMenuKeys={allowedMenuKeys} onClose={() => setOpen(false)} />
+              </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
-              <Sidebar allowedMenuKeys={allowedMenuKeys} onClose={() => setOpen(false)} />
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </>
   );
 }

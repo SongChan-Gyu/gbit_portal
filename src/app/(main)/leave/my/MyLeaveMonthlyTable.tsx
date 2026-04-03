@@ -37,6 +37,9 @@ export default function MyLeaveMonthlyTable({ monthlyUsage, monthLabels, request
 
   return (
     <div className="overflow-x-auto">
+      <p className="px-4 pt-3 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">
+        월별 표는 <strong>승인 완료</strong>된 휴가만 집계합니다. 결재 대기·반려는 「목록」 탭에서 확인하세요.
+      </p>
       {/* 월별 사용 바 차트 */}
       <div className="p-4">
         <div className="grid grid-cols-12 gap-1 mb-1">
