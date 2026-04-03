@@ -33,15 +33,26 @@ const VALIDITY_BADGE: Record<string, { bg:string; text:string; label:string }> =
   "부여일기준": { bg:"bg-amber-50",  text:"text-amber-700", label:"부여일기준" },
 };
 
-const APPROVAL_BADGE: Record<number, { cls:string; label:string; labelShort:string }> = {
-  0: { cls:"bg-gray-100 text-gray-500",     label:"자동승인",     labelShort:"자동" },
-  1: { cls:"bg-sky-100 text-sky-700",       label:"팀장 1단계",   labelShort:"팀장" },
-  2: { cls:"bg-indigo-100 text-indigo-700", label:"팀장 → PM",   labelShort:"팀장→PM" },
+const APPROVAL_BADGE: Record<0 | 1, { cls:string; label:string; labelShort:string }> = {
+  0: { cls:"bg-gray-100 text-gray-500", label:"자동 승인", labelShort:"자동" },
+  1: {
+    cls:"bg-sky-100 text-sky-700",
+    label:"1단계 (상위 직책)",
+    labelShort:"1단계",
+  },
 };
+
+/** 서버: 0=자동, 1+=역할 기반 1단계(팀원→팀장, 팀장→PM, PM·관리자는 자동). 예전 DB값 2도 동일 의미 */
+function approvalStepsUi(steps: number | null | undefined): 0 | 1 {
+  return (steps ?? 0) > 0 ? 1 : 0;
+}
+function approvalBadgeFor(steps: number) {
+  return approvalStepsUi(steps) === 0 ? APPROVAL_BADGE[0] : APPROVAL_BADGE[1];
+}
 
 function newBlank(): Partial<LT> {
   return {
-    code:"", name:"", daysPerUnit:1, deductFromBalance:true, approvalSteps:2,
+    code:"", name:"", daysPerUnit:1, deductFromBalance:true, approvalSteps:1,
     maxPerMonth:null, maxPerYear:null, requiresStamp:false, stampCount:null,
     allowsFullDay:true, allowsHalfDay:false, halfDayAmPm:"BOTH", applyGroupKey:null,
     usageCategory:"ASSET", displayHint:null,
@@ -84,7 +95,8 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
     setSaving(true); setErr("");
     const url    = editing.isNew ? "/api/admin/leave-types" : `/api/admin/leave-types/${editing.id}`;
     const method = editing.isNew ? "POST" : "PATCH";
-    const { isNew, ...payload } = editing;
+    const { isNew, ...rest } = editing;
+    const payload = { ...rest, approvalSteps: approvalStepsUi(rest.approvalSteps) === 0 ? 0 : 1 };
     const res  = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload) });
     const data = await res.json();
     setSaving(false);
@@ -106,7 +118,7 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
 
   const renderRow = (lt: LT) => {
     const vb = VALIDITY_BADGE[lt.validityBasis];
-    const ab = APPROVAL_BADGE[lt.approvalSteps] ?? APPROVAL_BADGE[2];
+    const ab = approvalBadgeFor(lt.approvalSteps);
     const deductCls = lt.deductFromBalance ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600";
     const deductLabel = lt.deductFromBalance ? "연차 차감" : "미차감";
     const slotBadges: string[] = [];
@@ -191,7 +203,7 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
   /** 모바일용 카드 한 장 (휴가 유형 1개) */
   const renderCard = (lt: LT) => {
     const vb = VALIDITY_BADGE[lt.validityBasis];
-    const ab = APPROVAL_BADGE[lt.approvalSteps] ?? APPROVAL_BADGE[2];
+    const ab = approvalBadgeFor(lt.approvalSteps);
     const slotBadges: string[] = [];
     if (lt.allowsFullDay) slotBadges.push("종일");
     if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "AM_ONLY")) slotBadges.push("오전");
@@ -359,14 +371,21 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="label">결재 단계</label>
-                  <select className="input" value={editing.approvalSteps??2}
-                    onChange={(e)=>set("approvalSteps",parseInt(e.target.value))}>
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="label">결재</label>
+                  <select
+                    className="input"
+                    value={approvalStepsUi(editing.approvalSteps)}
+                    onChange={(e) => set("approvalSteps", parseInt(e.target.value, 10) === 0 ? 0 : 1)}
+                  >
                     <option value={0}>자동 승인 (힐링데이 등)</option>
-                    <option value={1}>1단계 — 팀장까지</option>
-                    <option value={2}>2단계 — 팀장 → PM</option>
+                    <option value={1}>
+                      1단계 결재 — 팀원→팀장, 팀장→PM (PM·관리자 본인은 자동)
+                    </option>
                   </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    예전에 저장된 「2단계」값도 서버에서 위와 동일하게 1단계 역할 결재로 처리됩니다. 저장 시 1로 맞춰집니다.
+                  </p>
                 </div>
                 <div>
                   <label className="label">연차 차감 여부</label>

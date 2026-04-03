@@ -31,7 +31,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
 
   const data: Prisma.LeaveTypeUpdateInput = {
     name:body.name, daysPerUnit:body.daysPerUnit, deductFromBalance:body.deductFromBalance,
-    approvalSteps:body.approvalSteps, maxPerMonth:body.maxPerMonth??null, maxPerYear:body.maxPerYear??null,
+    ...(typeof body.approvalSteps === "number"
+      ? { approvalSteps: body.approvalSteps === 0 ? 0 : 1 }
+      : {}),
+    maxPerMonth:body.maxPerMonth??null, maxPerYear:body.maxPerYear??null,
     requiresStamp:body.requiresStamp, stampCount:body.stampCount??null,
     allowsFullDay, allowsHalfDay, halfDayAmPm: hd,
     includeInFiscalInit: body.includeInFiscalInit ?? undefined,

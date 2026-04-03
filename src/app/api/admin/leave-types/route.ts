@@ -39,7 +39,8 @@ export async function POST(req: Request) {
   const lt = await prisma.leaveType.create({
     data:{
       code:body.code, name:body.name, daysPerUnit:body.daysPerUnit??1,
-      deductFromBalance:body.deductFromBalance??true, approvalSteps:body.approvalSteps??2,
+      deductFromBalance:body.deductFromBalance??true,
+      approvalSteps: body.approvalSteps === 0 ? 0 : 1,
       maxPerMonth:body.maxPerMonth??null, maxPerYear:body.maxPerYear??null,
       requiresStamp:body.requiresStamp??false, stampCount:body.stampCount??null,
       allowsFullDay, allowsHalfDay, halfDayAmPm,

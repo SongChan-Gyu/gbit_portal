@@ -1018,9 +1018,7 @@ export default function LeaveApplyForm({
                     <Info size={11} className="text-gray-400" />
                     {lt.approvalSteps === 0
                       ? "결재 없이 즉시 처리"
-                      : lt.approvalSteps === 1
-                      ? "팀장 1단계 결재"
-                      : "팀장 → PM 2단계 결재"}
+                      : "1단계 결재 (팀원→팀장, 팀장→PM · PM·관리자 본인은 자동)"}
                     {isAnnualDeduct && (
                       <span className="ml-2 text-orange-500">· 연차 {actualDays}일 차감</span>
                     )}
