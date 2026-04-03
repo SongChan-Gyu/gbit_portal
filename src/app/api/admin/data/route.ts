@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 
 /** 조회 가능 테이블: id(API용), label(화면표시), editable(수정 가능 여부) */
@@ -44,7 +45,7 @@ export async function GET(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as any;
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "ADMIN만 조회 가능합니다." }, { status: 403 });
+  const guard = requireAdmin(user); if (guard) return guard;
 
   const { searchParams } = new URL(req.url);
   const table = searchParams.get("table");
@@ -284,7 +285,7 @@ export async function PATCH(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as any;
-  if (user.role !== "ADMIN") return NextResponse.json({ error: "ADMIN만 수정 가능합니다." }, { status: 403 });
+  const guard = requireAdmin(user); if (guard) return guard;
 
   const body = await req.json().catch(() => ({})) as { table: string; id?: string; key?: string; data: Record<string, unknown> };
   const { table, id, key, data } = body;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 
@@ -16,8 +17,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const session = await auth();
     if (!session) return NextResponse.json({ error: "로그인이 필요합니다." }, { status: 401 });
     const user = session.user as any;
-    if (!["PM", "ADMIN"].includes(user.role ?? ""))
-      return NextResponse.json({ error: "PM 또는 관리자만 직권 취소할 수 있습니다." }, { status: 403 });
+    const guard = requirePMOrAdmin(user); if (guard) return guard;
 
     const request = await prisma.leaveRequest.findUnique({
       where: { id },

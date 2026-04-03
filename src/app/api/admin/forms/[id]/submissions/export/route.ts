@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import * as XLSX from "xlsx";
 
@@ -9,8 +10,7 @@ export async function GET(
 ) {
   const session = await auth();
   const u = session?.user as any;
-  if (!["PM", "ADMIN"].includes(u?.role ?? ""))
-    return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+  const guard = requirePMOrAdmin(u); if (guard) return guard;
   const formId = (await ctx.params).id;
   const form = await prisma.form.findUnique({
     where: { id: formId },

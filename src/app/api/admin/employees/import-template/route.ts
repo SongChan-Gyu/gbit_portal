@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import * as XLSX from "xlsx";
 import { TEMPLATE_HEADERS } from "@/lib/employeeExcel";
 
@@ -7,8 +8,7 @@ export async function GET() {
   try {
     const session = await auth();
     const user = session?.user as any;
-    if (!session?.user || !["PM", "ADMIN"].includes(user?.role ?? ""))
-      return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+    const guard = requirePMOrAdmin(user); if (guard) return guard;
 
     const wb = XLSX.utils.book_new();
     const wsData: string[][] = [

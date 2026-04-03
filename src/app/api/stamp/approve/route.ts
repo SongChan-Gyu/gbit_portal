@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { appendStampCouponToCard } from "@/lib/stampCard";
 
@@ -17,8 +18,7 @@ export async function POST(req: Request) {
   if (sr.status !== "PENDING") return NextResponse.json({ error: "이미 처리된 요청입니다." }, { status: 400 });
 
   const actor = await prisma.employee.findUnique({ where: { id: user.employeeId } });
-  if (!["TEAM_LEAD","PM","ADMIN"].includes(actor?.role ?? ""))
-    return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+  const guard = requirePMOrAdmin(actor); if (guard) return guard;
 
   if (action === "REJECT") {
     await prisma.stampRequest.update({

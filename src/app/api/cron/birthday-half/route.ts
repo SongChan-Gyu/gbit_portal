@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import { runBirthdayHalf } from "@/lib/scheduler";
 
 export async function POST(req: NextRequest) {
@@ -12,10 +13,8 @@ export async function POST(req: NextRequest) {
   } else {
     const session = await auth();
     const user = session?.user as { role?: string; employeeId?: string } | undefined;
-    if (!user || !["ADMIN", "PM"].includes(user.role ?? "")) {
-      return NextResponse.json({ error: "권한 없음" }, { status: 403 });
-    }
-    actorId = user.employeeId;
+    const guard = requirePMOrAdmin(user); if (guard) return guard;
+    actorId = user?.employeeId;
   }
 
   const body = (await req.json().catch(() => ({}))) as { yearMonth?: string; dryRun?: boolean };

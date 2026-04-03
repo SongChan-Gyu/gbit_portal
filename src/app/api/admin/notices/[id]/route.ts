@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit, getIp } from "@/lib/audit";
 
@@ -18,8 +19,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const u = session?.user as any;
-  if (!["PM", "ADMIN"].includes(u?.role ?? ""))
-    return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+  const guard = requirePMOrAdmin(u); if (guard) return guard;
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
   const { title, content } = body;
@@ -47,8 +47,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const u = session?.user as any;
-  if (!["PM", "ADMIN"].includes(u?.role ?? ""))
-    return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+  const guard = requirePMOrAdmin(u); if (guard) return guard;
   const { id } = await ctx.params;
   const notice = await prisma.notice.findUnique({ where: { id }, select: { title: true } });
   await prisma.notice.delete({ where: { id } }).catch(() => null);

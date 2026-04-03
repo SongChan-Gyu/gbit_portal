@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 
 const TENURE_CODES = ["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"];
@@ -7,8 +8,7 @@ const TENURE_CODES = ["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"];
 export async function GET(req: Request) {
   const session = await auth();
   const user = session?.user as any;
-  if (!["ADMIN","PM"].includes(user?.role ?? ""))
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const guard = requirePMOrAdmin(user); if (guard) return guard;
 
   const { searchParams } = new URL(req.url);
   const empId   = searchParams.get("empId") ?? undefined;

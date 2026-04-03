@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
 
@@ -8,7 +9,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     const { id } = await params;
     const session = await auth();
     const u = session?.user as any;
-    if (!["PM","ADMIN"].includes(u?.role ?? "")) return NextResponse.json({ error:"권한이 없습니다." }, { status:403 });
+    const guard = requirePMOrAdmin(u); if (guard) return guard;
 
     const body = await req.json();
     const prev = await prisma.leaveAllocation.findUnique({ where:{ id } });

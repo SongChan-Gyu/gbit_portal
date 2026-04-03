@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
@@ -10,9 +11,7 @@ type Method = "EMAIL_INVITE" | "DIRECT_CREDENTIAL";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const user = session?.user as any;
-  if (!["PM", "ADMIN"].includes(user?.role ?? "")) {
-    return NextResponse.json({ error: "권한 없음" }, { status: 403 });
-  }
+  const guard = requirePMOrAdmin(user); if (guard) return guard;
 
   const { id: employeeId } = await params;
   const body = await req.json().catch(() => ({}));

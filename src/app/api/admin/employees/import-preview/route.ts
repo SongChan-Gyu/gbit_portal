@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import * as XLSX from "xlsx";
 import { parseSheetToRows } from "@/lib/employeeExcel";
 
 export async function POST(req: Request) {
   const session = await auth();
   const user = session?.user as any;
-  if (!["PM", "ADMIN"].includes(user?.role ?? ""))
-    return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+  const guard = requirePMOrAdmin(user); if (guard) return guard;
 
   let file: File;
   try {

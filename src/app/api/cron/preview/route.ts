@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import { getUpcomingAnniversaries, getAccrualCandidates } from "@/lib/scheduler";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   const user = session?.user as { role?: string } | undefined;
-  if (!user || !["ADMIN","PM"].includes(user.role ?? "")) {
-    return NextResponse.json({ error: "권한 없음" }, { status: 403 });
-  }
+  const guard = requirePMOrAdmin(user); if (guard) return guard;
 
   const { searchParams } = new URL(req.url);
   const type  = searchParams.get("type") ?? "tenure";

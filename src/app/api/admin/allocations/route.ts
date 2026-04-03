@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { serializeDates } from "@/lib/serialize";
 
 export async function GET(req: NextRequest) {
   const session = await auth();
   const u = session?.user as { role?: string } | undefined;
-  if (!["PM","ADMIN"].includes(u?.role ?? "")) return NextResponse.json({ error:"권한 없음" }, { status:403 });
+  const guard = requirePMOrAdmin(u); if (guard) return guard;
 
   const empId = new URL(req.url).searchParams.get("empId");
   if (!empId) return NextResponse.json({ allocations: [] });
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: Request) {
   const session = await auth();
   const u = session?.user as any;
-  if (!["PM","ADMIN"].includes(u?.role ?? "")) return NextResponse.json({ error:"권한 없음" }, { status:403 });
+  const guard = requirePMOrAdmin(u); if (guard) return guard;
 
   const body = await req.json();
   const { employeeId, sourceCode, label, totalDays, usedDays, validFrom, validUntil, fiscalYear, note } = body;

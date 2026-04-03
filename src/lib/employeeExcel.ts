@@ -40,6 +40,10 @@ export const DUTY_DEPT_TO_LABEL: Record<string, string> = {
   NONE: "해당사항없음",
 };
 
+/** 직무부서 코드 목록 (귀속연도 초기화 등에서 사용) */
+export const DUTY_DEPT_CODES = ["OPERATIONS", "EDUCATION", "WELFARE"] as const;
+export type DutyDeptCode = (typeof DUTY_DEPT_CODES)[number];
+
 export const ROLE_MAP: Record<string, string> = {
   "": "STAFF",
   "팀원": "STAFF",

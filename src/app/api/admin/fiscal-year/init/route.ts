@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { fiscalPeriod } from "@/lib/leaveCalc";
+import { DUTY_DEPT_CODES, DUTY_DEPT_TO_LABEL } from "@/lib/employeeExcel";
 import {
   previewMonthlyPoolSyncNeeded,
   regularBaseAnnualExists,
@@ -24,8 +26,7 @@ const MONTHLY_POOL_PREVIEW_KEY = "MONTHLY_ACCRUAL_POOL";
 export async function POST(req: Request) {
   const session = await auth();
   const user = session?.user as any;
-  if (!["PM","ADMIN"].includes(user?.role ?? ""))
-    return NextResponse.json({ error:"권한 없음" }, { status:403 });
+  const guard = requirePMOrAdmin(user); if (guard) return guard;
 
   const body = await req.json().catch(() => ({}));
   const { fy, dryRun } = body;
@@ -64,9 +65,9 @@ export async function POST(req: Request) {
       .map((lt) => [String(lt.allocationSourceCode), lt]),
   );
 
-  const DUTY_DEPT_VALUES = ["OPERATIONS", "EDUCATION", "WELFARE"];
+  const DUTY_DEPT_VALUES = DUTY_DEPT_CODES;
   const DUTY_SOURCE = "DUTY_DEPT";
-  const DUTY_LABEL: Record<string, string> = { OPERATIONS: "운영부", EDUCATION: "교육부", WELFARE: "복지부" };
+  const DUTY_LABEL = DUTY_DEPT_TO_LABEL;
 
   // DB에서 규칙 읽기 (AllocationSourceConfig)
   const baseAnnualCfg  = sourceConfigs.find((s) => s.sourceCode === "BASE_ANNUAL");
@@ -262,7 +263,7 @@ export async function POST(req: Request) {
         if (lt && lt.includeInFiscalInit === false) continue;
         if (cfg.sourceCode === DUTY_SOURCE) {
           const dutyDept = (emp as { dutyDept?: string | null }).dutyDept ?? null;
-          if (!dutyDept || !DUTY_DEPT_VALUES.includes(dutyDept)) continue;
+          if (!dutyDept || !(DUTY_DEPT_VALUES as readonly string[]).includes(dutyDept)) continue;
         }
         if (await exists(emp.id, cfg.sourceCode)) continue;
         const days = cfg.defaultDays ?? lt?.maxPerYear ?? lt?.daysPerUnit ?? null;
@@ -388,7 +389,7 @@ export async function POST(req: Request) {
         if (lt && lt.validityBasis !== "귀속연도") continue;
         if (lt && lt.includeInFiscalInit === false) continue;
         const dutyDept = (emp as { dutyDept?: string | null }).dutyDept ?? null;
-        if (cfg.sourceCode === DUTY_SOURCE && (!dutyDept || !DUTY_DEPT_VALUES.includes(dutyDept))) continue;
+        if (cfg.sourceCode === DUTY_SOURCE && (!dutyDept || !(DUTY_DEPT_VALUES as readonly string[]).includes(dutyDept))) continue;
         const exists = await allocExists(tx, emp.id, cfg.sourceCode, fy);
         if (exists) { skipped++; continue; }
         const days = cfg.defaultDays ?? lt?.maxPerYear ?? lt?.daysPerUnit ?? null;

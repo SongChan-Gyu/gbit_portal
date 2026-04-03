@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
+import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { sendMail } from "@/lib/email";
 import { wrapEmailBody } from "@/lib/emailTemplate";
@@ -8,8 +9,7 @@ import { wrapEmailBody } from "@/lib/emailTemplate";
 export async function POST(req: Request) {
   const session = await auth();
   const user = session?.user as any;
-  if (!["PM", "ADMIN"].includes(user?.role ?? ""))
-    return NextResponse.json({ error: "권한 없음" }, { status: 403 });
+  const guard = requirePMOrAdmin(user); if (guard) return guard;
 
   const { employeeId, url } = await req.json();
   if (!employeeId || !url || typeof url !== "string")
