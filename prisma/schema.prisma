@@ -158,6 +158,8 @@ model LeaveType {
   validityBasis    String  @default("FISCAL")
   // 유효기간 (개월 수, null=귀속연도 끝까지)
   validityMonths   Int?
+  // 반차·시간 단위 슬롯 정책 (예: TYPE_DEFAULT, HALF_ONLY 등 - 확장 예약 필드)
+  slotPolicy       String  @default("TYPE_DEFAULT")
   isActive         Boolean @default(true)
   sortOrder        Int     @default(0)
   color            String  @default("#3b82f6") // 캘린더 색상
@@ -441,21 +443,6 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([actorId])
   @@index([createdAt])
-}
-
-// ─────────────────────────────────────────
-// 요청(접속) 로그 (IP, 메서드, URL - 운영/보안 확인용)
-// ─────────────────────────────────────────
-model RequestLog {
-  id        String   @id @default(cuid())
-  method   String   // GET, POST, ...
-  path     String   @db.VarChar(512)
-  ip       String?  @db.VarChar(64)
-  userId   String?  // 로그인 시 세션 사용자 ID (선택)
-  createdAt DateTime @default(now())
-
-  @@index([createdAt])
-  @@index([path])
 }
 
 // ─────────────────────────────────────────

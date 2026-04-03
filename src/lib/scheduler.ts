@@ -12,6 +12,7 @@ import prisma from "@/lib/db";
 import { writeAudit, writeSchedulerLog } from "@/lib/audit";
 import { getFiscalYear } from "@/lib/workdays";
 import { getTenureMilestones, fiscalPeriod, DEFAULT_TENURE_MILESTONES, type TenureMilestoneConfig } from "@/lib/leaveCalc";
+import { appendMonthlyAccrualMonth } from "@/lib/monthlyAccrualPool";
 
 export interface AccrualItem {
   employeeId: string;
@@ -75,9 +76,6 @@ export async function runMonthlyAccrual(
     tMonth = prev.getMonth() + 1;
   }
   const monthStr   = `${tYear}-${String(tMonth).padStart(2, "0")}`;
-  const sourceCode = "BASE_ANNUAL";
-  const monthlyAccrualNoteKey = `MONTHLY_ACCRUAL:${monthStr}`;
-  const monthStart = new Date(tYear, tMonth - 1, 1);
   const monthEnd   = new Date(tYear, tMonth, 0);
 
   const employees = await prisma.employee.findMany({
@@ -99,85 +97,28 @@ export async function runMonthlyAccrual(
       continue;
     }
 
-    const existing = await prisma.leaveAllocation.findFirst({
-      where: {
-        employeeId: emp.id,
-        OR: [
-          // 신규 표준: 월별 적립도 BASE_ANNUAL로 적재, note 키로 월 구분
-          { sourceCode, note: { contains: monthlyAccrualNoteKey } },
-          // 레거시 호환
-          { sourceCode: `MONTHLY_ACCRUAL_${tYear}_${String(tMonth).padStart(2, "0")}` },
-        ],
-      },
-    });
-    if (existing) {
-      const canReactivate = !existing.isActive && existing.validUntil >= now;
-      if (canReactivate) {
-        if (dryRun) {
-          result.granted.push({
-            employeeId: emp.id,
-            name: emp.name,
-            month: monthStr,
-            days: 1,
-            reason: "비활성 기존 적립 복구 예정",
-          });
-        } else {
-          await prisma.leaveAllocation.update({
-            where: { id: existing.id },
-            data: { isActive: true },
-          });
-          await writeAudit({
-            entityType: "LeaveAllocation",
-            entityId: existing.id,
-            action: "UPDATED",
-            actorId: actorId ?? null,
-            actorName: actorId ? undefined : "스케줄러(월별적립)",
-            note: `${emp.name} ${monthStr} 월별 적립 비활성 건 복구`,
-          });
-          result.granted.push({
-            employeeId: emp.id,
-            name: emp.name,
-            month: monthStr,
-            days: 1,
-            reason: "비활성 기존 적립 복구",
-          });
-        }
-      } else {
-        const reason = existing.validFrom > now
-          ? "이미 적립됨(유효 시작 전)"
-          : "이미 적립됨";
-        result.skipped.push({ employeeId: emp.id, name: emp.name, month: monthStr, days: 1, reason });
-      }
-      continue;
-    }
-
-    if (dryRun) {
-      result.granted.push({ employeeId: emp.id, name: emp.name, month: monthStr, days: 1 });
-      continue;
-    }
-
-    const fy         = getFiscalYear(monthStart);
-    const validFrom  = monthStart;
-    const validUntil = new Date(`${fy + 1}-04-30`);
-
     try {
-      const alloc = await prisma.leaveAllocation.create({
-        data: {
-          employeeId: emp.id, fiscalYear: fy, sourceCode,
-          label:      "기본연차",
-          totalDays:  1, usedDays: 0,
-          validFrom, validUntil, isActive: true,
-          note: `${monthlyAccrualNoteKey} · 월별 연차 자동 적립 (입사 1년 미만)`,
-        },
+      const out = await appendMonthlyAccrualMonth(prisma, {
+        employeeId: emp.id,
+        name: emp.name,
+        hireDate: hire,
+        targetYm: monthStr,
+        dryRun,
+        actorId,
       });
-      await writeAudit({
-        entityType: "LeaveAllocation", entityId: alloc.id,
-        action: "GRANTED", actorId: actorId ?? null,
-        actorName: actorId ? undefined : "스케줄러(월별적립)",
-        after: { sourceCode, totalDays: 1, month: monthStr },
-        note: `${emp.name} ${monthStr} 월별 연차 자동 적립`,
-      });
-      result.granted.push({ employeeId: emp.id, name: emp.name, month: monthStr, days: 1 });
+      if (out === "granted") {
+        result.granted.push({ employeeId: emp.id, name: emp.name, month: monthStr, days: 1 });
+      } else if (out === "reactivated") {
+        result.granted.push({
+          employeeId: emp.id,
+          name: emp.name,
+          month: monthStr,
+          days: 1,
+          reason: "비활성 기존 적립 복구",
+        });
+      } else {
+        result.skipped.push({ employeeId: emp.id, name: emp.name, month: monthStr, days: 1, reason: "이미 적립됨" });
+      }
     } catch (e: unknown) {
       result.errors.push({
         employeeId: emp.id, name: emp.name, month: monthStr, days: 1,
@@ -475,7 +416,6 @@ export async function runBirthdayHalf(
     tMonth = now.getMonth() + 1;
   }
   const yearMonthStr = `${tYear}-${String(tMonth).padStart(2, "0")}`;
-  const monthStart = new Date(tYear, tMonth - 1, 1);
 
   // 유효기간: LeaveType.validityMonths (BIRTHDAY_HALF) 기준, 없으면 3개월 폴백
   const birthdayHalfLT = await prisma.leaveType.findFirst({
@@ -501,11 +441,15 @@ export async function runBirthdayHalf(
       continue;
     }
 
+    // 실제 생일 날짜 (해당 연도)
+    const birthdayThisYear = new Date(tYear, birth.getMonth(), birth.getDate());
+    const birthdayDateStr = birthdayThisYear.toISOString().slice(0, 10);
+
     const existing = await prisma.leaveAllocation.findFirst({
       where: {
         employeeId: emp.id,
         sourceCode: "BIRTHDAY_HALF",
-        note: { contains: `${tYear}년` },
+        note: { contains: birthdayDateStr },
       },
     });
     if (existing) {
@@ -519,7 +463,7 @@ export async function runBirthdayHalf(
     }
 
     try {
-      const validUntil = new Date(monthStart);
+      const validUntil = new Date(birthdayThisYear);
       validUntil.setMonth(validUntil.getMonth() + validityMonths);
       validUntil.setDate(validUntil.getDate() - 1);
       validUntil.setHours(23, 59, 59, 999);
@@ -530,11 +474,11 @@ export async function runBirthdayHalf(
           label: "생일반차",
           totalDays: daysPerUnit,
           usedDays: 0,
-          validFrom: monthStart,
+          validFrom: birthdayThisYear,  // 생일 당일부터 사용 가능
           validUntil,
           fiscalYear: null,
           isActive: true,
-          note: `${tYear}년 ${tMonth}월 생일반차 (부여일 기준 ${validityMonths}개월)`,
+          note: `생일반차 ${birthdayDateStr} 부여 (부여일 기준 ${validityMonths}개월)`,
         },
       });
       await writeAudit({
@@ -543,8 +487,8 @@ export async function runBirthdayHalf(
         action: "GRANTED",
         actorId: actorId ?? null,
         actorName: actorId ? undefined : "스케줄러(생일반차)",
-        after: { sourceCode: "BIRTHDAY_HALF", totalDays: 0.5, yearMonth: yearMonthStr },
-        note: `${emp.name} ${tYear}년 ${tMonth}월 생일반차 부여`,
+        after: { sourceCode: "BIRTHDAY_HALF", totalDays: 0.5, birthday: birthdayDateStr },
+        note: `${emp.name} ${birthdayDateStr} 생일반차 부여`,
       });
       result.granted.push({ employeeId: emp.id, name: emp.name, birthMonth: tMonth });
     } catch (e: unknown) {
@@ -592,14 +536,15 @@ export async function getAccrualCandidates(targetMonth?: string) {
     tMonth = now.getMonth() + 1;
   }
   const monthStr   = `${tYear}-${String(tMonth).padStart(2, "0")}`;
-  const sourceCode = "BASE_ANNUAL";
-  const monthlyAccrualNoteKey = `MONTHLY_ACCRUAL:${monthStr}`;
   const monthEnd   = new Date(tYear, tMonth, 0);
 
   const employees = await prisma.employee.findMany({
     where: { status: "ACTIVE" },
     include: { team: { select: { name: true } } },
   });
+
+  const { findMonthlyAccrualRows, collectMonthsFromRows, eligibleForMonth } =
+    await import("@/lib/monthlyAccrualPool");
 
   const candidates: {
     employeeId: string; name: string; teamName: string;
@@ -611,21 +556,18 @@ export async function getAccrualCandidates(targetMonth?: string) {
     const monthsWorked =
       (tYear - hire.getFullYear()) * 12 + (tMonth - (hire.getMonth() + 1));
     if (monthsWorked < 0 || monthsWorked >= 12 || hire > monthEnd) continue;
+    if (!eligibleForMonth(hire, tYear, tMonth)) continue;
 
-    const existing = await prisma.leaveAllocation.findFirst({
-      where: {
-        employeeId: emp.id,
-        OR: [
-          { sourceCode, note: { contains: monthlyAccrualNoteKey } },
-          { sourceCode: `MONTHLY_ACCRUAL_${tYear}_${String(tMonth).padStart(2, "0")}` },
-        ],
-      },
-    });
+    const monthStart = new Date(tYear, tMonth - 1, 1);
+    const fy = getFiscalYear(monthStart);
+    const rows = await findMonthlyAccrualRows(prisma, emp.id, fy);
+    const months = collectMonthsFromRows(rows);
+    const alreadyGranted = months.has(monthStr);
 
     candidates.push({
       employeeId: emp.id, name: emp.name, teamName: emp.team?.name ?? "-",
       hireDate: hire.toISOString().slice(0, 10),
-      monthsWorked, alreadyGranted: !!existing,
+      monthsWorked, alreadyGranted,
     });
   }
 

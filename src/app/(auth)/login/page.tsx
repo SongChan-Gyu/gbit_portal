@@ -56,7 +56,7 @@ export default function LoginPage() {
                 {[
                   "연차·반차 신청 및 결재",
                   "제주도 숙소 예약·승인",
-                  "스탬프 쿠폰 및 근태 현황",
+                  "스탬프 쿠폰 및 월별 근태 현황",
                 ].map((f) => (
                   <p key={f} className="flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-200 inline-block" />

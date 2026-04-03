@@ -196,7 +196,7 @@ export default function AttendanceClient({
     <div className="space-y-4">
       {/* 헤더 */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="page-title">근태 현황</h1>
+        <h1 className="page-title">월별 근태 현황</h1>
         <div className="flex items-center gap-2">
           <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs">
             <button onClick={()=>setView("monthly")}

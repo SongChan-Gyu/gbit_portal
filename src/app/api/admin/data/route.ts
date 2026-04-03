@@ -21,7 +21,10 @@ const DATA_TABLE_OPTIONS = [
   { id: "NotificationLog", label: "알림 발송 로그", editable: false },
   { id: "InviteToken", label: "초대 토큰", editable: false },
   { id: "FormSubmission", label: "양식 제출", editable: false },
-  { id: "RequestLog", label: "요청(접속) 로그", editable: false },
+  { id: "Holiday", label: "공휴일", editable: false },
+  { id: "StampRequest", label: "스탬프 신청", editable: false },
+  { id: "StampCard", label: "스탬프 카드", editable: false },
+  { id: "LeaveApproval", label: "휴가 결재", editable: false },
 ] as const;
 
 const EDITABLE_TABLES = DATA_TABLE_OPTIONS.filter((t) => t.editable).map((t) => t.id);
@@ -241,10 +244,31 @@ export async function GET(req: Request) {
       ]);
       return NextResponse.json({ rows: rows.map((r) => serializeRow(r as unknown as Record<string, unknown>)), total });
     }
-    if (table === "RequestLog") {
+    if (table === "Holiday") {
       const [rows, total] = await Promise.all([
-        prisma.requestLog.findMany({ orderBy: { createdAt: "desc" }, skip, take: pageSize }),
-        prisma.requestLog.count(),
+        prisma.holiday.findMany({ orderBy: { date: "desc" }, skip, take: pageSize }),
+        prisma.holiday.count(),
+      ]);
+      return NextResponse.json({ rows: rows.map((r) => serializeRow(r as unknown as Record<string, unknown>)), total });
+    }
+    if (table === "StampRequest") {
+      const [rows, total] = await Promise.all([
+        prisma.stampRequest.findMany({ orderBy: { createdAt: "desc" }, skip, take: pageSize }),
+        prisma.stampRequest.count(),
+      ]);
+      return NextResponse.json({ rows: rows.map((r) => serializeRow(r as unknown as Record<string, unknown>)), total });
+    }
+    if (table === "StampCard") {
+      const [rows, total] = await Promise.all([
+        prisma.stampCard.findMany({ orderBy: { createdAt: "desc" }, skip, take: pageSize }),
+        prisma.stampCard.count(),
+      ]);
+      return NextResponse.json({ rows: rows.map((r) => serializeRow(r as unknown as Record<string, unknown>)), total });
+    }
+    if (table === "LeaveApproval") {
+      const [rows, total] = await Promise.all([
+        prisma.leaveApproval.findMany({ orderBy: { createdAt: "desc" }, skip, take: pageSize }),
+        prisma.leaveApproval.count(),
       ]);
       return NextResponse.json({ rows: rows.map((r) => serializeRow(r as unknown as Record<string, unknown>)), total });
     }

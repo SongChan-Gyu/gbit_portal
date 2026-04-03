@@ -55,10 +55,11 @@ async function seedLeaveTypes() {
     return "ASSET";
   }
   function carryoverEligibleForCode(code: string): boolean {
-    return ["CARE", "HOLIDAY_EXT", "AWARD", "BIRTHDAY_HALF"].includes(code);
+    return ["AWARD", "BIRTHDAY_HALF", "TENURE_5Y", "TENURE_10Y"].includes(code);
   }
   function autoCarryoverOnFiscalInitForCode(code: string): boolean {
-    return false;
+    // TENURE_1Y: 별도 특례 로직(귀속연도 말 N개월 이내 이월)으로 처리 → 여기서 제외
+    return ["AWARD", "BIRTHDAY_HALF", "TENURE_5Y", "TENURE_10Y"].includes(code);
   }
   function displayHintForCode(code: string): string | null {
     if (code === "CARE") return "연 2일 한도";
@@ -156,6 +157,7 @@ async function seedAllocationSourceConfigs() {
     { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1, carryoverThresholdMonths: 3 },
     { sourceCode: "TENURE_5Y",  label: "5년근속휴가",  sortOrder: 8, defaultDays: 5,  tenureYears: 5  },
     { sourceCode: "TENURE_10Y", label: "10년근속휴가", sortOrder: 9, defaultDays: 10, tenureYears: 10 },
+    { sourceCode: "BIRTHDAY_HALF", label: "생일반차", sortOrder: 10, defaultDays: null, note: "생일 해당 월 스케줄러 자동 부여 0.5일" },
   ];
 
   for (const cfg of configs) {

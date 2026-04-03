@@ -19,6 +19,9 @@ fi
 echo "[start:prod] backfill stamp cards"
 npx tsx scripts/backfill-stamp-cards.ts
 
+echo "[start:prod] encrypt employee PII (phone/email) - 이미 암호화된 값은 자동 스킵"
+npx tsx scripts/encrypt-employee-pii.ts
+
 echo "[start:prod] prisma db seed"
 npx prisma db seed
 

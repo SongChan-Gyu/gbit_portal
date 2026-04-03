@@ -25,7 +25,10 @@ const TABLES = [
   { id: "NotificationLog", label: "알림 발송 로그", editable: false },
   { id: "InviteToken", label: "초대 토큰", editable: false },
   { id: "FormSubmission", label: "양식 제출", editable: false },
-  { id: "RequestLog", label: "요청(접속) 로그", editable: false },
+  { id: "Holiday", label: "공휴일", editable: false },
+  { id: "StampRequest", label: "스탬프 신청", editable: false },
+  { id: "StampCard", label: "스탬프 카드", editable: false },
+  { id: "LeaveApproval", label: "휴가 결재", editable: false },
 ] as const;
 
 type TableId = (typeof TABLES)[number]["id"];

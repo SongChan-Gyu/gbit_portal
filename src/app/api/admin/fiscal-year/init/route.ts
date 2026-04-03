@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { fiscalPeriod } from "@/lib/leaveCalc";
+import {
+  previewMonthlyPoolSyncNeeded,
+  regularBaseAnnualExists,
+  syncMonthlyAccrualPoolForFiscalInit,
+} from "@/lib/monthlyAccrualPool";
+
+const MONTHLY_POOL_PREVIEW_KEY = "MONTHLY_ACCRUAL_POOL";
 
 /**
  * POST /api/admin/fiscal-year/init
@@ -146,65 +153,109 @@ export async function POST(req: Request) {
     }
   }
 
+  /**
+   * 자동이월 대상 원본 행 조회.
+   * - fiscalYear != targetFy (이미 이월된 행 제외)
+   * - validUntil >= fyStart (새 귀속연도 시작일 이후까지 유효한 행만)
+   * - isActive = true
+   * - remaining > 0
+   * - 이미 targetFy로 이월된 행이 있으면 빈 배열 반환
+   */
+  async function getAutoCarryoverSourceRows(
+    finder: any,
+    employeeId: string,
+    targetFy: number,
+    sourceCode: string,
+  ): Promise<{ id: string; totalDays: number; usedDays: number; validFrom: Date; validUntil: Date }[]> {
+    const already = await finder.leaveAllocation.findFirst({
+      where: {
+        employeeId,
+        sourceCode,
+        fiscalYear: targetFy,
+        note: { contains: AUTO_CARRYOVER_NOTE_KEY },
+      },
+      select: { id: true },
+    });
+    if (already) return [];
+
+    const rows = await finder.leaveAllocation.findMany({
+      where: {
+        employeeId,
+        sourceCode,
+        isActive: true,
+        fiscalYear: { not: targetFy },
+        validUntil: { gte: fyStart },
+      },
+      select: { id: true, totalDays: true, usedDays: true, validFrom: true, validUntil: true },
+    });
+    return rows.filter(
+      (r: { totalDays: number; usedDays: number }) => Number(r.totalDays) - Number(r.usedDays) > 0,
+    );
+  }
+
+  /** 이월 일수만 빠르게 계산 (dryRun 미리보기용) */
   async function getAutoCarryoverDaysBySource(
     finder: any,
     employeeId: string,
     targetFy: number,
     sourceCode: string,
   ): Promise<number> {
-    const already = await finder.leaveAllocation.findFirst({
-      where: {
-        employeeId,
-        sourceCode,
-        fiscalYear: targetFy,
-        note: { contains: `${AUTO_CARRYOVER_NOTE_KEY}:${prevFy}:${sourceCode}` },
-      },
-      select: { id: true },
-    });
-    if (already) return 0;
-
-    const prevRows = await finder.leaveAllocation.findMany({
-      where: {
-        employeeId,
-        sourceCode,
-        fiscalYear: prevFy,
-        isActive: true,
-      },
-      select: { totalDays: true, usedDays: true },
-    });
-    return prevRows.reduce((s: number, a: { totalDays: number; usedDays: number }) => {
-      const remain = Number(a.totalDays) - Number(a.usedDays);
-      return remain > 0 ? s + remain : s;
-    }, 0);
+    const rows = await getAutoCarryoverSourceRows(finder, employeeId, targetFy, sourceCode);
+    return rows.reduce((s, r) => s + Math.max(0, Number(r.totalDays) - Number(r.usedDays)), 0);
   }
 
-  /** dryRun: 미리보기만 반환 (DB 변경 없음) */
+  /** dryRun: 미리보기만 반환 (DB 변경 없음) — 열=부여 소스(메타 키), 행=사원 */
   if (dryRun === true) {
-    const preview: { name: string; items: { label: string; totalDays: number }[] }[] = [];
+    type PreviewItem = { key: string; label: string; totalDays: number };
+    type PreviewRow = { employeeId: string; name: string; items: PreviewItem[] };
+    const preview: PreviewRow[] = [];
+
+    function sortInitPreviewColumnKeys(keys: string[]): string[] {
+      const rank = (key: string): [number, number, string] => {
+        if (key === "BASE_ANNUAL") return [0, 0, key];
+        if (key === MONTHLY_POOL_PREVIEW_KEY) return [0, 0.45, key];
+        if (key === "TENURE_BONUS") return [0, 1, key];
+        if (key === "TENURE_1Y_CARRY") return [3, 0, key];
+        if (key.startsWith("AUTO:")) {
+          const src = key.slice(5);
+          const ord = sourceConfigs.find((c) => c.sourceCode === src)?.sortOrder ?? 500;
+          return [4, ord, key];
+        }
+        const cfg = sourceConfigs.find((c) => c.sourceCode === key);
+        return [2, cfg?.sortOrder ?? 9999, key];
+      };
+      return [...keys].sort((a, b) => {
+        const ra = rank(a);
+        const rb = rank(b);
+        if (ra[0] !== rb[0]) return ra[0] - rb[0];
+        if (ra[1] !== rb[1]) return ra[1] - rb[1];
+        return ra[2].localeCompare(rb[2]);
+      });
+    }
+
     for (const emp of employees) {
       if (!emp.hireDate) continue;
       const hire = new Date(emp.hireDate);
       const yearsOfService = Math.floor((fyStart.getTime() - hire.getTime()) / (365.25 * 24 * 3600 * 1000));
-      const items: { label: string; totalDays: number }[] = [];
+      const items: PreviewItem[] = [];
 
       const exists = (empId: string, code: string) =>
         prisma.leaveAllocation.findFirst({ where: { employeeId: empId, sourceCode: code, fiscalYear: fy } });
 
       if (yearsOfService >= 1) {
-        if (!(await exists(emp.id, "BASE_ANNUAL")))
-          items.push({ label: "기본연차", totalDays: BASE_ANNUAL_DAYS });
+        if (!(await regularBaseAnnualExists(prisma, emp.id, fy)))
+          items.push({ key: "BASE_ANNUAL", label: "기본연차", totalDays: BASE_ANNUAL_DAYS });
         const bonus = BONUS_INTERVAL_YRS > 0
           ? Math.min(Math.floor(yearsOfService / BONUS_INTERVAL_YRS), BONUS_MAX_DAYS)
           : 0;
         const empType = (emp as any).employeeType ?? "FULL";
         const skipBonus = BONUS_SKIP_FREE && empType === "FREE";
         if (bonus > 0 && !skipBonus && !(await exists(emp.id, "TENURE_BONUS")))
-          items.push({ label: `근속가산(+${bonus}일)`, totalDays: bonus });
+          items.push({ key: "TENURE_BONUS", label: `근속가산(+${bonus}일)`, totalDays: bonus });
       }
       for (const cfg of sourceConfigs) {
         if (["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"].includes(cfg.sourceCode)) continue;
         if (cfg.sourceCode.startsWith("MONTHLY_ACCRUAL_")) continue;
-        // tenureYears가 있는 sourceCode(근속특별휴가)는 스케줄러가 부여하므로 귀속연도 초기화에서 제외
         if (cfg.tenureYears != null) continue;
         const lt = leaveTypeSourceMap.get(cfg.sourceCode);
         if (lt && lt.validityBasis !== "귀속연도") continue;
@@ -216,28 +267,64 @@ export async function POST(req: Request) {
         if (await exists(emp.id, cfg.sourceCode)) continue;
         const days = cfg.defaultDays ?? lt?.maxPerYear ?? lt?.daysPerUnit ?? null;
         if (!days || Number(days) <= 0) continue;
-        items.push({ label: cfg.label, totalDays: Number(days) });
+        items.push({ key: cfg.sourceCode, label: cfg.label, totalDays: Number(days) });
       }
       const tenure1yCarry = await getTenure1yCarryoverDays(prisma, emp.id, fy);
       if (tenure1yCarry > 0) {
-        items.push({ label: "1년근속휴가(이월)", totalDays: tenure1yCarry });
+        items.push({ key: "TENURE_1Y_CARRY", label: "1년근속휴가(이월)", totalDays: tenure1yCarry });
       }
       for (const src of autoCarryoverSourceCodes) {
         const days = await getAutoCarryoverDaysBySource(prisma, emp.id, fy, src);
         if (days > 0) {
-          items.push({ label: `${sourceLabelMap.get(src) ?? src}(자동이월)`, totalDays: Number(days.toFixed(1)) });
+          items.push({
+            key: `AUTO:${src}`,
+            label: `${sourceLabelMap.get(src) ?? src}(자동이월)`,
+            totalDays: Number(days.toFixed(1)),
+          });
         }
       }
 
-      if (items.length > 0) preview.push({ name: emp.name, items });
+      const mp = await previewMonthlyPoolSyncNeeded(prisma, emp.id, hire, fy, new Date());
+      if (mp.needed) {
+        items.push({
+          key: MONTHLY_POOL_PREVIEW_KEY,
+          label: "기본연차(월별적립)",
+          totalDays: mp.expectedTotalDays,
+        });
+      }
+
+      if (items.length > 0) preview.push({ employeeId: emp.id, name: emp.name, items });
     }
+
+    const keySet = new Set<string>();
+    for (const row of preview) for (const it of row.items) keySet.add(it.key);
+    const columnKeys = sortInitPreviewColumnKeys([...keySet]);
+    const labelByKey = new Map<string, string>();
+    for (const row of preview) for (const it of row.items) {
+      if (!labelByKey.has(it.key)) labelByKey.set(it.key, it.label);
+    }
+    for (const k of columnKeys) {
+      if (!labelByKey.has(k)) labelByKey.set(k, k);
+    }
+
+    const previewMatrix = {
+      columns: columnKeys.map((key) => ({ key, label: labelByKey.get(key) ?? key })),
+      rows: preview.map((r) => {
+        const values: Record<string, number | null> = {};
+        for (const k of columnKeys) values[k] = null;
+        for (const it of r.items) values[it.key] = it.totalDays;
+        return { employeeId: r.employeeId, name: r.name, values };
+      }),
+    };
+
+    const totalToCreate = preview.reduce((s, p) => s + p.items.length, 0);
     return NextResponse.json({
       ok: true,
       dryRun: true,
       fy,
-      preview,
+      previewMatrix,
       totalEmployees: employees.length,
-      totalToCreate: preview.reduce((s, p) => s + p.items.length, 0),
+      totalToCreate,
     });
   }
 
@@ -250,7 +337,7 @@ export async function POST(req: Request) {
       let created = 0, skipped = 0;
 
       if (yearsOfService >= 1) {
-        const exists = await allocExists(tx, emp.id, "BASE_ANNUAL", fy);
+        const exists = await regularBaseAnnualExists(tx, emp.id, fy);
         if (!exists) {
           await tx.leaveAllocation.create({
             data: {
@@ -282,6 +369,15 @@ export async function POST(req: Request) {
           } else { skipped++; }
         }
       }
+
+      const monthlySync = await syncMonthlyAccrualPoolForFiscalInit(tx, {
+        employeeId: emp.id,
+        hireDate: hire,
+        fiscalYear: fy,
+        asOf: new Date(),
+        dryRun: false,
+      });
+      created += monthlySync.created + monthlySync.updated;
 
       for (const cfg of sourceConfigs) {
         if (["BASE_ANNUAL", "TENURE_BONUS", "CARRYOVER"].includes(cfg.sourceCode)) continue;
@@ -333,22 +429,34 @@ export async function POST(req: Request) {
         created++;
       }
       for (const src of autoCarryoverSourceCodes) {
-        const carryDays = await getAutoCarryoverDaysBySource(tx, emp.id, fy, src);
-        if (carryDays <= 0) continue;
-        await tx.leaveAllocation.create({
-          data: {
-            employeeId: emp.id,
-            sourceCode: src,
-            label: `${sourceLabelMap.get(src) ?? src}(자동이월)`,
-            totalDays: Number(carryDays.toFixed(1)),
-            usedDays: 0,
-            validFrom: fyStart,
-            validUntil: fyEnd,
-            fiscalYear: fy,
-            note: `${AUTO_CARRYOVER_NOTE_KEY}:${prevFy}:${src}`,
-          },
-        });
-        created++;
+        const srcRows = await getAutoCarryoverSourceRows(tx, emp.id, fy, src);
+        if (srcRows.length === 0) continue;
+
+        const srcLabel = sourceLabelMap.get(src) ?? src;
+        // 원본 행 1개당 이월 행 1개 생성 (포상휴가 등 복수 부여 케이스 대응)
+        for (const row of srcRows) {
+          const remaining = Number(row.totalDays) - Number(row.usedDays);
+          if (remaining <= 0) continue;
+          await tx.leaveAllocation.create({
+            data: {
+              employeeId: emp.id,
+              sourceCode: src,
+              label: `${srcLabel}(이월)`,
+              totalDays: Number(remaining.toFixed(1)),
+              usedDays: 0,
+              validFrom: new Date(row.validFrom),
+              validUntil: new Date(row.validUntil),
+              fiscalYear: fy,
+              note: `${AUTO_CARRYOVER_NOTE_KEY}:${fy}:${src} (원본 ${row.id})`,
+            },
+          });
+          // 원본 비활성화 (중복 차감 방지, 이력은 보존)
+          await tx.leaveAllocation.update({
+            where: { id: row.id },
+            data: { isActive: false },
+          });
+          created++;
+        }
       }
 
       out.push({ name: emp.name, allocsCreated: created, skipped });

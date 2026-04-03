@@ -135,6 +135,7 @@ async function main() {
     { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1,  carryoverThresholdMonths: 3 },
     { sourceCode: "TENURE_5Y",  label: "5년근속휴가",  sortOrder: 8, defaultDays: 5,  tenureYears: 5  },
     { sourceCode: "TENURE_10Y", label: "10년근속휴가", sortOrder: 9, defaultDays: 10, tenureYears: 10 },
+    { sourceCode: "BIRTHDAY_HALF", label: "생일반차", sortOrder: 10, defaultDays: null, note: "생일 해당 월 스케줄러 자동 부여 0.5일" },
   ];
   for (const s of initSources) {
     const existing = await prisma.allocationSourceConfig.findUnique({ where: { sourceCode: s.sourceCode } });
@@ -581,10 +582,14 @@ async function seedLeaveTypes() {
     return "ASSET";
   }
   function carryoverEligibleForCode(code: string): boolean {
-    return ["CARE", "HOLIDAY_EXT", "AWARD", "BIRTHDAY_HALF"].includes(code);
+    // CARE·HOLIDAY_EXT: 귀속연도 기준 소멸 → 이월 불필요
+    // 나머지 전용 풀(부여일·입사일 기준)은 유효기간이 귀속연도를 넘을 수 있어 이월 대상
+    return ["AWARD", "BIRTHDAY_HALF", "TENURE_5Y", "TENURE_10Y"].includes(code);
   }
   function autoCarryoverOnFiscalInitForCode(code: string): boolean {
-    return false;
+    // 귀속연도 초기화 시 자동이월: 부여일/입사일 기준 유효기간이 다음 귀속연도로 넘어갈 수 있는 소스
+    // TENURE_1Y: 별도 TENURE_1Y_CARRYOVER 특례 로직으로 처리 (여기서 제외)
+    return ["AWARD", "BIRTHDAY_HALF", "TENURE_5Y", "TENURE_10Y"].includes(code);
   }
   function displayHintForCode(code: string): string | null {
     if (code === "ANNUAL") return "연차 차감";

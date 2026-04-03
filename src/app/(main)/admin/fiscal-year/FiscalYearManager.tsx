@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Zap, PlusCircle, Pencil, ArrowRightCircle, ToggleLeft, ToggleRight, X, AlertTriangle } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
+import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
 
 interface Alloc {
   id:string; sourceCode:string; label:string; totalDays:number; usedDays:number;
@@ -40,13 +41,16 @@ export default function FiscalYearManager({
   });
   const [carryoverSaving, setCarryoverSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const [initPreview, setInitPreview] = useState<{ name: string; items: { label: string; totalDays: number }[] }[] | null>(null);
+  const [initPreviewMatrix, setInitPreviewMatrix] = useState<{
+    columns: { key: string; label: string }[];
+    rows: { employeeId: string; name: string; values: Record<string, number | null> }[];
+  } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const fyD = fyDates(fiscalYear);
 
   async function loadInitPreview() {
     setLoadingPreview(true);
-    setInitPreview(null);
+    setInitPreviewMatrix(null);
     setInitResult("");
     const res = await fetch("/api/admin/fiscal-year/init", {
       method: "POST",
@@ -56,13 +60,22 @@ export default function FiscalYearManager({
     const data = await res.json();
     setLoadingPreview(false);
     if (!res.ok) { setInitResult("❌ 미리보기 실패: " + (data.error ?? "")); return; }
-    setInitPreview(data.preview ?? []);
-    if ((data.preview ?? []).length === 0) setInitResult("추가될 할당이 없습니다. (이미 모두 존재)");
+    const matrix = data.previewMatrix as {
+      columns: { key: string; label: string }[];
+      rows: { employeeId: string; name: string; values: Record<string, number | null> }[];
+    } | null;
+    setInitPreviewMatrix(matrix && matrix.rows?.length ? matrix : null);
+    if (!matrix?.rows?.length) setInitResult("추가될 할당이 없습니다. (이미 모두 존재)");
   }
 
   async function runInit() {
-    if (!initPreview?.length && !confirm(`${fiscalYear}년도 귀속연도를 일괄 초기화하시겠습니까?`)) return;
-    if (initPreview?.length && !confirm(`미리보기대로 ${initPreview.reduce((s, p) => s + p.items.length, 0)}건 할당을 생성하시겠습니까?`)) return;
+    const cellCount =
+      initPreviewMatrix?.rows.reduce(
+        (s, r) => s + initPreviewMatrix.columns.filter((c) => r.values[c.key] != null).length,
+        0,
+      ) ?? 0;
+    if (!initPreviewMatrix?.rows?.length && !confirm(`${fiscalYear}년도 귀속연도를 일괄 초기화하시겠습니까?`)) return;
+    if (initPreviewMatrix?.rows?.length && !confirm(`미리보기대로 ${cellCount}건 할당을 생성하시겠습니까?`)) return;
     setInitializing(true);
     setInitResult("");
     const res = await fetch("/api/admin/fiscal-year/init", {
@@ -74,7 +87,7 @@ export default function FiscalYearManager({
     setInitializing(false);
     if (!res.ok) { setInitResult("❌ " + (data.error ?? "실패")); return; }
     setInitResult(`✅ 완료: ${data.summary.created}건 생성, ${data.summary.skipped}건 이미 존재 (총 ${data.total}명)`);
-    setInitPreview(null);
+    setInitPreviewMatrix(null);
     router.refresh();
   }
 
@@ -220,33 +233,65 @@ export default function FiscalYearManager({
           </button>
         </div>
       </div>
-      {/* 미리보기: 변경될 데이터 빨간색 표시 */}
-      {initPreview && initPreview.length > 0 && (
+      {/* 미리보기: 행=사원, 열=AllocationSourceConfig 등 메타 부여 소스 */}
+      {initPreviewMatrix && initPreviewMatrix.rows.length > 0 && (
         <div className="rounded-xl border-2 border-red-200 bg-red-50/50 p-4">
-          <p className="text-sm font-semibold text-red-800 mb-2">아래 내용으로 저장 시 추가될 할당 (빨간색 표시)</p>
-          <div className="max-h-64 overflow-y-auto">
-            <table className="w-full text-sm border border-red-200 bg-white/70 rounded-lg overflow-hidden">
-              <thead className="bg-red-100">
+          <p className="text-sm font-semibold text-red-800 mb-2">
+            저장 시 추가될 부여 일수 — 행: 사원, 열: 부여 소스(시스템 메타 순서)
+          </p>
+          <p className="text-xs text-red-700/90 mb-2">
+            월별 적립(입사 1년 미만)은 귀속연도 초기화에 포함되지 않으며, 스케줄러만 부여합니다. 유효기간은 부여월 1일~해당 귀속연도 말일(4/30)입니다.
+          </p>
+          <div className="max-h-96 overflow-auto rounded-lg border border-red-200">
+            <table className="w-max min-w-full text-sm border-collapse bg-white/80">
+              <thead className="bg-red-100 sticky top-0 z-10">
                 <tr>
-                  <th className="text-left px-3 py-2 text-xs font-semibold text-red-800 whitespace-nowrap">사원</th>
-                  <th className="text-left px-3 py-2 text-xs font-semibold text-red-800">할당</th>
-                  <th className="text-right px-3 py-2 text-xs font-semibold text-red-800 whitespace-nowrap">일수</th>
+                  <th className="text-left px-3 py-2 text-xs font-semibold text-red-800 whitespace-nowrap border-b border-red-200 sticky left-0 bg-red-100">
+                    사원
+                  </th>
+                  {initPreviewMatrix.columns.map((c) => (
+                    <th
+                      key={c.key}
+                      className="text-right px-2 py-2 text-[11px] font-semibold text-red-800 whitespace-nowrap border-b border-red-200 max-w-[7rem]"
+                      title={c.label}
+                    >
+                      <span className="line-clamp-2">{c.label}</span>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-red-100">
-                {initPreview.flatMap((p) =>
-                  p.items.map((it, j) => (
-                    <tr key={`${p.name}-${it.label}-${j}`}>
-                      <td className="px-3 py-2 text-red-900 font-medium whitespace-nowrap">{p.name}</td>
-                      <td className="px-3 py-2 text-red-700">{it.label}</td>
-                      <td className="px-3 py-2 text-red-900 text-right font-semibold tabular-nums">{it.totalDays}일</td>
-                    </tr>
-                  )),
-                )}
+                {initPreviewMatrix.rows.map((r) => (
+                  <tr key={r.employeeId}>
+                    <td className="px-3 py-2 text-red-900 font-medium whitespace-nowrap sticky left-0 bg-white border-r border-red-100">
+                      {r.name}
+                    </td>
+                    {initPreviewMatrix.columns.map((c) => {
+                      const v = r.values[c.key];
+                      return (
+                        <td
+                          key={c.key}
+                          className={`px-2 py-2 text-right tabular-nums text-xs ${
+                            v != null ? "text-red-900 font-semibold bg-red-50/80" : "text-gray-300"
+                          }`}
+                        >
+                          {v != null ? `${formatLeaveDayDisplay(Number(v))}일` : "—"}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-red-600 mt-2">총 {initPreview.reduce((s, p) => s + p.items.length, 0)}건 생성 예정 · 저장(적용) 버튼을 눌러 반영하세요.</p>
+          <p className="text-xs text-red-600 mt-2">
+            총{" "}
+            {initPreviewMatrix.rows.reduce(
+              (s, row) => s + initPreviewMatrix.columns.filter((c) => row.values[c.key] != null).length,
+              0,
+            )}
+            건 생성 예정 · 저장(적용)으로 반영
+          </p>
         </div>
       )}
       {initResult && (
@@ -268,15 +313,17 @@ export default function FiscalYearManager({
         const activeAllocs = emp.leaveAllocations.filter((a) => a.isActive !== false);
         const total = activeAllocs.reduce((s,a)=>s+a.totalDays,0);
         const used  = activeAllocs.reduce((s,a)=>s+a.usedDays,0);
-        const monthlyAccrualRows = emp.leaveAllocations.filter(
-          (a) => a.sourceCode === "BASE_ANNUAL" && (a.note ?? "").includes("MONTHLY_ACCRUAL:"),
-        );
+        const isMonthlyAccrualRow = (a: Alloc) => {
+          if (a.sourceCode.startsWith("MONTHLY_ACCRUAL_")) return true;
+          const n = a.note ?? "";
+          if (a.sourceCode !== "BASE_ANNUAL") return false;
+          return n.includes("MONTHLY_ACCRUAL_POOL") || n.includes("MONTHLY_ACCRUAL:");
+        };
+        const monthlyAccrualRows = emp.leaveAllocations.filter(isMonthlyAccrualRow);
         const displayAllocs =
           monthlyAccrualRows.length >= 2
             ? [
-                ...emp.leaveAllocations.filter(
-                  (a) => !(a.sourceCode === "BASE_ANNUAL" && (a.note ?? "").includes("MONTHLY_ACCRUAL:")),
-                ),
+                ...emp.leaveAllocations.filter((a) => !isMonthlyAccrualRow(a)),
                 {
                   ...monthlyAccrualRows[0],
                   id: `monthly-agg-${emp.id}`,

@@ -24,6 +24,7 @@ export async function GET(req: Request) {
           OR: [
             { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
             { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL:" } },
+            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL_POOL" } },
           ],
         }
       : type === "tenure"
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
           OR: [
             { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
             { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL:" } },
+            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL_POOL" } },
             { sourceCode: { in: TENURE_CODES } },
           ],
         }),
@@ -77,10 +79,12 @@ export async function GET(req: Request) {
   const rows = allocations.map((a) => {
     const legacyMonthly = a.sourceCode.startsWith("MONTHLY_ACCRUAL_");
     const monthlyFromNote = a.note?.match(/MONTHLY_ACCRUAL:(\d{4}-\d{2})/)?.[1] ?? null;
-    const isMonthly = legacyMonthly || !!monthlyFromNote;
+    const poolMonths = a.note?.match(/ACCURED_MONTHS:([^·\s]+)/)?.[1] ?? null;
+    const isMonthly =
+      legacyMonthly || !!monthlyFromNote || !!(a.note && a.note.includes("MONTHLY_ACCRUAL_POOL"));
     const month = legacyMonthly
       ? a.sourceCode.replace("MONTHLY_ACCRUAL_", "").replace("_", "-")
-      : monthlyFromNote;
+      : monthlyFromNote ?? (poolMonths ? poolMonths.replace(/,/g, "·") : null);
 
     const typeLabel = isMonthly
       ? `월별적립 (${month})`

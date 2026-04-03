@@ -7,6 +7,12 @@ import LeaveApprovalsTab from "@/app/(main)/admin/leave-management/LeaveApproval
 import { getFiscalYear } from "@/lib/workdays";
 import { serializeDates } from "@/lib/serialize";
 import { prorateLeaveDaysToFiscalYear } from "@/lib/fiscalLeaveStats";
+import {
+  aggregateAllocationsByOverviewKey,
+  buildOverviewColumns,
+  formatLeaveDayDisplay,
+  formatOverviewCell,
+} from "@/lib/leaveOverviewTable";
 
 export const metadata = { title: "휴가 부여·현황 | GBIT Portal" };
 
@@ -41,7 +47,7 @@ export default async function LeaveManagementPage({
   const allocationSourceConfigs = await prisma.allocationSourceConfig.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-    select: { sourceCode: true, label: true },
+    select: { sourceCode: true, label: true, sortOrder: true },
   });
 
   /** 승인된 사유형 휴가 일수(귀속 구간 비율 배분) — 할당 used와 별도 */
@@ -66,6 +72,24 @@ export default async function LeaveManagementPage({
       reasonDaysByEmployee.set(empId, (reasonDaysByEmployee.get(empId) ?? 0) + d);
     }
   }
+
+  const overviewPerEmployeeMaps =
+    tab === "overview"
+      ? employees.map((emp) => {
+          const allocs = ((emp as any).leaveAllocations ?? []).filter((a: any) => a.isActive !== false);
+          return aggregateAllocationsByOverviewKey(
+            allocs.map((a: any) => ({
+              sourceCode: a.sourceCode,
+              totalDays: Number(a.totalDays),
+              usedDays: Number(a.usedDays),
+              note: a.note,
+              isActive: a.isActive,
+            })),
+          );
+        })
+      : [];
+  const overviewColumns =
+    tab === "overview" ? buildOverviewColumns(allocationSourceConfigs, overviewPerEmployeeMaps) : [];
 
   const TABS = [
     { id: "overview", label: "휴가 현황" },
@@ -104,12 +128,12 @@ export default async function LeaveManagementPage({
       {/* ── 휴가 현황 ─────────────────────────────────── */}
       {tab === "overview" && (
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 space-y-3">
             <div className="text-sm text-gray-500 space-y-1 max-w-3xl">
               <p>귀속연도별 직원별 현황입니다.</p>
               <ul className="list-disc list-inside text-xs text-gray-500 space-y-0.5">
                 <li>
-                  <strong className="text-gray-600">자산형</strong>: 해당 연도 <strong>휴가 할당</strong>의 부여·사용·잔여 합계입니다. 사유형 사용은 여기에 포함되지 않습니다.
+                  <strong className="text-gray-600">자산형</strong>: 해당 연도 <strong>휴가 할당</strong>의 부여·사용·잔여입니다. 소스별 열 순서·이름은 <strong>메타정보(AllocationSourceConfig)</strong>를 따르며, 월별 적립 행은 &quot;기본연차(월별적립)&quot; 열에 합산됩니다.
                 </li>
                 <li>
                   <strong className="text-gray-600">사유형 사용</strong>: 승인된 사유형(부여 없이 신청) 일수이며, 귀속 구간(5/1~익년 4/30)과 겹치는 날짜 비율로 배분합니다.
@@ -119,7 +143,7 @@ export default async function LeaveManagementPage({
                 </li>
               </ul>
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {[fy - 1, fy, fy + 1].map((y) => (
                 <a key={y} href={`?tab=overview&fy=${y}`}
                   className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
@@ -139,33 +163,55 @@ export default async function LeaveManagementPage({
                   <th className="whitespace-nowrap" title="해당 귀속연도 할당 합계">자산 부여</th>
                   <th className="whitespace-nowrap" title="할당에서 차감된 일수">자산 사용</th>
                   <th className="whitespace-nowrap" title="자산 부여 − 자산 사용">자산 잔여</th>
+                  {overviewColumns.map((col) => (
+                    <th
+                      key={col.key}
+                      className="whitespace-nowrap text-xs max-w-[6.5rem] align-bottom"
+                      title={col.label}
+                    >
+                      <span className="line-clamp-2">{col.label}</span>
+                    </th>
+                  ))}
                   <th className="whitespace-nowrap" title="사유형 승인 일수(귀속 구간 비율)">사유형 사용</th>
                 </tr>
               </thead>
               <tbody>
-                {employees.map((emp) => {
+                {employees.map((emp, idx) => {
                   const allocs = ((emp as any).leaveAllocations ?? []).filter((a: any) => a.isActive !== false);
                   const total  = allocs.reduce((s: number, a: any) => s + a.totalDays, 0);
                   const used   = allocs.reduce((s: number, a: any) => s + a.usedDays,  0);
                   const remain = total - used;
                   const reasonUsed = reasonDaysByEmployee.get(emp.id) ?? 0;
+                  const byKey = overviewPerEmployeeMaps[idx];
                   return (
                     <tr key={emp.id}>
                       <td className="font-medium whitespace-nowrap">{emp.name}</td>
                       <td className="whitespace-nowrap">{emp.team?.name ?? "-"}</td>
-                      <td className="font-semibold text-slate-700">{total.toFixed(1)}</td>
-                      <td className="text-slate-600">{used.toFixed(1)}</td>
+                      <td className="font-semibold text-slate-700">{formatLeaveDayDisplay(total)}</td>
+                      <td className="text-slate-600">{formatLeaveDayDisplay(used)}</td>
                       <td>
                         <span
                           className={`font-bold ${
                             remain > 0 ? "text-slate-800" : remain < 0 ? "text-rose-600" : "text-gray-400"
                           }`}
                         >
-                          {remain.toFixed(1)}
+                          {formatLeaveDayDisplay(remain)}
                         </span>
                       </td>
+                      {overviewColumns.map((col) => {
+                        const cell = formatOverviewCell(byKey?.get(col.key));
+                        return (
+                          <td
+                            key={col.key}
+                            className="tabular-nums text-xs text-slate-600"
+                            title={cell.title || undefined}
+                          >
+                            {cell.line}
+                          </td>
+                        );
+                      })}
                       <td className="text-violet-700 tabular-nums">
-                        {reasonUsed > 0 ? reasonUsed.toFixed(1) : "—"}
+                        {formatLeaveDayDisplay(reasonUsed)}
                       </td>
                     </tr>
                   );
@@ -182,11 +228,11 @@ export default async function LeaveManagementPage({
       {/* ── 휴가 할당 (일괄 초기화 + 직원별 할당 추가/수정/이월/비활성화) ── */}
       {tab === "allocations" && (
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-gray-500">
+          <div className="mb-4 space-y-3">
+            <p className="text-sm text-gray-500 max-w-3xl">
               귀속연도 일괄 초기화, 직원별 할당 추가·수정·이월·비활성화를 한 화면에서 처리합니다.
             </p>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {[fy - 1, fy, fy + 1].map((y) => (
                 <a key={y} href={`?tab=allocations&fy=${y}`}
                   className={`px-3 py-1.5 rounded-full text-sm transition-colors ${
