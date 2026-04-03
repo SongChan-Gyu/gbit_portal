@@ -6,6 +6,7 @@ import SchedulerPanel from "@/app/(main)/admin/scheduler/SchedulerPanel";
 import LeaveApprovalsTab from "@/app/(main)/admin/leave-management/LeaveApprovalsTab";
 import { getFiscalYear } from "@/lib/workdays";
 import { serializeDates } from "@/lib/serialize";
+import { prorateLeaveDaysToFiscalYear } from "@/lib/fiscalLeaveStats";
 
 export const metadata = { title: "휴가 부여·현황 | GBIT Portal" };
 
@@ -42,6 +43,29 @@ export default async function LeaveManagementPage({
     orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
     select: { sourceCode: true, label: true },
   });
+
+  /** 승인된 사유형 휴가 일수(귀속 구간 비율 배분) — 할당 used와 별도 */
+  const reasonDaysByEmployee = new Map<string, number>();
+  if (tab === "overview") {
+    const reasonItems = await prisma.leaveRequestItem.findMany({
+      where: {
+        leaveRequest: { status: "APPROVED" },
+        leaveType: { usageCategory: "REASON" },
+      },
+      select: {
+        days: true,
+        startDate: true,
+        endDate: true,
+        leaveRequest: { select: { employeeId: true } },
+      },
+    });
+    for (const it of reasonItems) {
+      const empId = it.leaveRequest.employeeId;
+      const d = prorateLeaveDaysToFiscalYear(it.startDate, it.endDate, it.days, fy);
+      if (d <= 0) continue;
+      reasonDaysByEmployee.set(empId, (reasonDaysByEmployee.get(empId) ?? 0) + d);
+    }
+  }
 
   const TABS = [
     { id: "overview", label: "휴가 현황" },
@@ -81,7 +105,20 @@ export default async function LeaveManagementPage({
       {tab === "overview" && (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <p className="text-sm text-gray-500">귀속연도별 전체 직원 휴가 부여·사용·잔여 현황입니다.</p>
+            <div className="text-sm text-gray-500 space-y-1 max-w-3xl">
+              <p>귀속연도별 직원별 현황입니다.</p>
+              <ul className="list-disc list-inside text-xs text-gray-500 space-y-0.5">
+                <li>
+                  <strong className="text-gray-600">자산형</strong>: 해당 연도 <strong>휴가 할당</strong>의 부여·사용·잔여 합계입니다. 사유형 사용은 여기에 포함되지 않습니다.
+                </li>
+                <li>
+                  <strong className="text-gray-600">사유형 사용</strong>: 승인된 사유형(부여 없이 신청) 일수이며, 귀속 구간(5/1~익년 4/30)과 겹치는 날짜 비율로 배분합니다.
+                </li>
+                <li className="text-gray-400">
+                  사유형은 할당 <code className="text-[11px]">usedDays</code>에 반영되지 않으므로, 자산 잔여가 사유 사용으로 마이너스 되는 구조는 아닙니다. (관리자가 사용&gt;부여로 넣은 경우 등에는 자산 잔여가 음수로 보일 수 있습니다.)
+                </li>
+              </ul>
+            </div>
             <div className="flex gap-1.5">
               {[fy - 1, fy, fy + 1].map((y) => (
                 <a key={y} href={`?tab=overview&fy=${y}`}
@@ -99,9 +136,10 @@ export default async function LeaveManagementPage({
                 <tr>
                   <th className="whitespace-nowrap">직원</th>
                   <th className="whitespace-nowrap">팀</th>
-                  <th className="whitespace-nowrap">부여</th>
-                  <th className="whitespace-nowrap">사용</th>
-                  <th className="whitespace-nowrap">잔여</th>
+                  <th className="whitespace-nowrap" title="해당 귀속연도 할당 합계">자산 부여</th>
+                  <th className="whitespace-nowrap" title="할당에서 차감된 일수">자산 사용</th>
+                  <th className="whitespace-nowrap" title="자산 부여 − 자산 사용">자산 잔여</th>
+                  <th className="whitespace-nowrap" title="사유형 승인 일수(귀속 구간 비율)">사유형 사용</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,16 +147,25 @@ export default async function LeaveManagementPage({
                   const allocs = ((emp as any).leaveAllocations ?? []).filter((a: any) => a.isActive !== false);
                   const total  = allocs.reduce((s: number, a: any) => s + a.totalDays, 0);
                   const used   = allocs.reduce((s: number, a: any) => s + a.usedDays,  0);
+                  const remain = total - used;
+                  const reasonUsed = reasonDaysByEmployee.get(emp.id) ?? 0;
                   return (
                     <tr key={emp.id}>
                       <td className="font-medium whitespace-nowrap">{emp.name}</td>
                       <td className="whitespace-nowrap">{emp.team?.name ?? "-"}</td>
-                      <td className="font-semibold text-slate-700">{total}</td>
-                      <td className="text-slate-600">{used}</td>
+                      <td className="font-semibold text-slate-700">{total.toFixed(1)}</td>
+                      <td className="text-slate-600">{used.toFixed(1)}</td>
                       <td>
-                        <span className={`font-bold ${(total-used) > 0 ? "text-slate-800" : "text-gray-400"}`}>
-                          {(total-used).toFixed(1)}
+                        <span
+                          className={`font-bold ${
+                            remain > 0 ? "text-slate-800" : remain < 0 ? "text-rose-600" : "text-gray-400"
+                          }`}
+                        >
+                          {remain.toFixed(1)}
                         </span>
+                      </td>
+                      <td className="text-violet-700 tabular-nums">
+                        {reasonUsed > 0 ? reasonUsed.toFixed(1) : "—"}
                       </td>
                     </tr>
                   );
