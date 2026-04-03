@@ -74,11 +74,11 @@ export function getTenureMilestones(
     .filter(Boolean) as { years: number; label: string; days: number; code: string; grantDate: Date }[];
 }
 
-/** 귀속연도 시작/종료일 */
+/** 귀속연도 시작/종료일 (KST 기준) */
 export function fiscalPeriod(fy: number): { start: Date; end: Date } {
   return {
-    start: new Date(`${fy}-05-01`),
-    end:   new Date(`${fy+1}-04-30`),
+    start: new Date(fy, 4, 1, 0, 0, 0, 0),        // KST 5월 1일 자정
+    end:   new Date(fy + 1, 3, 30, 23, 59, 59, 999), // KST 4월 30일 하루 끝
   };
 }
 

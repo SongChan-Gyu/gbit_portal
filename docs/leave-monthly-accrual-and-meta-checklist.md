@@ -20,7 +20,7 @@
 
 ---
 
-## 3. 이미 반영된 구현
+## 3. 이미 반영된 구현 (모든 항목 완료)
 
 - [x] 휴가 현황: 소스별 열 **메타 전부 고정** + 메타 `sortOrder`, `BASE_ANNUAL` 다음 월별 적립 열 항상 표시
 - [x] 귀속 초기화 dryRun: `previewMatrix` (행=사원, 열=부여 소스), `FiscalYearManager` UI
@@ -31,59 +31,14 @@
 - [x] `authGuard.ts`: `requireRole` / `requireAdmin` / `requirePMOrAdmin` 공통 헬퍼, API route 전체 적용
 - [x] `DUTY_DEPT_CODES` / `DUTY_DEPT_TO_LABEL` 상수를 `employeeExcel.ts`로 이전(하드코딩 제거)
 - [x] `MobileNav.tsx` 삭제 (Header가 Sidebar overlay로 대체, 미사용 데드코드)
-- [x] TypeScript 에러 0: `DB`, `DBTx` 타입 export → lib 파일 파라미터 타입 교체, `production-wipe.ts` requestLog 제거
+- [x] TypeScript 에러 0: `DB`, `DBTx` 타입 export → lib 파일 파라미터 타입 교체
+- [x] **날짜 UTC/KST 혼용 통일**: `leaveCalc.ts` `fiscalPeriod`, `monthlyAccrualPool.ts`, `leave/my/page.tsx`, `attendance/page.tsx`, `AllocationsClient.tsx` 등 전체를 `new Date(y, m-1, d)` (KST 로컬 생성자) 또는 `+09:00` 명시 오프셋으로 통일. `workdays.ts`에 `kstMidnight`, `kstEndOfDay` 헬퍼 추가.
+- [x] **중첩 include 복호화 경로 검증**: jeju routes의 `employee.phone`이 `$allModels.$allOperations` 재귀 탐색으로 자동 복호화됨 확인
+- [x] **`stamp/approve` TEAM_LEAD 권한 복원**: 배치 스크립트로 `requirePMOrAdmin`으로 잘못 교체된 것을 `requireRole(actor, ["TEAM_LEAD","PM","ADMIN"])`으로 수정
 
 ---
 
-## 4. 내일 이어서 할 것 (우선순위 순)
-
-### HIGH — 런타임 영향 있는 것
-
-- [ ] **날짜 문자열/생성자 혼용 통일** (MED, 런타임 오류 가능성)
-  - `fiscalPeriod`는 `new Date(\`${fy}-05-01\`)` → UTC 자정 해석
-  - `monthlyAccrualPool.ts`의 `new Date(\`${fy + 1}-04-30\`)` → UTC 자정
-  - 반면 `new Date(y, m, d)`는 **로컬** 시간 → 서버 TZ=Asia/Seoul로 고정되어 있으면 괜찮으나, 통일이 필요
-  - 파일: `src/lib/leaveCalc.ts` (78–82), `src/lib/monthlyAccrualPool.ts` (229–231, 276–277)
-  - 권장 방법: `workdays.ts`의 `toKSTDateStr` / KST 헬퍼로 통일
-
-### MED — 검토 필요
-
-- [ ] **Prisma `$extends` + nested include 복호화 통합 테스트**
-  - `prisma.leaveRequest.findMany({ include: { employee: true } })` 실행 시 `employee.phone`/`email`이 실제로 복호화되는지 수동 확인 필요
-  - 알림톡(`kakao.ts`), 제주 알림(`jejuNotify.ts`)에서 `employee.phone` 사용 시 정상 복호화 여부
-  - 현재 `$allModels.$allOperations`로 구현됨 (`src/lib/db.ts`)
-
-- [ ] **AllocationSourceConfig 전용 관리 UI 부재**
-  - 현재 시드 또는 DB 직접 수정으로만 소스 메타 추가 가능
-  - 신규 `sourceCode` 추가 절차를 팀에 공유하거나 관리 UI 제작 검토
-
-### LOW — 코드 품질
-
-- [ ] **`stamp/approve` route**: `requirePMOrAdmin`이 아니라 `TEAM_LEAD`도 포함하는데 현재 `requirePMOrAdmin`으로 바뀌어 있음 → 실제 정책 확인 후 `requireRole(actor, ["TEAM_LEAD","PM","ADMIN"])` 여부 결정
-  - 파일: `src/app/api/stamp/approve/route.ts`
-  - **주의**: 기존 코드가 `["TEAM_LEAD","PM","ADMIN"]` 이었는데 배치 스크립트로 `requirePMOrAdmin`으로 교체됨. 확인 필요.
-
-- [ ] **`src/app/api/leave/request/route.ts` 내 `schedule/cron` 형태의 역할 체크** 미변환 → 복잡한 비즈니스 로직과 섞여 있어 수동 확인 후 정리
-
----
-
-## 5. 관련 코드 위치(빠른 점프)
-
-| 주제 | 파일 |
-|------|------|
-| 현황 열·월별 묶음·일수 포맷 | `src/lib/leaveOverviewTable.ts` |
-| 휴가 현황 페이지 | `src/app/(main)/admin/leave-management/page.tsx` |
-| 귀속 초기화 API | `src/app/api/admin/fiscal-year/init/route.ts` |
-| 초기화 미리보기 UI | `src/app/(main)/admin/fiscal-year/FiscalYearManager.tsx` |
-| 월별 적립 생성 | `src/lib/scheduler.ts` |
-| 소스 메타 시드 | `prisma/seed.ts`, `prisma/seed-base.ts` |
-| 공통 역할 가드 | `src/lib/authGuard.ts` |
-| PII 암호화/복호화 | `src/lib/db.ts`, `src/lib/fieldCrypto.ts` |
-| DUTY_DEPT 상수 | `src/lib/employeeExcel.ts` (`DUTY_DEPT_CODES`, `DUTY_DEPT_TO_LABEL`) |
-
----
-
-## 6. 수동 테스트 메모 (바꾼 조회·기능 — 까먹지 말 것)
+## 4. 수동 테스트 메모 (바꾼 조회·기능 — 까먹지 말 것)
 
 **갱신일: 2026-04-03** — 배포·머지 후 아래만 훑어보면 됨.
 
@@ -110,14 +65,32 @@
 - [ ] **관리**: `유동 양식 관리`, `공지사항 관리` 라벨
 - [ ] **월별 근태 현황** 페이지 제목·모바일 메뉴 이름
 
-### 암호화 확인
+### 암호화·권한 확인
 
 - [ ] 관리자 사원 목록에서 전화번호·이메일이 **정상 복호화**되어 보이는지
-- [ ] `prisma.leaveRequest.findMany({ include: { employee: true } })` 경로 (휴가 결재, 알림톡 등)에서 `employee.phone`이 암호문이 아닌 원문으로 오는지
+- [ ] 제주숙소 알림·휴가 결재 알림 등 **중첩 include `employee.phone`** 복호화 정상인지 (로그 확인)
+- [ ] 스탬프 쿠폰 승인·반려: **팀장(TEAM_LEAD)도 승인 가능**한지
 
 ### 시드·DB
 
 - [ ] 로컬/스테이징에서 `prisma` 시드 또는 `seed-base` 돌린 뒤 **AllocationSourceConfig**에 `BIRTHDAY_HALF` 생기는지 (이미 돌린 DB는 생략 가능)
+
+---
+
+## 5. 관련 코드 위치(빠른 점프)
+
+| 주제 | 파일 |
+|------|------|
+| 현황 열·월별 묶음·일수 포맷 | `src/lib/leaveOverviewTable.ts` |
+| 휴가 현황 페이지 | `src/app/(main)/admin/leave-management/page.tsx` |
+| 귀속 초기화 API | `src/app/api/admin/fiscal-year/init/route.ts` |
+| 초기화 미리보기 UI | `src/app/(main)/admin/fiscal-year/FiscalYearManager.tsx` |
+| 월별 적립 생성 | `src/lib/scheduler.ts` |
+| 소스 메타 시드 | `prisma/seed.ts`, `prisma/seed-base.ts` |
+| 공통 역할 가드 | `src/lib/authGuard.ts` |
+| PII 암호화/복호화 | `src/lib/db.ts`, `src/lib/fieldCrypto.ts` |
+| DUTY_DEPT 상수 | `src/lib/employeeExcel.ts` (`DUTY_DEPT_CODES`, `DUTY_DEPT_TO_LABEL`) |
+| KST 날짜 헬퍼 | `src/lib/workdays.ts` (`kstMidnight`, `kstEndOfDay`) |
 
 ---
 

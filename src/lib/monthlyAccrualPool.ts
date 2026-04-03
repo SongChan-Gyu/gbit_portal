@@ -6,7 +6,7 @@
 import prisma from "@/lib/db";
 import type { DB, DBTx } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import { getFiscalYear } from "@/lib/workdays";
+import { getFiscalYear, kstMidnight, kstEndOfDay } from "@/lib/workdays";
 import { fiscalPeriod } from "@/lib/leaveCalc";
 
 export const MONTHLY_ACCRUAL_POOL_MARKER = "MONTHLY_ACCRUAL_POOL";
@@ -226,8 +226,8 @@ export async function syncMonthlyAccrualPoolForFiscalInit(
   const usedSum = rows.reduce((s, r) => s + Number(r.usedDays), 0);
   const firstYm = expected[0]!;
   const [fyY, fyM] = firstYm.split("-").map(Number);
-  const validFrom = new Date(fyY, fyM - 1, 1);
-  const validUntil = new Date(`${fy + 1}-04-30`);
+  const validFrom = kstMidnight(fyY, fyM, 1);
+  const validUntil = kstEndOfDay(fy + 1, 4, 30);
 
   const before = collectMonthsFromRows(rows);
   const expectedSet = new Set(expected);
@@ -270,10 +270,10 @@ export async function appendMonthlyAccrualMonth(
   const [tYear, tMonth] = targetYm.split("-").map(Number);
   if (!eligibleForMonth(hireDate, tYear, tMonth)) return "skipped";
 
-  const monthStart = new Date(tYear, tMonth - 1, 1);
+  const monthStart = kstMidnight(tYear, tMonth, 1);
   const fy = getFiscalYear(monthStart);
   const { end: fyEnd } = fiscalPeriod(fy);
-  const validUntil = new Date(`${fy + 1}-04-30`);
+  const validUntil = kstEndOfDay(fy + 1, 4, 30);
 
   const rows = await findMonthlyAccrualRows(db, employeeId, fy);
   const usedSum = rows.reduce((s, r) => s + Number(r.usedDays), 0);
@@ -305,7 +305,7 @@ export async function appendMonthlyAccrualMonth(
   const sorted = [...months].sort();
   const first = sorted[0]!;
   const [fyY, fyM] = first.split("-").map(Number);
-  const validFrom = new Date(fyY, fyM - 1, 1);
+  const validFrom = kstMidnight(fyY, fyM, 1);
 
   if (dryRun) return "granted";
 

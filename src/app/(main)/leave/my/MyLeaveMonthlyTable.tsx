@@ -31,8 +31,8 @@ interface Props {
 const MONTH_START = [5,6,7,8,9,10,11,12,1,2,3,4]; // 귀속연도 월 순서
 
 export default function MyLeaveMonthlyTable({ monthlyUsage, monthLabels, requests, fy }: Props) {
-  const fyStart = new Date(`${fy}-05-01`);
-  const fyEnd   = new Date(`${fy+1}-04-30`);
+  const fyStart = new Date(fy, 4, 1, 0, 0, 0, 0);
+  const fyEnd   = new Date(fy + 1, 3, 30, 23, 59, 59, 999);
   const today   = new Date();
 
   return (

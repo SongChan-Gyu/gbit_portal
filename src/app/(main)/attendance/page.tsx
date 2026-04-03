@@ -27,8 +27,8 @@ export default async function AttendancePage({
 
   // 귀속연도 계산 (5월 기준)
   const fy = month >= 5 ? year : year - 1;
-  const fyStart = new Date(`${fy}-05-01`);
-  const fyEnd   = new Date(`${fy+1}-04-30`);
+  const fyStart = new Date(fy, 4, 1, 0, 0, 0, 0);
+  const fyEnd   = new Date(fy + 1, 3, 30, 23, 59, 59, 999);
 
   // 직원 목록
   const empWhere = isAdmin ? { status:"ACTIVE" } : { id:user.employeeId };

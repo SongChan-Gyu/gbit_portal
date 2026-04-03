@@ -118,8 +118,8 @@ export default function AllocationsClient({ employees, initialAllocations, selec
 
     // 2. 다음 귀속연도 CARRYOVER 할당 생성
     const fy = carryoverForm.targetFy;
-    const fyStart = new Date(`${fy}-05-01`).toISOString();
-    const fyEnd   = new Date(`${fy + 1}-04-30`).toISOString();
+    const fyStart = new Date(`${fy}-05-01T00:00:00+09:00`).toISOString();
+    const fyEnd   = new Date(`${fy + 1}-04-30T23:59:59+09:00`).toISOString();
 
     const res = await fetch("/api/admin/allocations", {
       method: "POST",

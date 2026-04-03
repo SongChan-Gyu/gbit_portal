@@ -23,8 +23,8 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const fy       = fyRaw ? parseInt(fyRaw) : getFiscalYear();
   const activeTab = tab ?? "list"; // list | monthly
 
-  const fyStart = new Date(`${fy}-05-01`);
-  const fyEnd   = new Date(`${fy+1}-04-30`);
+  const fyStart = new Date(fy, 4, 1, 0, 0, 0, 0);
+  const fyEnd   = new Date(fy + 1, 3, 30, 23, 59, 59, 999);
   const fyRangeLabel = `${formatYMD(fyStart)} ~ ${formatYMD(fyEnd)}`;
   const dayStart = new Date();
   dayStart.setHours(0, 0, 0, 0);

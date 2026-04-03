@@ -64,3 +64,24 @@ export function getFiscalYearFromStr(dateStr: string): number {
   const yyyy = parseInt(dateStr.slice(0, 4));
   return mm >= 5 ? yyyy : yyyy - 1;
 }
+
+/**
+ * KST 기준 특정 날짜의 자정(00:00:00) Date 객체 생성.
+ * TZ=Asia/Seoul 환경에서 new Date(y, m-1, d)와 동일하나,
+ * "YYYY-MM-DD" 문자열 파싱(UTC 자정)과 혼용되는 버그를 방지한다.
+ *
+ * @param year  연도 (예: 2025)
+ * @param month 월 1-indexed (예: 5 = 5월)
+ * @param day   일 (예: 1)
+ */
+export function kstMidnight(year: number, month: number, day: number): Date {
+  return new Date(year, month - 1, day, 0, 0, 0, 0);
+}
+
+/**
+ * KST 기준 특정 날짜의 하루 끝(23:59:59.999) Date 객체 생성.
+ * validUntil 용도로 사용하면 당일 KST 자정까지 유효하다.
+ */
+export function kstEndOfDay(year: number, month: number, day: number): Date {
+  return new Date(year, month - 1, day, 23, 59, 59, 999);
+}
