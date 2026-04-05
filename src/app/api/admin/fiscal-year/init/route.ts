@@ -8,6 +8,7 @@ import { addCalendarMonthsToYmd, addDaysYMD } from "@/lib/dateUtils";
 import { birthdayInstancesInFiscalYear } from "@/lib/fiscalYearInitGrants";
 import { DUTY_DEPT_CODES, DUTY_DEPT_TO_LABEL } from "@/lib/employeeExcel";
 import {
+  asOfKstTodayForMonthlyAccrual,
   previewMonthlyPoolSyncNeeded,
   regularBaseAnnualExists,
   syncMonthlyAccrualPoolForFiscalInit,
@@ -342,7 +343,7 @@ export async function POST(req: Request) {
         employeeId: emp.id,
         hireDate: hire,
         fiscalYear: fy,
-        asOf: new Date(),
+        asOf: asOfKstTodayForMonthlyAccrual(),
         dryRun: false,
       });
       created += monthlySync.created + monthlySync.updated;

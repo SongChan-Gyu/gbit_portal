@@ -10,7 +10,12 @@
 
 import prisma from "@/lib/db";
 import { writeAudit, writeSchedulerLog } from "@/lib/audit";
-import { getFiscalYear, kstMidnightFromYmd, tenureMilestoneValidUntil } from "@/lib/workdays";
+import {
+  getFiscalYear,
+  kstMidnightFromYmd,
+  tenureMilestoneValidUntil,
+  todayStr,
+} from "@/lib/workdays";
 import { addCalendarYearsToYmd, kstYmd } from "@/lib/dateUtils";
 import { findTenureMilestoneAllocation } from "@/lib/tenureAllocationDedupe";
 import {
@@ -75,12 +80,11 @@ export async function runMonthlyAccrual(
 ): Promise<AccrualResult> {
   const result: AccrualResult = { granted: [], skipped: [], errors: [], isDryRun: dryRun };
 
-  const now = new Date();
   let tYear: number, tMonth: number;
   if (targetMonth) {
     [tYear, tMonth] = targetMonth.split("-").map(Number);
   } else {
-    const ymd = kstYmd(now);
+    const ymd = todayStr();
     tYear = parseInt(ymd.slice(0, 4), 10);
     tMonth = parseInt(ymd.slice(5, 7), 10);
   }
@@ -571,12 +575,11 @@ export async function runBirthdayHalf(args: RunBirthdayHalfArgs = {}): Promise<B
 
 // 이번 달 월별 적립 예정자 (runMonthlyAccrual 기본 월과 동일: KST 당월)
 export async function getAccrualCandidates(targetMonth?: string) {
-  const now = new Date();
   let tYear: number, tMonth: number;
   if (targetMonth) {
     [tYear, tMonth] = targetMonth.split("-").map(Number);
   } else {
-    const ymd = kstYmd(now);
+    const ymd = todayStr();
     tYear = parseInt(ymd.slice(0, 4), 10);
     tMonth = parseInt(ymd.slice(5, 7), 10);
   }

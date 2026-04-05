@@ -6,7 +6,13 @@
 import prisma from "@/lib/db";
 import type { DB, DBTx } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import { getFiscalYear, kstMidnight, kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
+import {
+  getFiscalYear,
+  kstMidnight,
+  kstEndOfDay,
+  kstMidnightFromYmd,
+  todayStr,
+} from "@/lib/workdays";
 import { fiscalPeriod } from "@/lib/leaveCalc";
 import { kstYmd, ymMonthEndYmd, ymNext } from "@/lib/dateUtils";
 
@@ -69,6 +75,14 @@ export function monthlyAccrualCapDate(asOf: Date, fyEnd: Date): Date {
   const [ey, em, ed] = lastYmd.split("-").map(Number);
   const endOfMonth = kstEndOfDay(ey, em, ed);
   return endOfMonth.getTime() < fyEnd.getTime() ? endOfMonth : fyEnd;
+}
+
+/**
+ * 귀속 초기화·풀 동기화의 `asOf` — KST 달력 오늘(`todayStr`)과 동일한 날.
+ * `runMonthlyAccrual` 인자 없음일 때의 대상 월(당월)과 같은 기준으로 `monthlyAccrualCapDate`를 맞춘다.
+ */
+export function asOfKstTodayForMonthlyAccrual(): Date {
+  return kstMidnightFromYmd(todayStr());
 }
 
 export function listEligibleMonthlyMonths(hire: Date, fy: number, capDate: Date): string[] {

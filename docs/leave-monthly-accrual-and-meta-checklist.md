@@ -8,7 +8,7 @@
 
 - **표시(휴가 현황)**: `BASE_ANNUAL`이면서 노트에 `MONTHLY_ACCRUAL:`가 있거나, `sourceCode`가 `MONTHLY_ACCRUAL_*`인 행은 **한 열로 묶어** 합산한다. (`src/lib/leaveOverviewTable.ts`, `OVERVIEW_MONTHLY_BUNDLE_KEY`)
 - **유효기간(의도)**: N월에 부여되면 **N월 1일 ~ 해당 귀속연도 말(4/30)**까지 쓸 수 있는 구조. (코드는 `src/lib/scheduler.ts` 등에서 확인·유지)
-- **귀속연도 일괄 초기화(`fiscal-year/init`)**: 입사 1년 미만 월별 적립은 **스케줄러와 동일 규칙**으로 `syncMonthlyAccrualPoolForFiscalInit`가 한 번에 맞춘다(적립 상한 시점: **실행일 KST 기준 당월 말**까지, `monthlyAccrualCapDate`).
+- **귀속연도 일괄 초기화(`fiscal-year/init`)**: 입사 1년 미만 월별 적립은 **스케줄러와 동일 규칙**으로 `syncMonthlyAccrualPoolForFiscalInit`가 한 번에 맞춘다. `asOf`는 `asOfKstTodayForMonthlyAccrual()`(= KST 오늘, `todayStr`)로 스케줄러 당월과 동일 기준 → 적립 상한은 **당월 말**까지(`monthlyAccrualCapDate`).
 - **월별 적립 스케줄러(`runMonthlyAccrual`)**: 인자 없으면 **KST 당월** 1일분을 적립(예: 3월 실행 → `2026-03`). 관리자 UI 월 선택 기본값도 동일.
 - **"이월"**: 연 단일 이월 객체가 아니라, **월별로 쌓이는 할당 + 각자 유효기간**에 가깝다. 현황 표에서는 위 묶음 열로 합쳐 보여 준다.
 
