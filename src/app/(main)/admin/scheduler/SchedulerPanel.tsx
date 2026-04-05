@@ -126,17 +126,8 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
   const [tab, setTab] = useState<"accrual"|"tenure"|"birthday"|"logs"|"grants">("tenure");
 
   // ── 탭: 월별 적립
-  const [accrualMonth, setAccrualMonth] = useState(() => {
-    const tk = todayKstYmd();
-    const [y, m] = tk.split("-").map(Number);
-    let pm = m - 1;
-    let py = y;
-    if (pm < 1) {
-      pm = 12;
-      py -= 1;
-    }
-    return `${py}-${String(pm).padStart(2, "0")}`;
-  });
+  /** 백엔드 기본과 동일: KST 당월 (3월에 돌리면 3월분 적립) */
+  const [accrualMonth, setAccrualMonth] = useState(() => todayKstYmd().slice(0, 7));
   const [accrualRunning, setAccrualRunning] = useState(false);
   const [accrualResult, setAccrualResult]   = useState<JobResult|null>(null);
   const [accrualErr, setAccrualErr]         = useState("");

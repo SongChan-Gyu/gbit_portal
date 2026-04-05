@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import { runMonthlyAccrual, previewMonthlyAccrual } from "@/lib/scheduler";
+import { todayStr } from "@/lib/workdays";
 
 export async function POST(req: NextRequest) {
   const cronSecret  = req.headers.get("x-cron-secret");
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success:  true,
       isDryRun: result.isDryRun,
-      month:    month ?? "이전달",
+      month:    month ?? todayStr().slice(0, 7),
       granted:  result.granted.length,
       skipped:  result.skipped.length,
       errors:   result.errors.length,

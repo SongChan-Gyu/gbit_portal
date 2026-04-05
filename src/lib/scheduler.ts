@@ -2,7 +2,7 @@
  * 자동 스케줄러 비즈니스 로직
  *
  * 두 가지 작업:
- * 1. runMonthlyAccrual  — 매월 1일: 입사 1년 미만 직원에게 1일 연차 적립
+ * 1. runMonthlyAccrual  — 기본: KST **당월** 1일분 적립(인자 `YYYY-MM`로 특정 월 지정 가능). 입사 1년 미만·입사 첫 귀속연도 내 월만.
  * 2. runTenureCheck     — 매일: 1·5·10년 근속 기념일 도래 직원에게 근속휴가 부여(귀속연도 초기화와는 별도·단일 출처)
  *
  * dryRun=true 이면 DB 변경 없이 "부여 예정자"만 반환합니다.
@@ -80,9 +80,9 @@ export async function runMonthlyAccrual(
   if (targetMonth) {
     [tYear, tMonth] = targetMonth.split("-").map(Number);
   } else {
-    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    tYear  = prev.getFullYear();
-    tMonth = prev.getMonth() + 1;
+    const ymd = kstYmd(now);
+    tYear = parseInt(ymd.slice(0, 4), 10);
+    tMonth = parseInt(ymd.slice(5, 7), 10);
   }
   const monthStr   = `${tYear}-${String(tMonth).padStart(2, "0")}`;
   const monthEnd   = new Date(tYear, tMonth, 0);
@@ -569,15 +569,16 @@ export async function runBirthdayHalf(args: RunBirthdayHalfArgs = {}): Promise<B
   return result;
 }
 
-// 이번 달 월별 적립 예정자
+// 이번 달 월별 적립 예정자 (runMonthlyAccrual 기본 월과 동일: KST 당월)
 export async function getAccrualCandidates(targetMonth?: string) {
   const now = new Date();
   let tYear: number, tMonth: number;
   if (targetMonth) {
     [tYear, tMonth] = targetMonth.split("-").map(Number);
   } else {
-    tYear  = now.getFullYear();
-    tMonth = now.getMonth() + 1;
+    const ymd = kstYmd(now);
+    tYear = parseInt(ymd.slice(0, 4), 10);
+    tMonth = parseInt(ymd.slice(5, 7), 10);
   }
   const monthStr   = `${tYear}-${String(tMonth).padStart(2, "0")}`;
   const monthEnd   = new Date(tYear, tMonth, 0);

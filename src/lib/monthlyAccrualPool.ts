@@ -60,8 +60,8 @@ export function eligibleForMonth(hire: Date, tYear: number, tMonth: number): boo
 /**
  * 귀속연도 초기화·월별 풀 동기화 상한일.
  * - KST 달력 기준 asOf가 속한 달의 말일(귀속 말일과 겹치면 귀속 말일)까지 월 키를 포함한다.
- * - 월별 스케줄러 기본 실행(인자 없음)은 **지난 달**만 `appendMonthlyAccrualMonth` 하지만,
- *   초기화는 “오늘 시점까지 누적”과 맞추기 위해 **당월**까지 반영한다(4/6이면 4월분 포함).
+ * - 월별 스케줄러 기본 실행(인자 없음)은 KST **당월**을 `appendMonthlyAccrualMonth` 대상으로 한다.
+ *   귀속 초기화·풀 동기화 상한(당월 말)과 같은 월 키를 쓴다.
  */
 export function monthlyAccrualCapDate(asOf: Date, fyEnd: Date): Date {
   const ymd = kstYmd(asOf);
