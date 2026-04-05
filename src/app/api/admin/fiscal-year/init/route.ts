@@ -73,6 +73,7 @@ export async function POST(req: Request) {
       applyGroupKey: true,
       includeInFiscalInit: true,
       validityMonths: true,
+      fiscalInitOnlyAfterGrantDate: true,
     },
   });
   const leaveTypeSourceMap = new Map(
@@ -196,7 +197,8 @@ export async function POST(req: Request) {
       const bhSrc = bhLt?.allocationSourceCode;
       if (bhLt && bhSrc && emp.birthDate) {
         for (const { birthdayDateStr } of birthdayInstancesInFiscalYear(fy, new Date(emp.birthDate as Date))) {
-          if (birthdayDateStr > kstTodayYmd) continue;
+          const bdGate = bhLt.fiscalInitOnlyAfterGrantDate !== false;
+          if (bdGate && birthdayDateStr > kstTodayYmd) continue;
           const alreadyBh = await prisma.leaveAllocation.findFirst({
             where: {
               employeeId: emp.id,
@@ -214,7 +216,8 @@ export async function POST(req: Request) {
       }
 
       for (const m of getTenureMilestones(hire, fyStart, fyEnd, tenureMilestoneConfigs)) {
-        if (m.anniversaryYmd > kstTodayYmd) continue;
+        const msGate = m.fiscalInitOnlyAfterGrantDate !== false;
+        if (msGate && m.anniversaryYmd > kstTodayYmd) continue;
         if (m.days <= 0) continue;
         const dup = await findTenureMilestoneAllocation(prisma, emp.id, m.code, m.anniversaryYmd);
         if (dup) continue;
@@ -369,7 +372,8 @@ export async function POST(req: Request) {
           fy,
           new Date(emp.birthDate as Date),
         )) {
-          if (birthdayDateStr > kstTodayYmd) continue;
+          const bdGateTx = bhLtTx.fiscalInitOnlyAfterGrantDate !== false;
+          if (bdGateTx && birthdayDateStr > kstTodayYmd) continue;
           const alreadyBh = await tx.leaveAllocation.findFirst({
             where: {
               employeeId: emp.id,

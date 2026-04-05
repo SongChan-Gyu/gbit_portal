@@ -324,11 +324,15 @@ export async function PATCH(req: Request) {
         tenureYears?: number | null; carryoverThresholdMonths?: number | null;
         bonusIntervalYears?: number | null; bonusMaxDays?: number | null;
         skipForFreelancer?: boolean;
+        fiscalInitOnlyAfterGrantDate?: boolean;
       } = {};
       if (typeof data.label === "string") update.label = data.label;
       if (typeof data.sortOrder === "number") update.sortOrder = data.sortOrder;
       if (typeof data.isActive === "boolean") update.isActive = data.isActive;
       if (typeof data.skipForFreelancer === "boolean") update.skipForFreelancer = data.skipForFreelancer;
+      if (typeof data.fiscalInitOnlyAfterGrantDate === "boolean") {
+        update.fiscalInitOnlyAfterGrantDate = data.fiscalInitOnlyAfterGrantDate;
+      }
       if (data.defaultDays === null) update.defaultDays = null;
       else if (typeof data.defaultDays === "number") update.defaultDays = data.defaultDays;
       if (data.tenureYears === null) update.tenureYears = null;

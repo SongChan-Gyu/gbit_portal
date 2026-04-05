@@ -28,6 +28,7 @@ export async function loadTenureMilestoneConfigs(db: DB): Promise<TenureMileston
       daysPerUnit: true,
       hireAnniversaryYears: true,
       maxPerYear: true,
+      fiscalInitOnlyAfterGrantDate: true,
     },
   });
   const mapped = fromLt
@@ -39,6 +40,7 @@ export async function loadTenureMilestoneConfigs(db: DB): Promise<TenureMileston
         code: r.allocationSourceCode!,
         label: r.name,
         days,
+        fiscalInitOnlyAfterGrantDate: r.fiscalInitOnlyAfterGrantDate,
       };
     })
     .filter(Boolean) as TenureMilestoneConfig[];
@@ -54,6 +56,7 @@ export async function loadTenureMilestoneConfigs(db: DB): Promise<TenureMileston
       code: c.sourceCode,
       label: c.label,
       days: Number(c.defaultDays ?? 0),
+      fiscalInitOnlyAfterGrantDate: c.fiscalInitOnlyAfterGrantDate,
     }))
     .filter((m) => m.days > 0);
 }
@@ -80,7 +83,8 @@ export async function ensureTenureMilestonesForFiscalYear(
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
   let created = 0;
   for (const m of getTenureMilestones(hireDate, fyStart, fyEnd, milestoneConfigs)) {
-    if (m.anniversaryYmd > asOf) continue;
+    const onlyAfter = m.fiscalInitOnlyAfterGrantDate !== false;
+    if (onlyAfter && m.anniversaryYmd > asOf) continue;
     if (m.days <= 0) continue;
     const dup = await findTenureMilestoneAllocation(tx, employeeId, m.code, m.anniversaryYmd);
     if (dup) continue;

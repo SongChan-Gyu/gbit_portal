@@ -7,6 +7,11 @@ export interface TenureMilestoneConfig {
   code:  string;
   label: string;
   days:  number;
+  /**
+   * true/미설정: 귀속 초기화 시 기념일이 KST asOf 이하여야 생성(스케줄러 미실행 보강).
+   * false: 귀속 FY 구간의 미래 기념일도 초기화에 포함(레거시).
+   */
+  fiscalInitOnlyAfterGrantDate?: boolean;
 }
 
 /** 기본연차·가산 규칙 설정 타입 (AllocationSourceConfig 기반) */
@@ -73,7 +78,7 @@ export function getTenureMilestones(
   fyStart: Date,
   fyEnd:   Date,
   milestoneConfigs: TenureMilestoneConfig[] = DEFAULT_TENURE_MILESTONES,
-): { years: number; label: string; days: number; code: string; grantDate: Date; anniversaryYmd: string }[] {
+): (TenureMilestoneConfig & { grantDate: Date; anniversaryYmd: string })[] {
   const hireYmd = kstYmd(hireDate);
   const fyStartYmd = kstYmd(fyStart);
   const fyEndYmd = kstYmd(fyEnd);
@@ -85,7 +90,7 @@ export function getTenureMilestones(
       const grantDate = kstMidnight(yy, mm, dd);
       return { ...m, grantDate, anniversaryYmd };
     })
-    .filter(Boolean) as { years: number; label: string; days: number; code: string; grantDate: Date; anniversaryYmd: string }[];
+    .filter(Boolean) as (TenureMilestoneConfig & { grantDate: Date; anniversaryYmd: string })[];
 }
 
 /**

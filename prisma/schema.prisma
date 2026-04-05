@@ -146,6 +146,8 @@ model LeaveType {
   displayHint      String?
   // 귀속연도 초기화(fiscal-year init) 대상 여부. 귀속연도 유형이어도 false면 자동 부여 제외.
   includeInFiscalInit Boolean @default(true)
+  // 생일·입사주년 등: 귀속 초기화 시 스케줄러와 같이 '부여 기준일(KST)이 오늘 이전·당일'인 것만 보강. false면 FY 구간 내 미래 일정도 초기화에 포함(레거시).
+  fiscalInitOnlyAfterGrantDate Boolean @default(true)
   // 입사 N주년에 부여 (입사일기준·allocationSourceCode 있을 때). 스케줄러·초기화 보강이 이 값을 사용.
   hireAnniversaryYears Int?
   // 관리자 수동 이월(다음 귀속연도 CARRYOVER 생성) UI 허용. 귀속연도형·자산형 연차 등만 true 권장. 자동 이월 없음.
@@ -378,6 +380,8 @@ model AllocationSourceConfig {
   bonusIntervalYears Int?   // 가산 기준 연수 (2 = 2년마다 +1일). null이면 가산 없음.
   bonusMaxDays    Float?   // 가산 최대 일수 (10일). null이면 무제한.
   skipForFreelancer Boolean @default(false) // true면 FREE(프리랜서) 사원 제외
+  // tenureYears 기반 근속 마일스톤: 귀속 초기화 시 기념일이 KST 오늘 이후면 제외할지(LeaveType.fiscalInitOnlyAfterGrantDate와 동일 의미)
+  fiscalInitOnlyAfterGrantDate Boolean @default(true)
 
   note        String?
   createdAt   DateTime @default(now())

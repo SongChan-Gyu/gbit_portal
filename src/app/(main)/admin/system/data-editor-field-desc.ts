@@ -23,6 +23,8 @@ export const DATA_EDITOR_FIELD_DESCRIPTIONS: Record<string, Record<string, strin
     isActive: "사용 여부 (false면 귀속연도 초기화 시 제외)",
     defaultDays: "고정 부여일 수 (null이면 계산 로직 사용)",
     tenureYears: "근속 기준 연수 (TENURE_1Y·5Y·10Y 등에서 사용)",
+    fiscalInitOnlyAfterGrantDate:
+      "LeaveType 미사용·AllocationSourceConfig만 쓰는 근속 마일스톤: 귀속 초기화 시 기념일이 KST 오늘 이하여야만 보강(true 권장)",
     carryoverThresholdMonths: "이월 특례 기준 개월 수 (TENURE_1Y: 귀속연도 종료 N개월 전 부여분 이월)",
     bonusIntervalYears: "근속가산 부여 주기(년) (TENURE_BONUS에서 사용)",
     bonusMaxDays: "근속가산 최대 일수 상한",
@@ -157,6 +159,8 @@ export const DATA_EDITOR_FIELD_DESCRIPTIONS: Record<string, Record<string, strin
     allowsHalfDay: "반차 사용 허용 여부",
     halfDayAmPm: "반차 구분 (AM=오전, PM=오후, BOTH=모두)",
     includeInFiscalInit: "귀속연도 초기화 시 포함 여부",
+    fiscalInitOnlyAfterGrantDate:
+      "생일·입사주년형: 귀속 초기화 시 KST 오늘까지 부여일이 도래한 경우만 보강(true 권장). false면 FY 안 미래 일정도 초기화에 생성",
     hireAnniversaryYears: "입사 N주년 자동 부여 연수 (입사일기준 유형·allocationSourceCode와 함께 사용)",
     carryoverEligible: "휴가 할당에서 수동 이월(CARRYOVER) UI 허용 여부 (연차·근속가산 풀 등 정책 반영)",
     validityBasis: "유효 기간 기준 (귀속연도·입사일기준·부여일기준 등 한글 값)",
