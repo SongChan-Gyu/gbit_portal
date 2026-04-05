@@ -9,36 +9,26 @@ import { writeAudit } from "@/lib/audit";
 import { getFiscalYear, kstMidnight, kstEndOfDay } from "@/lib/workdays";
 import { fiscalPeriod } from "@/lib/leaveCalc";
 
-export const MONTHLY_ACCRUAL_POOL_MARKER = "MONTHLY_ACCRUAL_POOL";
-const ACCURED_PREFIX = "ACCURED_MONTHS:";
+// 순수 함수는 클라이언트 안전 파일에서 re-export
+export {
+  MONTHLY_ACCRUAL_POOL_MARKER,
+  isPoolNote,
+  isMonthlyAccrualRowNote,
+  parseAccruedMonthsFromNote,
+  buildPoolNote,
+} from "@/lib/monthlyAccrualNote";
+import {
+  MONTHLY_ACCRUAL_POOL_MARKER,
+  isPoolNote,
+  parseAccruedMonthsFromNote,
+  buildPoolNote,
+} from "@/lib/monthlyAccrualNote";
 
 export type MonthlyAccrualDb = DBTx | DB;
-
-export function isPoolNote(note: string | null | undefined): boolean {
-  return !!(note && note.includes(MONTHLY_ACCRUAL_POOL_MARKER));
-}
 
 function isLegacyMonthlyNote(note: string | null | undefined): boolean {
   if (!note) return false;
   return /MONTHLY_ACCRUAL:\d{4}-\d{2}/.test(note);
-}
-
-/** 휴가 현황·풀 판별용 */
-export function isMonthlyAccrualRowNote(note: string | null | undefined, sourceCode: string): boolean {
-  if (sourceCode.startsWith("MONTHLY_ACCRUAL_")) return true;
-  if (sourceCode !== "BASE_ANNUAL") return false;
-  return isPoolNote(note) || isLegacyMonthlyNote(note);
-}
-
-export function parseAccruedMonthsFromNote(note: string | null | undefined): Set<string> {
-  const s = note ?? "";
-  const m = s.match(new RegExp(`${ACCURED_PREFIX}([^·\\s]+)`));
-  if (m?.[1]) return new Set(m[1].split(",").filter(Boolean));
-  const months = new Set<string>();
-  const re = /MONTHLY_ACCRUAL:(\d{4}-\d{2})/g;
-  let x: RegExpExecArray | null;
-  while ((x = re.exec(s)) !== null) months.add(x[1]!);
-  return months;
 }
 
 function legacySourceCodeToYm(sourceCode: string): string | null {
@@ -47,11 +37,6 @@ function legacySourceCodeToYm(sourceCode: string): string | null {
   const [y, mo] = rest.split("_");
   if (!y || !mo) return null;
   return `${y}-${mo.padStart(2, "0")}`;
-}
-
-export function buildPoolNote(monthsSorted: string[]): string {
-  const list = [...monthsSorted].sort().join(",");
-  return `${MONTHLY_ACCRUAL_POOL_MARKER} · ${ACCURED_PREFIX}${list} · 월별 연차 누적 (입사 1년 미만)`;
 }
 
 export function eligibleForMonth(hire: Date, tYear: number, tMonth: number): boolean {

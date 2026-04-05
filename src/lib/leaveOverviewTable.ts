@@ -2,7 +2,7 @@
  * 휴가 현황(관리자) 표: AllocationSourceConfig + 실제 할당 데이터로 열 구성
  */
 
-import { isMonthlyAccrualRowNote } from "@/lib/monthlyAccrualPool";
+import { isMonthlyAccrualRowNote } from "@/lib/monthlyAccrualNote";
 
 export const OVERVIEW_MONTHLY_BUNDLE_KEY = "__BASE_ANNUAL_MONTHLY__";
 
