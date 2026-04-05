@@ -1,31 +1,9 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { holidayDateToYmd, ymdRangeUtcBounds } from "@/lib/dateUtils";
+import { eachYmdInInclusiveRange, holidayDateToYmd, kstWeekYmdsForWeekOffset, kstYmd, todayKstYmd, ymdRangeUtcBounds } from "@/lib/dateUtils";
+import { kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
 import { itemSlotForSchedule } from "@/lib/leaveTimeSlot";
 import TeamScheduleClient from "./TeamScheduleClient";
-
-/** 이번 주 월~일 날짜 배열 반환 */
-function getWeekDates(base?: Date) {
-  const today = base ?? new Date();
-  // 월요일 기준
-  const day = today.getDay(); // 0=일,1=월...6=토
-  const diffToMonday = day === 0 ? -6 : 1 - day;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() + diffToMonday);
-  monday.setHours(0, 0, 0, 0);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return d.toISOString().slice(0, 10);
-  });
-}
-
-/** 이번 주 기준 w주 이동한 월요일 날짜 */
-function getBaseDate(weekOffset: number) {
-  const today = new Date();
-  today.setDate(today.getDate() + weekOffset * 7);
-  return today;
-}
 
 /** 해당 연월의 모든 날짜 (YYYY-MM-DD) */
 function getMonthDates(year: number, month: number): string[] {
@@ -54,11 +32,9 @@ function buildSchedule(
     if (!schedule[empId]) schedule[empId] = {};
 
     for (const item of req.items) {
-      const s = new Date(item.startDate);
-      const e = new Date(item.endDate);
-      const cur = new Date(s);
-      while (cur <= e) {
-        const dateStr = cur.toISOString().slice(0, 10);
+      const startYmd = kstYmd(new Date(item.startDate));
+      const endYmd = kstYmd(new Date(item.endDate));
+      for (const dateStr of eachYmdInInclusiveRange(startYmd, endYmd)) {
         if (dateSet.has(dateStr)) {
           const lt = item.leaveType;
           const status: DayStatus = itemSlotForSchedule(item, lt);
@@ -74,7 +50,6 @@ function buildSchedule(
           if (!existing) byDay[dateStr].push({ name: empName, status: schedule[empId][dateStr]! });
           else existing.status = schedule[empId][dateStr]!;
         }
-        cur.setDate(cur.getDate() + 1);
       }
     }
   }
@@ -89,9 +64,10 @@ export default async function TeamSchedulePage({
   const { w, view: viewRaw, y: yRaw, m: mRaw } = await searchParams;
   const weekOffset = parseInt(w ?? "0", 10) || 0;
   const view = viewRaw === "month" ? "month" : "week";
-  const now = new Date();
-  const year = parseInt(yRaw ?? String(now.getFullYear()), 10) || now.getFullYear();
-  const month = parseInt(mRaw ?? String(now.getMonth() + 1), 10) || now.getMonth() + 1;
+  const todayY = todayKstYmd();
+  const [defY, defM] = todayY.split("-").map((x) => parseInt(x, 10));
+  const year = parseInt(yRaw ?? String(defY), 10) || defY;
+  const month = parseInt(mRaw ?? String(defM), 10) || defM;
   const safeMonth = Math.min(12, Math.max(1, month));
 
   const session = await auth();
@@ -115,14 +91,23 @@ export default async function TeamSchedulePage({
   }
 
   const memberIds = membersSource.map((m: { id: string }) => m.id);
-  const weekDates = getWeekDates(getBaseDate(weekOffset));
+  const weekDates = kstWeekYmdsForWeekOffset(weekOffset);
   const monthDates = getMonthDates(year, safeMonth);
-  const startDate = view === "week"
-    ? new Date(weekDates[0])
-    : new Date(year, safeMonth - 1, 1);
-  const endDate = view === "week"
-    ? (() => { const e = new Date(weekDates[6]); e.setHours(23, 59, 59, 999); return e; })()
-    : new Date(year, safeMonth, 0, 23, 59, 59, 999);
+  const startDate =
+    view === "week"
+      ? kstMidnightFromYmd(weekDates[0]!)
+      : kstMidnightFromYmd(`${year}-${String(safeMonth).padStart(2, "0")}-01`);
+  const endDate =
+    view === "week"
+      ? (() => {
+          const last = weekDates[6]!;
+          const [y, m, d] = last.split("-").map((x) => parseInt(x, 10));
+          return kstEndOfDay(y, m, d);
+        })()
+      : (() => {
+          const lastD = new Date(year, safeMonth, 0).getDate();
+          return kstEndOfDay(year, safeMonth, lastD);
+        })();
 
   const leaveRequests = await prisma.leaveRequest.findMany({
     where: {
@@ -179,7 +164,7 @@ export default async function TeamSchedulePage({
         schedule={schedule}
         byDay={byDay}
         holidayYmds={holidayYmds}
-        todayStr={new Date().toISOString().slice(0, 10)}
+        todayStr={todayKstYmd()}
         weekOffset={weekOffset}
         isAdminOrPm={isAdminOrPm}
       />

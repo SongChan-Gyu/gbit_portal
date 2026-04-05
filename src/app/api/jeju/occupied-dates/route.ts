@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
+import { eachYmdInHalfOpenRange, kstYmd } from "@/lib/dateUtils";
+import { kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
 
 /**
  * GET ?from=YYYY-MM-DD&to=YYYY-MM-DD
@@ -20,10 +22,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "from, to (YYYY-MM-DD) 필요" }, { status: 400 });
   }
 
-  const from = new Date(fromStr);
-  const to = new Date(toStr);
-  from.setHours(0, 0, 0, 0);
-  to.setHours(23, 59, 59, 999);
+  const from = kstMidnightFromYmd(fromStr.slice(0, 10));
+  const [ty, tm, td] = toStr.slice(0, 10).split("-").map((x) => parseInt(x, 10));
+  const to = kstEndOfDay(ty, tm, td);
 
   let blockedDates: string[] = [];
   try {
@@ -57,12 +58,9 @@ export async function GET(req: Request) {
     const byDate: Record<string, { name: string; empNo: string; requestId: string }[]> = {};
     const welfareOccupiedSet = new Set<string>();
     for (const r of approved) {
-      const start = new Date(r.startDate);
-      const end = new Date(r.endDate);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(0, 0, 0, 0);
-      for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-        const key = d.toISOString().slice(0, 10);
+      const startY = kstYmd(new Date(r.startDate));
+      const endY = kstYmd(new Date(r.endDate));
+      for (const key of eachYmdInHalfOpenRange(startY, endY)) {
         welfareOccupiedSet.add(key);
         /* 복지부 달력에는 승인된 건만 이름 표시 (PENDING은 '예약됨'으로만) */
         if (r.status !== "APPROVED") continue;
@@ -88,12 +86,9 @@ export async function GET(req: Request) {
     }
   }
   for (const r of approved) {
-    const start = new Date(r.startDate);
-    const end = new Date(r.endDate);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
-    for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
-      const key = d.toISOString().slice(0, 10);
+    const startY = kstYmd(new Date(r.startDate));
+    const endY = kstYmd(new Date(r.endDate));
+    for (const key of eachYmdInHalfOpenRange(startY, endY)) {
       if (!set.has(key)) {
         set.add(key);
         occupiedDates.push(key);

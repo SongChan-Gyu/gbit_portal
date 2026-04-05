@@ -1,4 +1,5 @@
 import type { DB } from "@/lib/db";
+import { dowLabelKoFromYmd } from "@/lib/dateUtils";
 
 /**
  * 카카오 알림톡 발송 (Aligo 연동)
@@ -15,6 +16,8 @@ import type { DB } from "@/lib/db";
  * 테스트 안전장치
  * - ALIMTALK_ALLOWED_RECEIVER: 설정 시, 이 번호로만 알림톡 발송 허용 (그 외는 SKIPPED로 로깅)
  *   예: 01044234532
+ *
+ * KAKAO_* 미설정: 외부 발송 없음(MOCKED). NotificationLog에는 기록(운영 추적용). 프로덕션에서는 MOCK 콘솔 로그 생략.
  */
 async function sendAlimtalk(
   prisma: DB,
@@ -142,6 +145,74 @@ GBIT Portal에서 확인 후 처리 부탁드립니다.
 GBIT Portal에서 상세내역을 확인해 주세요.
 본 메시지는 발신 전용입니다.`,
     },
+    /** 신청자: 1차 승인 후 입금 안내 (알리고에 동일 코드·변수로 등록) */
+    JEJU_APPLICANT_STEP1_OK: {
+      subject: "제주 숙소 1차 승인",
+      body:
+`[GBIT Portal]
+#{신청자명}님, 제주도 숙소 예약이 1차 승인되었습니다.
+
+- 투숙객: #{투숙객명}
+- 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
+
+예약금 입금 후 PM 입금확인이 진행됩니다. 포털에서 계좌 안내를 확인해 주세요.
+본 메시지는 발신 전용입니다.`,
+    },
+    /** 담당자(복지): 1차 승인 요청 */
+    JEJU_STAFF_STEP1: {
+      subject: "제주 숙소 1차 승인 요청",
+      body:
+`[GBIT Portal]
+제주 숙소 1차 승인 요청이 접수되었습니다.
+
+- 신청(투숙): #{신청자명}
+- 기간: #{이용기간}
+- 입금자명: #{입금자명}
+
+포털에서 결재해 주세요.
+본 메시지는 발신 전용입니다.`,
+    },
+    /** 담당자(PM): 입금확인 요청 */
+    JEJU_STAFF_STEP2: {
+      subject: "제주 숙소 입금확인 요청",
+      body:
+`[GBIT Portal]
+복지부 1차 승인이 완료되어 입금확인이 필요합니다.
+
+- 신청(투숙): #{신청자명}
+- 기간: #{이용기간}
+- 입금자명: #{입금자명}
+
+포털에서 처리해 주세요.
+본 메시지는 발신 전용입니다.`,
+    },
+    /** 담당자(복지): 취소 1차 승인 요청 */
+    JEJU_STAFF_CANCEL1: {
+      subject: "제주 숙소 취소 승인 요청",
+      body:
+`[GBIT Portal]
+제주 숙소 취소 요청이 접수되었습니다. 1차 취소 승인이 필요합니다.
+
+- 신청(투숙): #{신청자명}
+- 기간: #{이용기간}
+
+포털에서 처리해 주세요.
+본 메시지는 발신 전용입니다.`,
+    },
+    /** 담당자(PM): 입금취소 처리 요청 */
+    JEJU_STAFF_CANCEL2: {
+      subject: "제주 숙소 입금취소 처리",
+      body:
+`[GBIT Portal]
+취소 1차 승인이 완료되었습니다. 입금취소 처리가 필요합니다.
+
+- 신청(투숙): #{신청자명}
+- 기간: #{이용기간}
+- 입금자명: #{입금자명}
+
+포털에서 처리해 주세요.
+본 메시지는 발신 전용입니다.`,
+    },
     INVITE_REGISTER: {
       subject: "GBIT Portal 가입 안내",
       body:
@@ -204,7 +275,9 @@ GBIT Portal에서 상세내역을 확인해 주세요.
       errorMsg = e?.message ?? "알림톡 발송 실패";
     }
   } else if (isMocked) {
-    console.log(`[AlimTalk Mock] to=${receiver} template=${templateCode}`, params);
+    if (process.env.NODE_ENV !== "production") {
+      console.log(`[AlimTalk Mock] to=${receiver} template=${templateCode}`, params);
+    }
   }
 
   await prisma.notificationLog.create({
@@ -224,13 +297,6 @@ export async function sendInviteAlimtalk(
   await sendAlimtalk(prisma, employeeId, phone, "INVITE_REGISTER", { 수신자명: name, 가입링크: url });
 }
 
-const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
-function dowLabel(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
-  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-  return DOW_KO[dt.getDay()] ?? "";
-}
-
 export async function sendLeaveRequestAlimtalk(
   prisma: DB, approverId: string, phone: string,
   approverName: string, applicantName: string,
@@ -241,9 +307,9 @@ export async function sendLeaveRequestAlimtalk(
     신청자명: applicantName,
     휴가유형: leaveTypeName,
     시작일: startDate,
-    시작요일: dowLabel(startDate),
+    시작요일: dowLabelKoFromYmd(startDate),
     종료일: endDate,
-    종료요일: dowLabel(endDate),
+    종료요일: dowLabelKoFromYmd(endDate),
   });
 }
 
@@ -272,4 +338,25 @@ export async function sendLeaveResultAlimtalk(
     처리결과: result,
     처리코멘트: comment || "-",
   });
+}
+
+/** 제주 담당자(복지/PM) — 직원 ID 없이 번호만 있는 수신 */
+export async function sendJejuStaffAlimtalk(
+  prisma: DB,
+  phone: string,
+  templateCode: string,
+  params: Record<string, string>,
+) {
+  await sendAlimtalk(prisma, "jeju-staff-notify", phone, templateCode, params);
+}
+
+/** 제주 숙소 신청자 알림톡 */
+export async function sendJejuApplicantAlimtalk(
+  prisma: DB,
+  employeeId: string,
+  phone: string,
+  templateCode: string,
+  params: Record<string, string>,
+) {
+  await sendAlimtalk(prisma, employeeId, phone, templateCode, params);
 }

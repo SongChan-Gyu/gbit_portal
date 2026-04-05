@@ -5,6 +5,7 @@ import { CheckCircle2, Clock, XCircle, AlertCircle } from "lucide-react";
 import { todayStr } from "@/lib/workdays";
 import { formatYMD } from "@/lib/dateUtils";
 import { StampSlotGrid } from "@/components/stamp/StampSlotGrid";
+import DatePickerButton from "@/components/ui/DatePickerButton";
 
 interface StampDot {
   id: string;
@@ -236,7 +237,7 @@ export default function StampClient({
             <div className="flex gap-2 items-end">
               <div className="flex-1">
                 <label className="label">적용 날짜</label>
-                <input type="date" className="input" value={hdDate} onChange={(e) => setHdDate(e.target.value)} />
+                <DatePickerButton value={hdDate} onChange={setHdDate} />
               </div>
               <button onClick={applyHealingDay} disabled={hdLoading} className="btn-primary whitespace-nowrap">
                 {hdLoading ? (
@@ -295,11 +296,9 @@ export default function StampClient({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label">반영 날짜</label>
-                <input
-                  type="date"
-                  className="input"
+                <DatePickerButton
                   value={reqForm.stampDate}
-                  onChange={(e) => setReqForm((p) => ({ ...p, stampDate: e.target.value }))}
+                  onChange={(d) => setReqForm((p) => ({ ...p, stampDate: d }))}
                 />
               </div>
               <div>

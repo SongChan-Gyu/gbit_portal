@@ -127,8 +127,8 @@
   3. **돌봄휴가(CARE):** 전원 **2일** (귀속연도마다 초기화 시 부여).
   4. **연휴연장휴가(HOLIDAY_EXT):** 전원 **1일** (귀속연도마다 초기화 시 부여).
   5. **직무부서휴가(DUTY_DEPT):** 직급부서가 **운영부(OPERATIONS)·교육부(EDUCATION)·복지부(WELFARE)** 인 사원만 **2일**.
-  6. **1년 근속이월(TENURE_1Y_CARRYOVER):** 귀속연도 마지막 `carryoverThresholdMonths`(기본 3)개월 이내 부여된 1년 근속휴가 잔여를 다음 귀속연도로 이월.
-  7. **자동이월(AUTO_CARRYOVER):** `LeaveType.autoCarryoverOnFiscalInit=true`인 소스(AWARD·BIRTHDAY_HALF·TENURE_5Y·TENURE_10Y)의 활성 할당 중 `validUntil >= 새 귀속연도 시작일`인 행의 잔여를 **원본 1행당 이월 1행**으로 생성. 원본은 `isActive=false`로 비활성화(이력 보존).
+  6. **입사 주년 근속 휴가(TENURE_1Y/5Y/10Y 등):** `LeaveType.hireAnniversaryYears`와 전용 부여 풀 코드(`allocationSourceCode`)를 우선 사용하고, 없으면 `AllocationSourceConfig.tenureYears`로 폴백한다. 해당 귀속연도 구간에 입사 기념일이 있으면 스케줄러와 동일한 중복 판정으로 **없을 때만** 부여한다.
+  7. **이월:** 귀속연도 초기화 시 **자동 이월(PENDING 생성)은 하지 않는다.** 필요 시 관리자가 할당·이월 UI/API로 처리한다.
   8. **월별적립 풀 보정:** 스케줄러 누락 월이 있으면 `syncMonthlyAccrualPoolForFiscalInit`으로 일괄 보정.
 - dryRun=true 시 DB 변경 없이 미리보기 반환(행·열이 있는 피벗 테이블 형식).
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { kstYmd } from "@/lib/dateUtils";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 import { sendLeaveWithdrawAlimtalk } from "@/lib/kakao";
 
@@ -21,8 +22,8 @@ function buildLeaveSummary(items: { leaveType: { name: string }; startDate: Date
   const s = items[0]?.startDate;
   const e = items[items.length - 1]?.endDate;
   if (!s || !e) return types;
-  const a = s.toISOString().slice(0, 10);
-  const b = e.toISOString().slice(0, 10);
+  const a = kstYmd(s);
+  const b = kstYmd(e);
   return `- 휴가유형: ${types}\n- 기간: ${a}${a !== b ? ` ~ ${b}` : ""}`;
 }
 

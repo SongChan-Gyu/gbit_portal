@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, ToggleLeft, ToggleRight, X, AlertTriangle } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
+import DatePickerButton from "@/components/ui/DatePickerButton";
 
 interface Alloc {
   id: string;
@@ -248,20 +249,16 @@ export default function AllocationsDataEditor({ allocations, fiscalYear }: Props
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="label">유효 시작일</label>
-                  <input
-                    type="date"
-                    className="input"
+                  <DatePickerButton
                     value={form.validFrom ?? fyStart}
-                    onChange={(e) => setForm((p) => ({ ...p, validFrom: e.target.value }))}
+                    onChange={(d) => setForm((p) => ({ ...p, validFrom: d }))}
                   />
                 </div>
                 <div>
                   <label className="label">유효 종료일</label>
-                  <input
-                    type="date"
-                    className="input"
+                  <DatePickerButton
                     value={form.validUntil ?? fyEnd}
-                    onChange={(e) => setForm((p) => ({ ...p, validUntil: e.target.value }))}
+                    onChange={(d) => setForm((p) => ({ ...p, validUntil: d }))}
                   />
                 </div>
               </div>

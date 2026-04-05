@@ -50,7 +50,12 @@ export function isValidHolidayExtDay(targetYmd: string, holidaySet: Set<string>)
   return adjacentToLongBlock || sandwichedBridge;
 }
 
-/** 휴가 신청 화면·API 공통: 연휴연장 종일 일수(징검다리 공휴일 하루 = 1일) */
+/**
+ * 휴가 신청 화면·API 공통: 연휴연장 종일 일수
+ * - 규정상 쓰는 날은 **영업일**(주말·공휴일 당일은 0일 — 잘못 고르면 표시도 0)
+ * - 하루 구간: 규정 위치(isValidHolidayExtDay)이면서 영업일이면 1
+ * - 여러 날: 구간 안의 영업일 수만
+ */
 export function calcHolidayExtFullDays(startStr: string, endStr: string, holidays: string[]): number {
   const holidaySet = new Set(holidays);
   if (!startStr || !endStr) return 0;
@@ -58,7 +63,6 @@ export function calcHolidayExtFullDays(startStr: string, endStr: string, holiday
   const e = endStr.slice(0, 10);
   if (s !== e) return calcWorkingDays(s, e, holidays);
   if (!isValidHolidayExtDay(s, holidaySet)) return 0;
-  if (isHolidayOrWeekendYmd(s, holidaySet)) return 1;
   const w = calcWorkingDays(s, e, holidays);
   return w > 0 ? w : 0;
 }

@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import DatePickerButton from "@/components/ui/DatePickerButton";
+import { todayKstYmd } from "@/lib/dateUtils";
 
 interface Team { id:string; name:string; }
 interface Employee {
@@ -25,7 +27,7 @@ const DUTY_DEPT_OPTIONS = [
 
 export default function EmployeeForm({ teams, employee }: { teams:Team[]; employee?:Employee }) {
   const router = useRouter();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayKstYmd();
   const [form, setForm] = useState<Partial<Employee>>(employee
     ? {
       ...employee,
@@ -136,11 +138,11 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">입사일 *</label>
-          <input type="date" className="input" value={form.hireDate??""} onChange={(e)=>set("hireDate",e.target.value)} required />
+          <DatePickerButton value={form.hireDate??""} onChange={(d)=>set("hireDate",d)} />
         </div>
         <div>
           <label className="label">생년월일</label>
-          <input type="date" className="input" value={form.birthDate??""} onChange={(e)=>set("birthDate",e.target.value||"")} />
+          <DatePickerButton value={form.birthDate??""} onChange={(d)=>set("birthDate",d)} />
           <p className="text-xs text-gray-500 mt-1">생일반차쿠폰 자동 부여용</p>
         </div>
       </div>

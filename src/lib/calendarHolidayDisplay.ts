@@ -1,4 +1,5 @@
 import { mergePublicHolidayYmds } from "@/lib/holidays";
+import { calendarUtcDowFromYMD } from "@/lib/dateUtils";
 
 /** 달력에서 공휴일·일요일 강조 색 */
 export const CALENDAR_HOLIDAY_COLOR = "#c62828";
@@ -9,8 +10,7 @@ export function buildHolidayDisplaySet(dbYmds: string[]): Set<string> {
 }
 
 export function isSundayYmd(ymd: string): boolean {
-  const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
-  return new Date(y, m - 1, d).getDay() === 0;
+  return calendarUtcDowFromYMD(ymd.slice(0, 10)) === 0;
 }
 
 /** 공휴일 또는 일요일이면 달력에서 빨간색 처리 */

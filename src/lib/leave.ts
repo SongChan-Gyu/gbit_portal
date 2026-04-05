@@ -2,42 +2,26 @@
  * 휴가 관련 비즈니스 로직
  */
 
-/** 귀속연도 계산 (5월 1일 기준) */
-export function getFiscalYear(date: Date = new Date()): number {
-  const m = date.getMonth() + 1; // 1~12
-  const y = date.getFullYear();
-  return m >= 5 ? y : y - 1;
-}
+import { kstYmd } from "./dateUtils";
+import { fiscalPeriod } from "./leaveCalc";
+import { calcWorkingDays as calcWorkingDaysYmd } from "./workdays";
 
-/** 귀속연도 기간 반환 */
+export { getFiscalYear } from "./workdays";
+
+/** 귀속연도 기간 (KST +09:00 고정, leaveCalc.fiscalPeriod와 동일) */
 export function getFiscalPeriod(fiscalYear: number) {
-  return {
-    start: new Date(`${fiscalYear}-05-01T00:00:00`),
-    end: new Date(`${fiscalYear + 1}-04-30T23:59:59`),
-  };
+  return fiscalPeriod(fiscalYear);
 }
 
-/** 영업일 수 계산 (공휴일 배열 포함) */
-export function calcWorkingDays(
-  start: Date,
-  end: Date,
-  holidays: Date[]
-): number {
-  let count = 0;
-  const cur = new Date(start);
-  const holidaySet = new Set(holidays.map((h) => h.toISOString().slice(0, 10)));
-  while (cur <= end) {
-    const dow = cur.getDay();
-    const ds = cur.toISOString().slice(0, 10);
-    if (dow !== 0 && dow !== 6 && !holidaySet.has(ds)) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
+/** 영업일 수 (Date 구간 → KST 달력 YMD 후 `@/lib/workdays`와 동일 로직) */
+export function calcWorkingDays(start: Date, end: Date, holidays: Date[]): number {
+  const holidayYmds = holidays.map((h) => kstYmd(h));
+  return calcWorkingDaysYmd(kstYmd(start), kstYmd(end), holidayYmds);
 }
 
-/** 날짜 포맷 (YYYY-MM-DD) */
+/** 날짜 포맷 YYYY-MM-DD (KST 달력일) */
 export function formatDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return kstYmd(date);
 }
 
 /** 귀속연도 표시 문자열 */

@@ -5,7 +5,10 @@ import {
   AlertCircle, Eye, History, Clock, Users, ChevronDown, ChevronRight,
   FlaskConical, Zap, ListChecks, Search,
 } from "lucide-react";
+import DatePickerButton from "@/components/ui/DatePickerButton";
 import TenureScheduleClient from "@/app/(main)/admin/leave-management/TenureScheduleClient";
+import { todayKstYmd } from "@/lib/dateUtils";
+import { getFiscalYear } from "@/lib/workdays";
 
 // ─────────────── 타입 ───────────────────────────────
 interface JobItem {
@@ -119,14 +122,20 @@ function ResultBlock({ result }: { result: JobResult }) {
 // ─────────────── 메인 컴포넌트 ──────────────────────
 type SchedulerPanelProps = { currentFy?: number };
 export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProps = {}) {
-  const now = new Date();
-  const currentFy = propFy ?? (now.getMonth() + 1 >= 5 ? now.getFullYear() : now.getFullYear() - 1);
+  const currentFy = propFy ?? getFiscalYear();
   const [tab, setTab] = useState<"accrual"|"tenure"|"birthday"|"logs"|"grants">("tenure");
 
   // ── 탭: 월별 적립
   const [accrualMonth, setAccrualMonth] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+    const tk = todayKstYmd();
+    const [y, m] = tk.split("-").map(Number);
+    let pm = m - 1;
+    let py = y;
+    if (pm < 1) {
+      pm = 12;
+      py -= 1;
+    }
+    return `${py}-${String(pm).padStart(2, "0")}`;
   });
   const [accrualRunning, setAccrualRunning] = useState(false);
   const [accrualResult, setAccrualResult]   = useState<JobResult|null>(null);
@@ -136,7 +145,7 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
   const [loadingCandidates, setLoadingCandidates] = useState(false);
 
   // ── 탭: 근속 체크
-  const [tenureDate, setTenureDate] = useState(() => new Date().toISOString().slice(0,10));
+  const [tenureDate, setTenureDate] = useState(() => todayKstYmd());
   const [tenureWindow, setTenureWindow] = useState(0);
   const [tenureRunning, setTenureRunning] = useState(false);
   const [tenureResult, setTenureResult]   = useState<JobResult|null>(null);
@@ -145,11 +154,8 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
   const [upcomingDays, setUpcomingDays]   = useState(30);
   const [loadingUpcoming, setLoadingUpcoming] = useState(false);
 
-  // ── 탭: 생일반차
-  const [birthdayYearMonth, setBirthdayYearMonth] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-  });
+  // ── 탭: 생일반차 (달력 일 단위 — 해당 날짜에 생일인 직원만)
+  const [birthdayDate, setBirthdayDate] = useState(() => todayKstYmd());
   const [birthdayRunning, setBirthdayRunning] = useState(false);
   const [birthdayResult, setBirthdayResult] = useState<JobResult|null>(null);
   const [birthdayErr, setBirthdayErr] = useState("");
@@ -248,11 +254,11 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
 
   // ── 생일반차 실행
   async function runBirthdayHalf(dry: boolean) {
-    if (!dry && !confirm(`${birthdayYearMonth} 생일반차를 실제 부여하시겠습니까?`)) return;
+    if (!dry && !confirm(`${birthdayDate} 생일인 직원에게 생일반차를 실제 부여하시겠습니까?`)) return;
     setBirthdayRunning(true); setBirthdayErr(""); setBirthdayResult(null);
     const res = await fetch("/api/cron/birthday-half", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({ yearMonth: birthdayYearMonth, dryRun: dry }),
+      body: JSON.stringify({ date: birthdayDate, dryRun: dry }),
     });
     const data = await res.json();
     setBirthdayRunning(false);
@@ -264,7 +270,14 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
       skipped: data.detail?.skipped?.length ?? 0,
       errors: data.detail?.errors?.length ?? 0,
       detail: {
-        granted: (data.detail?.granted ?? []).map((g: { name: string; birthMonth: number }) => ({ ...g, name: g.name, month: `${g.birthMonth}월`, days: 0.5 })),
+        granted: (data.detail?.granted ?? []).map(
+          (g: { name: string; birthMonth: number; birthdayDateStr?: string }) => ({
+            ...g,
+            name: g.name,
+            anniversary: g.birthdayDateStr ?? `${g.birthMonth}월`,
+            days: 0.5,
+          }),
+        ),
         skipped: data.detail?.skipped ?? [],
         errors: data.detail?.errors ?? [],
       },
@@ -378,8 +391,7 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
             <div className="flex flex-wrap items-end gap-3">
               <div>
                 <label className="label">기준 날짜</label>
-                <input type="date" className="input w-44" value={tenureDate}
-                  onChange={e => setTenureDate(e.target.value)}/>
+                <DatePickerButton value={tenureDate} onChange={setTenureDate} className="w-44" />
                 <p className="text-xs text-gray-400 mt-1">오늘 날짜 = 당일 기념일 체크</p>
               </div>
               <div>
@@ -516,7 +528,8 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
       {tab === "birthday" && (
         <div className="space-y-4">
           <div className="rounded-xl bg-pink-50/60 border border-pink-200 px-4 py-3 text-xs text-pink-800">
-            생년월일이 입력된 재직자 중, 선택한 연·월에 생일이 있는 직원에게 생일반차 0.5일을 부여합니다. 매월 1회 실행 권장.
+            생년월일이 입력된 재직자 중, <strong>선택한 달력 날짜</strong>에 생일이 도래한 직원에게만 생일반차 0.5일을 부여합니다.
+            외부 자동 실행(cron)에서 월 단위로 돌리려면 API에 <code className="bg-pink-100 px-1 rounded">yearMonth: &quot;YYYY-MM&quot;</code>를 넘기면 됩니다.
           </div>
           <div className="rounded-xl border border-gray-200 p-5 space-y-4">
             <h3 className="font-semibold text-gray-800 text-sm flex items-center gap-2">
@@ -524,10 +537,9 @@ export default function SchedulerPanel({ currentFy: propFy }: SchedulerPanelProp
             </h3>
             <div className="flex flex-wrap items-end gap-3">
               <div>
-                <label className="label">대상 연·월</label>
-                <input type="month" className="input w-44" value={birthdayYearMonth}
-                  onChange={e => setBirthdayYearMonth(e.target.value)}/>
-                <p className="text-xs text-gray-400 mt-1">해당 월 생일자에게 0.5일 부여</p>
+                <label className="label">대상 날짜 (생일)</label>
+                <DatePickerButton value={birthdayDate} onChange={setBirthdayDate} className="max-w-[220px]" />
+                <p className="text-xs text-gray-400 mt-1">이 날짜의 월·일과 생일이 같은 직원만 부여</p>
               </div>
               <div className="flex gap-2 mt-4">
                 <button onClick={() => runBirthdayHalf(true)} disabled={birthdayRunning}

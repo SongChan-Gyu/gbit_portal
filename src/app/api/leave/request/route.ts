@@ -1,12 +1,19 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { isWednesdayYMD, holidayDateToYmd, addDaysYMD, ymdRangeUtcBounds } from "@/lib/dateUtils";
+import {
+  isWednesdayYMD,
+  holidayDateToYmd,
+  addDaysYMD,
+  ymdRangeUtcBounds,
+  allocationFullyCoversKstYmdRange,
+  kstYmd,
+} from "@/lib/dateUtils";
 import { sendLeaveRequestAlimtalk } from "@/lib/kakao";
 import { writeAudit, getIp } from "@/lib/audit";
 import { countAfternoonEligible, findAfternoonStampCard } from "@/lib/stampCard";
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
-import { calcWorkingDays } from "@/lib/workdays";
+import { calcWorkingDays, getFiscalYearFromStr, listWorkingYmds, splitYmdRangeByFiscalYear } from "@/lib/workdays";
 import { calcHolidayExtFullDays, isHolidayOrWeekendYmd, isValidHolidayExtDay } from "@/lib/holidayExt";
 import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
 import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
@@ -43,82 +50,18 @@ export async function POST(req: Request) {
     const leaveTypes = await prisma.leaveType.findMany({ where: { id: { in: ltIds } } });
     const ltMap = Object.fromEntries(leaveTypes.map((t) => [t.id, t]));
 
-    const now = new Date();
-
-    const poolAllocs = await prisma.leaveAllocation.findMany({
-      where: {
-        employeeId: user.employeeId,
-        OR: [
-          { sourceCode: { in: [...ANNUAL_CORE_SOURCE_CODES] } },
-          { sourceCode: "ANNUAL" },
-          { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
-        ],
-        isActive: true,
-        validFrom: { lte: now },
-        validUntil: { gte: now },
-      },
-    });
-    poolAllocs.sort((a, b) => {
-      const rank = (sourceCode: string) => {
-        if (sourceCode === "CARRYOVER") return 0;
-        if (sourceCode === "TENURE_BONUS") return 1;
-        if (sourceCode === "BASE_ANNUAL") return 2;
-        if (sourceCode.startsWith("MONTHLY_ACCRUAL_")) return 3;
-        if (sourceCode === "ANNUAL") return 4;
-        return 9;
-      };
-      const ai = rank(a.sourceCode);
-      const bi = rank(b.sourceCode);
-      if (ai !== bi) return ai - bi;
-      return new Date(a.validUntil).getTime() - new Date(b.validUntil).getTime();
-    });
-
-    const totalPoolRemaining = poolAllocs.reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0);
-
-    /** LeaveType.allocationSourceCode → 전용 부여 풀 (DB 할당 sourceCode와 동일 문자열) */
-    const poolSources = [
-      ...new Set(
-        items
-          .map((i) => ltMap[i.leaveTypeId]?.allocationSourceCode?.trim())
-          .filter((s): s is string => Boolean(s)),
-      ),
-    ];
-    const dedicatedAllocs =
-      poolSources.length > 0
-        ? await prisma.leaveAllocation.findMany({
-            where: {
-              employeeId: user.employeeId,
-              sourceCode: { in: poolSources },
-              isActive: true,
-              validFrom: { lte: now },
-              validUntil: { gte: now },
-            },
-          })
-        : [];
-    const allocsBySource = new Map<string, typeof dedicatedAllocs>();
-    for (const a of dedicatedAllocs) {
-      const list = allocsBySource.get(a.sourceCode) ?? [];
-      list.push(a);
-      allocsBySource.set(a.sourceCode, list);
-    }
-
-    /** 공휴일 조회: 신청일 YMD 문자열 기준 ±15일 (서버 TZ에 따라 new Date('YYYY-MM-DD') 해석이 달라져 5월 휴일이 빠지는 문제 방지) */
-    const itemYmds = items.flatMap((i) => [i.startDate.slice(0, 10), i.endDate.slice(0, 10)]);
-    const minYmd = itemYmds.reduce((a, b) => (a < b ? a : b));
-    const maxYmd = itemYmds.reduce((a, b) => (a > b ? a : b));
-    const lookupStartYmd = addDaysYMD(minYmd, -15);
-    const lookupEndYmd = addDaysYMD(maxYmd, 15);
+    /** 공휴일(영업일·연휴연장 계산용) — 신청 입력 일자 기준 */
+    const itemYmdsEarly = items.flatMap((i) => [i.startDate.slice(0, 10), i.endDate.slice(0, 10)]);
+    const minYmdH = itemYmdsEarly.reduce((a, b) => (a < b ? a : b));
+    const maxYmdH = itemYmdsEarly.reduce((a, b) => (a > b ? a : b));
+    const lookupStartYmd = addDaysYMD(minYmdH, -15);
+    const lookupEndYmd = addDaysYMD(maxYmdH, 15);
     const { gte: holidayGte, lte: holidayLte } = ymdRangeUtcBounds(lookupStartYmd, lookupEndYmd);
     const rangeHolidays = await prisma.holiday.findMany({
       where: { date: { gte: holidayGte, lte: holidayLte } },
     });
     const holidaySet = new Set(rangeHolidays.map((h) => holidayDateToYmd(h.date)));
     const holidayList = Array.from(holidaySet);
-    const sourceLabel = (sourceCode: string) => {
-      const fromType = Object.values(ltMap).find((t) => t.allocationSourceCode === sourceCode)?.name;
-      const fromAlloc = (allocsBySource.get(sourceCode) ?? [])[0]?.label;
-      return fromType || fromAlloc || sourceCode;
-    };
 
     type WorkItem = {
       leaveTypeId: string;
@@ -155,10 +98,11 @@ export async function POST(req: Request) {
         days =
           lt.code === "HOLIDAY_EXT" ? calcHolidayExtFullDays(s, e, holidayList) : calcWorkingDays(s, e, holidayList);
         if (days <= 0) {
-          return NextResponse.json(
-            { error: `${lt.name}: 신청 기간에 포함된 영업일이 없습니다.` },
-            { status: 400 },
-          );
+          const errNoBiz =
+            lt.code === "HOLIDAY_EXT"
+              ? `${lt.name}: 영업일이 하루도 잡히지 않습니다. 주말·공휴일만 선택하면 0일이며, 휴무 3일 이상 연속에 붙는 앞·뒤·징검다리 영업일인지 확인하세요.`
+              : `${lt.name}: 신청 기간에 포함된 영업일이 없습니다.`;
+          return NextResponse.json({ error: errNoBiz }, { status: 400 });
         }
       } else {
         if (s !== e) {
@@ -217,9 +161,7 @@ export async function POST(req: Request) {
       const r = overlappingItem.leaveRequest;
       return NextResponse.json(
         {
-          error: `해당 날짜에 이미 휴가가 신청/승인되어 있습니다. (${r.startDate.toISOString().slice(0, 10)} ~ ${r.endDate
-            .toISOString()
-            .slice(0, 10)})`,
+          error: `해당 날짜에 이미 휴가가 신청/승인되어 있습니다. (${kstYmd(r.startDate)} ~ ${kstYmd(r.endDate)})`,
         },
         { status: 400 },
       );
@@ -278,30 +220,193 @@ export async function POST(req: Request) {
           return NextResponse.json({ error: `${lt.name}은 이번 달 최대 사용 횟수를 초과했습니다.` }, { status: 400 });
         }
       }
+    }
 
-      if (lt.deductFromBalance) {
-        const d = leaveItemDeductDays(it, lt);
-        if (totalPoolRemaining < d) {
-          return NextResponse.json(
-            { error: `잔여 연차 부족 (잔여 ${totalPoolRemaining.toFixed(1)}일, 신청 ${d}일)` },
-            { status: 400 },
-          );
-        }
+    /** 전용 풀(BASE_ANNUAL·CARE 등): 귀속 말일~익 귀속 초일을 한 덩어리로 두면 한 할당으로 구간 전체를 못 덮음 → 귀속연도별로 쪼갬 */
+    const splitWorkItems: WorkItem[] = [];
+    for (const it of workItems) {
+      const lt = ltMap[it.leaveTypeId]!;
+      const needSplit =
+        lt.deductFromBalance &&
+        Boolean(lt.allocationSourceCode?.trim()) &&
+        it.timeSlot === "FULL" &&
+        it.startDate <= it.endDate &&
+        getFiscalYearFromStr(it.startDate) !== getFiscalYearFromStr(it.endDate);
+      if (!needSplit) {
+        splitWorkItems.push(it);
+        continue;
+      }
+      for (const { startYmd, endYmd } of splitYmdRangeByFiscalYear(it.startDate, it.endDate)) {
+        const segDays =
+          lt.code === "HOLIDAY_EXT"
+            ? calcHolidayExtFullDays(startYmd, endYmd, holidayList)
+            : calcWorkingDays(startYmd, endYmd, holidayList);
+        if (segDays <= 0) continue;
+        splitWorkItems.push({
+          ...it,
+          allocationId: "",
+          startDate: startYmd,
+          endDate: endYmd,
+          days: segDays,
+        });
       }
     }
 
-    for (const src of poolSources) {
-      const requested = workItems.reduce((sum, it) => {
-        const lt = ltMap[it.leaveTypeId];
-        if (!lt || lt.allocationSourceCode !== src) return sum;
-        return sum + leaveItemDeductDays(it, lt);
-      }, 0);
-      const list = allocsBySource.get(src) ?? [];
-      const rem = list.reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0);
-      if (requested > 0 && requested > rem) {
+    const expandedWorkItems: WorkItem[] = [];
+    for (const it of splitWorkItems) {
+      const lt = ltMap[it.leaveTypeId];
+      // allocationSourceCode 없을 때만: 영업일마다 1일씩 분리(신청·차감 단위). 예전 0.5+0.5 이중 행은 내역에 4줄로 보여 혼란스러워 1일 1행으로 통일.
+      if (lt?.deductFromBalance && !lt.allocationSourceCode && it.timeSlot === "FULL") {
+        const ymds = listWorkingYmds(it.startDate, it.endDate, holidayList);
+        for (const d of ymds) {
+          expandedWorkItems.push({ ...it, startDate: d, endDate: d, days: 1 });
+        }
+      } else {
+        expandedWorkItems.push(it);
+      }
+    }
+
+    const leaveMinYmd = expandedWorkItems.reduce(
+      (m, i) => (i.startDate < m ? i.startDate : m),
+      expandedWorkItems[0]!.startDate,
+    );
+    const leaveMaxYmd = expandedWorkItems.reduce(
+      (m, i) => (i.endDate > m ? i.endDate : m),
+      expandedWorkItems[0]!.endDate,
+    );
+    const leaveMinStart = new Date(`${leaveMinYmd}T00:00:00+09:00`);
+    const leaveMaxEnd = new Date(`${leaveMaxYmd}T23:59:59.999+09:00`);
+
+    const poolAllocsRaw = await prisma.leaveAllocation.findMany({
+      where: {
+        employeeId: user.employeeId,
+        OR: [
+          { sourceCode: { in: [...ANNUAL_CORE_SOURCE_CODES] } },
+          { sourceCode: "ANNUAL" },
+          { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+        ],
+        isActive: true,
+        validFrom: { lte: leaveMaxEnd },
+        validUntil: { gte: leaveMinStart },
+      },
+    });
+    poolAllocsRaw.sort((a, b) => {
+      const rank = (sourceCode: string) => {
+        if (sourceCode === "CARRYOVER") return 0;
+        if (sourceCode === "TENURE_BONUS") return 1;
+        if (sourceCode === "BASE_ANNUAL") return 2;
+        if (sourceCode.startsWith("MONTHLY_ACCRUAL_")) return 3;
+        if (sourceCode === "ANNUAL") return 4;
+        return 9;
+      };
+      const ai = rank(a.sourceCode);
+      const bi = rank(b.sourceCode);
+      if (ai !== bi) return ai - bi;
+      return new Date(a.validUntil).getTime() - new Date(b.validUntil).getTime();
+    });
+    const poolAllocs = poolAllocsRaw;
+
+    const poolSources = [
+      ...new Set(
+        items
+          .map((i) => ltMap[i.leaveTypeId]?.allocationSourceCode?.trim())
+          .filter((s): s is string => Boolean(s)),
+      ),
+    ];
+    const dedicatedAllocsRaw =
+      poolSources.length > 0
+        ? await prisma.leaveAllocation.findMany({
+            where: {
+              employeeId: user.employeeId,
+              sourceCode: { in: poolSources },
+              isActive: true,
+              validFrom: { lte: leaveMaxEnd },
+              validUntil: { gte: leaveMinStart },
+            },
+          })
+        : [];
+    const allocsBySource = new Map<string, typeof dedicatedAllocsRaw>();
+    for (const a of dedicatedAllocsRaw) {
+      const list = allocsBySource.get(a.sourceCode) ?? [];
+      list.push(a);
+      allocsBySource.set(a.sourceCode, list);
+    }
+
+    const sourceLabel = (sourceCode: string) => {
+      const fromType = Object.values(ltMap).find((t) => t.allocationSourceCode === sourceCode)?.name;
+      const fromAlloc = (allocsBySource.get(sourceCode) ?? [])[0]?.label;
+      return fromType || fromAlloc || sourceCode;
+    };
+
+    function poolCoversRange(startYmd: string, endYmd: string, a: (typeof poolAllocs)[0]) {
+      return allocationFullyCoversKstYmdRange(a.validFrom, a.validUntil, startYmd, endYmd);
+    }
+    function dedicatedCoversRange(sourceCode: string, startYmd: string, endYmd: string, a: (typeof dedicatedAllocsRaw)[0]) {
+      return a.sourceCode === sourceCode && allocationFullyCoversKstYmdRange(a.validFrom, a.validUntil, startYmd, endYmd);
+    }
+
+    const simPoolRem = new Map(poolAllocs.map((a) => [a.id, Math.max(0, a.totalDays - a.usedDays)]));
+    for (const it of expandedWorkItems) {
+      const lt = ltMap[it.leaveTypeId];
+      if (!lt?.deductFromBalance || lt.allocationSourceCode) continue;
+      const d = leaveItemDeductDays(it, lt);
+      let ok = false;
+      for (const a of poolAllocs) {
+        if (!poolCoversRange(it.startDate, it.endDate, a)) continue;
+        const cur = simPoolRem.get(a.id) ?? 0;
+        if (cur >= d) {
+          simPoolRem.set(a.id, cur - d);
+          ok = true;
+          break;
+        }
+      }
+      if (!ok) {
         return NextResponse.json(
           {
-            error: `「${sourceLabel(src)}」부여 휴가 잔여 부족 (잔여 ${rem.toFixed(1)}일, 신청 ${requested.toFixed(1)}일). PM·관리자에게 부여 후 이용해 주세요.`,
+            error: `잔여 연차가 부족하거나, 신청일(${it.startDate}~${it.endDate})을 한 할당의 유효기간이 모두 덮지 못합니다. 귀속·유효기간을 확인해 주세요.`,
+          },
+          { status: 400 },
+        );
+      }
+    }
+
+    const simDedRem = new Map<string, Map<string, number>>();
+    for (const src of poolSources) {
+      simDedRem.set(
+        src,
+        new Map((allocsBySource.get(src) ?? []).map((a) => [a.id, Math.max(0, a.totalDays - a.usedDays)])),
+      );
+    }
+    for (const it of expandedWorkItems) {
+      const lt = ltMap[it.leaveTypeId];
+      if (!lt?.allocationSourceCode) continue;
+      const src = lt.allocationSourceCode;
+      const d = leaveItemDeductDays(it, lt);
+      const rem = simDedRem.get(src)!;
+      const list = allocsBySource.get(src) ?? [];
+      let ok = false;
+      for (const a of list) {
+        if (!dedicatedCoversRange(src, it.startDate, it.endDate, a)) continue;
+        if ((rem.get(a.id) ?? 0) >= d) {
+          rem.set(a.id, (rem.get(a.id) ?? 0) - d);
+          ok = true;
+          break;
+        }
+      }
+      if (!ok) {
+        const cands = list.filter((a) => dedicatedCoversRange(src, it.startDate, it.endDate, a));
+        const best = cands
+          .filter((a) => (rem.get(a.id) ?? 0) > 0)
+          .sort((a, b) => (rem.get(b.id) ?? 0) - (rem.get(a.id) ?? 0))[0];
+        if (best && (rem.get(best.id) ?? 0) >= d) {
+          rem.set(best.id, (rem.get(best.id) ?? 0) - d);
+          ok = true;
+        }
+      }
+      if (!ok) {
+        return NextResponse.json(
+          {
+            error: `「${sourceLabel(src)}」신청일(${it.startDate}~${it.endDate})을 덮는 부여가 없거나 잔여가 부족합니다.`,
           },
           { status: 400 },
         );
@@ -327,8 +432,9 @@ export async function POST(req: Request) {
       );
     }
 
-    function pickAllocation(days: number): string | null {
+    function pickAllocation(days: number, startYmd: string, endYmd: string): string | null {
       for (const a of poolAllocs) {
+        if (!poolCoversRange(startYmd, endYmd, a)) continue;
         if ((poolRemaining[a.id] ?? 0) >= days) {
           poolRemaining[a.id] -= days;
           return a.id;
@@ -337,60 +443,24 @@ export async function POST(req: Request) {
       return null;
     }
 
-    function pickDedicatedAllocation(sourceCode: string, days: number): string | null {
+    function pickDedicatedAllocation(sourceCode: string, days: number, startYmd: string, endYmd: string): string | null {
       const list = allocsBySource.get(sourceCode) ?? [];
       const rem = dedicatedRemainBySource.get(sourceCode)!;
       for (const a of list) {
+        if (!dedicatedCoversRange(sourceCode, startYmd, endYmd, a)) continue;
         if ((rem[a.id] ?? 0) >= days) {
           rem[a.id] -= days;
           return a.id;
         }
       }
       const best = list
-        .filter((a) => (rem[a.id] ?? 0) > 0)
+        .filter((a) => dedicatedCoversRange(sourceCode, startYmd, endYmd, a) && (rem[a.id] ?? 0) > 0)
         .sort((a, b) => (rem[b.id] ?? 0) - (rem[a.id] ?? 0))[0];
-      if (best) {
-        rem[best.id] = Math.max(0, (rem[best.id] ?? 0) - days);
+      if (best && (rem[best.id] ?? 0) >= days) {
+        rem[best.id] = (rem[best.id] ?? 0) - days;
         return best.id;
       }
       return null;
-    }
-
-    const holidaySetForExpand = holidaySet;
-    const toYmdLocal = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    function listWorkingYmds(startYmd: string, endYmd: string): string[] {
-      const s = new Date(startYmd);
-      const e = new Date(endYmd);
-      const cur = new Date(s.getFullYear(), s.getMonth(), s.getDate());
-      const end = new Date(e.getFullYear(), e.getMonth(), e.getDate());
-      const out: string[] = [];
-      while (cur <= end) {
-        const ds = toYmdLocal(cur);
-        const dow = cur.getDay();
-        if (dow !== 0 && dow !== 6 && !holidaySetForExpand.has(ds)) out.push(ds);
-        cur.setDate(cur.getDate() + 1);
-      }
-      return out;
-    }
-
-    /**
-     * 연차 소진(우선순위 + 부분 소진) 정확도를 위해,
-     * - 연차 차감(deductFromBalance) + 전용풀 아님(allocationSourceCode 없음) + 종일(FULL) 항목은
-     *   1일을 0.5 + 0.5 단위로 쪼개 allocationId를 우선순위대로 배정한다.
-     */
-    const expandedWorkItems: WorkItem[] = [];
-    for (const it of workItems) {
-      const lt = ltMap[it.leaveTypeId];
-      if (lt?.deductFromBalance && !lt.allocationSourceCode && it.timeSlot === "FULL") {
-        const ymds = listWorkingYmds(it.startDate, it.endDate);
-        for (const d of ymds) {
-          expandedWorkItems.push({ ...it, startDate: d, endDate: d, days: 0.5 });
-          expandedWorkItems.push({ ...it, startDate: d, endDate: d, days: 0.5 });
-        }
-      } else {
-        expandedWorkItems.push(it);
-      }
     }
 
     const resolvedItems = expandedWorkItems.map((it) => {
@@ -398,9 +468,9 @@ export async function POST(req: Request) {
       const days = leaveItemDeductDays(it, lt);
       let allocationId = it.allocationId || null;
       if (lt?.allocationSourceCode && !allocationId) {
-        allocationId = pickDedicatedAllocation(lt.allocationSourceCode, days);
+        allocationId = pickDedicatedAllocation(lt.allocationSourceCode, days, it.startDate, it.endDate);
       } else if (lt?.deductFromBalance && !allocationId) {
-        allocationId = pickAllocation(days);
+        allocationId = pickAllocation(days, it.startDate, it.endDate);
       }
       return { ...it, days, allocationId };
     });
@@ -510,15 +580,23 @@ export async function POST(req: Request) {
             include: { items: { include: { leaveType: true } } } as const,
           });
           if (reqWithItems) {
-            const tNow = new Date();
             for (const item of reqWithItems.items) {
               let allocId = item.allocationId;
               if (!allocId) continue;
               const alloc = await tx.leaveAllocation.findUnique({ where: { id: allocId } });
               if (!alloc) continue;
-              const expired = new Date(alloc.validUntil) < tNow;
+              const itemStartYmd = kstYmd(new Date(item.startDate));
+              const itemEndYmd = kstYmd(new Date(item.endDate));
+              const coversItem = allocationFullyCoversKstYmdRange(
+                alloc.validFrom,
+                alloc.validUntil,
+                itemStartYmd,
+                itemEndYmd,
+              );
               if (isAnnualPoolSourceCode(alloc.sourceCode)) {
-                if (!alloc.isActive || expired) {
+                if (!alloc.isActive || !coversItem) {
+                  const itemStart = new Date(`${itemStartYmd}T00:00:00+09:00`);
+                  const itemEnd = new Date(`${itemEndYmd}T23:59:59.999+09:00`);
                   const fallback = await tx.leaveAllocation.findFirst({
                     where: {
                       employeeId: user.employeeId,
@@ -528,13 +606,23 @@ export async function POST(req: Request) {
                         { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
                       ],
                       isActive: true,
-                      validUntil: { gte: tNow },
+                      validFrom: { lte: itemEnd },
+                      validUntil: { gte: itemStart },
                     },
                     orderBy: { validUntil: "asc" },
                   });
-                  allocId = fallback?.id ?? null;
+                  const fb = fallback &&
+                    allocationFullyCoversKstYmdRange(
+                      fallback.validFrom,
+                      fallback.validUntil,
+                      itemStartYmd,
+                      itemEndYmd,
+                    )
+                      ? fallback
+                      : null;
+                  allocId = fb?.id ?? null;
                 }
-              } else if (!alloc.isActive || expired) {
+              } else if (!alloc.isActive || !coversItem) {
                 allocId = null;
               }
               if (allocId) {

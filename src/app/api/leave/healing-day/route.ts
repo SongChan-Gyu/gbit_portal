@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { findHealingStampCard } from "@/lib/stampCard";
+import { addDaysYMD, todayKstYmd } from "@/lib/dateUtils";
+import { kstMidnightFromYmd } from "@/lib/workdays";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -12,7 +14,12 @@ export async function POST(req: Request) {
   const lt = await prisma.leaveType.findUnique({ where: { code: "HEALING_DAY" } });
   if (!lt) return NextResponse.json({ error: "힐링데이 유형이 없습니다." }, { status: 404 });
 
-  const targetDate = date ? new Date(date) : new Date();
+  const dateYmd =
+    typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date.slice(0, 10))
+      ? date.slice(0, 10)
+      : todayKstYmd();
+  const targetDate = kstMidnightFromYmd(dateYmd);
+  const nextDay = kstMidnightFromYmd(addDaysYMD(dateYmd, 1));
 
   // 중복 체크
   const dup = await prisma.leaveRequest.findFirst({
@@ -21,8 +28,8 @@ export async function POST(req: Request) {
       status: { notIn: ["CANCELLED", "WITHDRAWN"] },
       items: { some: { leaveTypeId: lt.id } },
       startDate: {
-        gte: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate()),
-        lt:  new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate() + 1),
+        gte: targetDate,
+        lt: nextDay,
       },
     },
   });
@@ -58,7 +65,7 @@ export async function POST(req: Request) {
         action: "HEALING_DAY_APPLIED",
         actorId: user.employeeId,
         snapshot: JSON.stringify({
-          date: targetDate.toISOString().slice(0, 10),
+          date: dateYmd,
           stampCardId: healCard.id,
           healingSlot: true,
         }),

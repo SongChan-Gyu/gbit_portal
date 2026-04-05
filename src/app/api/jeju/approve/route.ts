@@ -67,8 +67,8 @@ export async function POST(req: Request) {
       actorId: user.employeeId, after: { status: "REJECTED", step: 1 },
       note: `1차 반려: ${comment}`, ip: getIp(req) ?? undefined,
     });
-    // 신청자에게 반려 알림
-    await sendJejuNotification(prisma, "applicant_rejected", row.employee, row, 1).catch(console.warn);
+    // 신청자에게 반려 알림 (메모리상 row에는 rejectComment가 없으므로 전달)
+    await sendJejuNotification(prisma, "applicant_rejected", row.employee, { ...row, rejectComment: comment?.trim() ?? null }, 1).catch(console.warn);
     return NextResponse.json({ ok: true });
   }
 

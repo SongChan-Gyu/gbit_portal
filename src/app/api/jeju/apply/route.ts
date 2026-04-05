@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { calcNights, isJejuDateBookable, JEJU_MAX_NIGHTS_DEFAULT } from "@/lib/jeju";
+import {
+  calcNights,
+  isJejuDateBookable,
+  jejuKstMidnightFromYmdStr,
+  jejuPeriodTouchesBlockedYmds,
+  JEJU_MAX_NIGHTS_DEFAULT,
+} from "@/lib/jeju";
 import { sendJejuNotification } from "@/lib/jejuNotify";
 
 async function getBlockedDates(): Promise<string[]> {
@@ -13,19 +19,6 @@ async function getBlockedDates(): Promise<string[]> {
   } catch {
     return [];
   }
-}
-
-/** 선택 기간 내 하루라도 예약 불가일이 있으면 true */
-function periodOverlapsBlocked(startDate: Date, endDate: Date, blocked: string[]): boolean {
-  const set = new Set(blocked);
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    if (set.has(d.toISOString().slice(0, 10))) return true;
-  }
-  return false;
 }
 
 export async function POST(req: Request) {
@@ -59,12 +52,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "입실 인원을 1명 이상 입력해 주세요." }, { status: 400 });
   }
 
-  const startDate = new Date(startStr);
-  const endDate = new Date(endStr);
-  startDate.setHours(0, 0, 0, 0);
-  endDate.setHours(0, 0, 0, 0);
+  const sY = startStr.slice(0, 10);
+  const eY = endStr.slice(0, 10);
+  const startDate = jejuKstMidnightFromYmdStr(sY);
+  const endDate = jejuKstMidnightFromYmdStr(eY);
 
-  if (startDate >= endDate) {
+  if (sY >= eY) {
     return NextResponse.json({ error: "제주도 숙소는 1박 이상(퇴실일이 입실일 다음 날 이상)만 신청할 수 있습니다." }, { status: 400 });
   }
 
@@ -75,7 +68,7 @@ export async function POST(req: Request) {
   }
 
   const blockedDates = await getBlockedDates();
-  if (periodOverlapsBlocked(startDate, endDate, blockedDates)) {
+  if (jejuPeriodTouchesBlockedYmds(startDate, endDate, blockedDates)) {
     return NextResponse.json({
       error: "선택한 기간 중 예약이 불가한 날짜가 포함되어 있습니다. 숙소 정보 또는 관리자에게 문의하세요.",
     }, { status: 400 });

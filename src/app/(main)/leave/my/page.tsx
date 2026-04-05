@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getFiscalYear } from "@/lib/workdays";
+import { fiscalPeriod } from "@/lib/leaveCalc";
 import { formatMDWithDay, formatYMD } from "@/lib/dateUtils";
 import { getTenureScheduleForFiscalYears } from "@/lib/scheduler";
 import CancelButton from "./CancelButton";
@@ -23,21 +24,19 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const fy       = fyRaw ? parseInt(fyRaw) : getFiscalYear();
   const activeTab = tab ?? "list"; // list | monthly
 
-  const fyStart = new Date(fy, 4, 1, 0, 0, 0, 0);
-  const fyEnd   = new Date(fy + 1, 3, 30, 23, 59, 59, 999);
+  const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
   const fyRangeLabel = `${formatYMD(fyStart)} ~ ${formatYMD(fyEnd)}`;
-  const dayStart = new Date();
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date();
-  dayEnd.setHours(23, 59, 59, 999);
 
   const [allocations, requests, tenureScheduleAll, reasonNoPoolLeaveTypes, assetPoolLeaveTypes, tenureMilestoneCodes] = await Promise.all([
+    // 관리자 휴가관리와 동일: 태그된 귀속연도(fiscalYear)이거나, 선택 FY 구간과 유효기간이 겹치면 표시
     prisma.leaveAllocation.findMany({
       where: {
         employeeId: user.employeeId,
         isActive: true,
-        validFrom: { lte: dayEnd },  // 날짜 기준 활성(당일 시작 포함)
-        validUntil: { gte: dayStart },
+        OR: [
+          { fiscalYear: fy },
+          { AND: [{ validFrom: { lte: fyEnd } }, { validUntil: { gte: fyStart } }] },
+        ],
       },
       orderBy: [{ fiscalYear:"desc" }, { sourceCode:"asc" }],
     }),
@@ -82,11 +81,10 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   const tenureThisFy = myTenureSchedule.filter((r) => r.fiscalYear === fy);
   const tenureNextFy = myTenureSchedule.filter((r) => r.fiscalYear === fy + 1);
 
-  const now = new Date();
   // 같은 귀속연도에 근속휴가가 fiscalYear null + fy 두 개 있으면 하나만 표시 (init 중복 방지)
   // tenureMilestoneCodes: AllocationSourceConfig.tenureYears != null 기반으로 동적 로드
   const TENURE_CODES = tenureMilestoneCodes;
-  const rawFyAllocs = allocations.filter((a) => a.fiscalYear === fy || !a.fiscalYear);
+  const rawFyAllocs = allocations;
   const byTenureSource = new Map<string, (typeof rawFyAllocs)[0]>();
   const fyAllocs: (typeof rawFyAllocs)[0][] = [];
   const annualPoolRows = rawFyAllocs.filter((a) => isAnnualPoolSourceCode(a.sourceCode));
@@ -127,8 +125,13 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   );
   // 정책상 자산형으로 유지해야 하는 공통 풀(LeaveType과 직접 1:1이 아닐 수 있음)
   const KPI_ASSET_FALLBACK = new Set(["ANNUAL", "DUTY_DEPT"]);
-  const validAllocs = fyAllocs.filter((a) => now >= new Date(a.validFrom) && now <= new Date(a.validUntil));
-  const kpiAllocs = validAllocs.filter((a) => kpiAssetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode) || isAnnualPoolSourceCode(a.sourceCode));
+  // 선택 귀속 구간과 유효기간이 겹치는 부여만 상단 KPI에 반영(오늘 기준만 쓰면 FY 시작 전·말 후 탭에서 0으로 보이던 문제 방지)
+  const allocsOverlappingFy = fyAllocs.filter(
+    (a) => new Date(a.validFrom) <= fyEnd && new Date(a.validUntil) >= fyStart,
+  );
+  const kpiAllocs = allocsOverlappingFy.filter(
+    (a) => kpiAssetSourceCodes.has(a.sourceCode) || KPI_ASSET_FALLBACK.has(a.sourceCode) || isAnnualPoolSourceCode(a.sourceCode),
+  );
   const granted  = kpiAllocs.reduce((s,a)=>s+a.totalDays, 0);
   const used     = kpiAllocs.reduce((s,a)=>s+a.usedDays,  0);
   const remain   = granted - used;

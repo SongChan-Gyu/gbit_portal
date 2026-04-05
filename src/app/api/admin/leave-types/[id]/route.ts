@@ -39,8 +39,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     requiresStamp:body.requiresStamp, stampCount:body.stampCount??null,
     allowsFullDay, allowsHalfDay, halfDayAmPm: hd,
     includeInFiscalInit: body.includeInFiscalInit ?? undefined,
-    carryoverEligible: body.carryoverEligible ?? undefined,
-    autoCarryoverOnFiscalInit: body.autoCarryoverOnFiscalInit ?? undefined,
     isHalf: legacy.isHalf, isAmOnly: legacy.isAmOnly, isPmOnly: legacy.isPmOnly,
     validityBasis:body.validityBasis, validityMonths:body.validityMonths??null,
     isActive:body.isActive, sortOrder:body.sortOrder, color:body.color,
@@ -66,7 +64,36 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
         ? body.applyGroupKey.trim()
         : null;
   }
+  if ("hireAnniversaryYears" in body) {
+    const v = body.hireAnniversaryYears;
+    if (v === null || v === "") {
+      data.hireAnniversaryYears = null;
+    } else if (typeof v === "number" && v > 0) {
+      data.hireAnniversaryYears = Math.floor(v);
+    }
+  }
+  if ("carryoverEligible" in body) {
+    data.carryoverEligible = body.carryoverEligible === true;
+  }
   const updated = await prisma.leaveType.update({ where:{ id }, data });
+  if (updated.allocationSourceCode && updated.allocationSourceCode !== "") {
+    const hy = updated.hireAnniversaryYears;
+    if (hy != null && hy > 0) {
+      const dpu = Number(updated.daysPerUnit ?? 1);
+      await prisma.allocationSourceConfig.updateMany({
+        where: { sourceCode: updated.allocationSourceCode },
+        data: {
+          tenureYears: hy,
+          defaultDays: Number.isFinite(dpu) ? dpu : null,
+        },
+      });
+    } else if ("hireAnniversaryYears" in body) {
+      await prisma.allocationSourceConfig.updateMany({
+        where: { sourceCode: updated.allocationSourceCode },
+        data: { tenureYears: updated.hireAnniversaryYears },
+      });
+    }
+  }
   if (updated.allocationSourceCode && updated.validityBasis === "귀속연도") {
     const defaultDays =
       updated.maxPerYear != null ? Number(updated.maxPerYear) : Number(updated.daysPerUnit ?? 1);

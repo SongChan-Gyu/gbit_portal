@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { formatYMD, formatMDWithDay } from "@/lib/dateUtils";
+import { formatYMD, formatMDWithDay, kstYmd, todayKstYmd, ymMonthEndYmd } from "@/lib/dateUtils";
+import { getFiscalYear } from "@/lib/workdays";
 
 type LeaveRequestRow = {
   id: string;
@@ -34,12 +35,6 @@ const STATUS_CLS: Record<string, string> = {
   WITHDRAWN: "bg-gray-100 text-gray-600",
   CANCEL_REQUESTED: "bg-amber-100 text-amber-800",
 };
-
-function getFiscalYear(): number {
-  const d = new Date();
-  const m = d.getMonth();
-  return m >= 4 ? d.getFullYear() : d.getFullYear() - 1;
-}
 
 function getWeekRange(date: Date): { start: Date; end: Date } {
   const d = new Date(date);
@@ -76,8 +71,9 @@ export default function LeaveApprovalsTab({
   const [list, setList] = useState<LeaveRequestRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [teamView, setTeamView] = useState<"week" | "month">("month");
-  const [teamMonth, setTeamMonth] = useState(new Date().getMonth() + 1);
-  const [teamYear, setTeamYear] = useState(new Date().getFullYear());
+  const [kY, kM] = todayKstYmd().split("-").map((x) => parseInt(x, 10));
+  const [teamMonth, setTeamMonth] = useState(kM);
+  const [teamYear, setTeamYear] = useState(kY);
   const [teamList, setTeamList] = useState<LeaveRequestRow[]>([]);
   const [cancelling, setCancelling] = useState<string | null>(null);
 
@@ -105,8 +101,8 @@ export default function LeaveApprovalsTab({
       end = range.end;
     }
     const params = new URLSearchParams({
-      start: start.toISOString().slice(0, 10),
-      end: end.toISOString().slice(0, 10),
+      start: kstYmd(start),
+      end: kstYmd(end),
     });
     const res = await fetch(`/api/admin/leave-requests?${params}`);
     if (res.ok) setTeamList(await res.json());
@@ -303,9 +299,9 @@ export default function LeaveApprovalsTab({
         {teamView === "month" ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {threeMonths.map(({ label, y, m }) => {
-              const range = getMonthRange(y, m);
-              const startStr = range.start.toISOString().slice(0, 10);
-              const endStr = range.end.toISOString().slice(0, 10);
+              const ym = `${y}-${String(m).padStart(2, "0")}`;
+              const startStr = `${ym}-01`;
+              const endStr = ymMonthEndYmd(ym);
               const inRange = teamList.filter((r) => {
                 const s = r.startDate.slice(0, 10);
                 const e = r.endDate.slice(0, 10);

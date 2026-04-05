@@ -1,3 +1,6 @@
+import { addDaysYMD, eachYmdInHalfOpenRange, kstYmd, todayKstYmd } from "@/lib/dateUtils";
+import { kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
+
 /**
  * 제주도 숙소: 직급부서가 복지부인 사람만 승인 가능 (dutyDept === "WELFARE")
  */
@@ -6,31 +9,62 @@ export function isWelfareDept(emp: { dutyDept?: string | null } | null): boolean
   return emp.dutyDept === "WELFARE";
 }
 
-/** 1박 = endDate > startDate (날짜 기준). 입실 15시·퇴실 11시 고정 */
+/** 1박 = endDate > startDate (KST 달력일 기준). 입실 15시·퇴실 11시 고정 */
 export function calcNights(startDate: Date, endDate: Date): number {
-  const s = new Date(startDate);
-  const e = new Date(endDate);
-  s.setHours(0, 0, 0, 0);
-  e.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.floor((e.getTime() - s.getTime()) / (24 * 60 * 60 * 1000)));
+  let n = 0;
+  let cur = kstYmd(startDate);
+  const end = kstYmd(endDate);
+  while (cur < end) {
+    n++;
+    cur = addDaysYMD(cur, 1);
+  }
+  return n;
 }
 
-/** 예약 가능 기간: 매월 1일 기준 2달 후 말일까지가 예약 시작일(입실일) 한도. ex) 3월 → 5/31까지 시작일 가능 */
+/**
+ * 예약 가능 기간 말일 YYYY-MM-DD: 매월 1일 기준 2달 후 말일까지가 예약 시작일(입실일) 한도.
+ * (한국 달력 기준, 서버 TZ와 무관)
+ */
+export function getJejuBookingWindowEndYmd(): string {
+  const [y, m] = todayKstYmd().split("-").map(Number);
+  let ty = y;
+  let tm = m + 2;
+  while (tm > 12) {
+    tm -= 12;
+    ty++;
+  }
+  const lastD = new Date(ty, tm, 0).getDate();
+  return `${ty}-${String(tm).padStart(2, "0")}-${String(lastD).padStart(2, "0")}`;
+}
+
+/** 예약 가능 기간 말일 23:59:59.999 KST */
 export function getJejuBookingWindowEnd(): Date {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth(); // 0-based
-  const end = new Date(y, m + 2 + 1, 0); // 현재 월 + 2 의 말일 (예약 시작일 한도)
-  end.setHours(23, 59, 59, 999);
-  return end;
+  const ymd = getJejuBookingWindowEndYmd();
+  const [yy, mm, dd] = ymd.split("-").map(Number);
+  return kstEndOfDay(yy, mm, dd);
 }
 
 /** 예약 시작일(입실일)이 한도 이내인지. 매월 1일 기준 2달 후 말일 이내만 신청 가능 */
 export function isJejuDateBookable(startDate: Date): boolean {
-  const end = getJejuBookingWindowEnd();
-  const s = new Date(startDate);
-  s.setHours(0, 0, 0, 0);
-  return s <= end;
+  return kstYmd(startDate) <= getJejuBookingWindowEndYmd();
+}
+
+/** [입실, 퇴실) 구간에 블록 YMD가 하나라도 걸치면 true */
+export function jejuPeriodTouchesBlockedYmds(
+  startDate: Date,
+  endDate: Date,
+  blockedYmds: string[],
+): boolean {
+  const set = new Set(blockedYmds);
+  for (const ymd of eachYmdInHalfOpenRange(kstYmd(startDate), kstYmd(endDate))) {
+    if (set.has(ymd)) return true;
+  }
+  return false;
+}
+
+/** 입실·퇴실 문자열(YYYY-MM-DD) → KST 자정 Date (Prisma 저장용) */
+export function jejuKstMidnightFromYmdStr(ymd: string): Date {
+  return kstMidnightFromYmd(ymd.slice(0, 10));
 }
 
 /** 최대 연박 수 (시스템 설정, 기본 14) */

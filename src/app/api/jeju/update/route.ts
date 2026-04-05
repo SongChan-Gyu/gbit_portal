@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
-import { calcNights, isJejuDateBookable, JEJU_MAX_NIGHTS_DEFAULT } from "@/lib/jeju";
+import {
+  calcNights,
+  isJejuDateBookable,
+  jejuKstMidnightFromYmdStr,
+  jejuPeriodTouchesBlockedYmds,
+  JEJU_MAX_NIGHTS_DEFAULT,
+} from "@/lib/jeju";
 import { writeAudit, getIp } from "@/lib/audit";
 import { sendJejuNotification } from "@/lib/jejuNotify";
 
@@ -14,18 +20,6 @@ async function getBlockedDates(): Promise<string[]> {
   } catch {
     return [];
   }
-}
-
-function periodOverlapsBlocked(startDate: Date, endDate: Date, blocked: string[]): boolean {
-  const set = new Set(blocked);
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-    if (set.has(d.toISOString().slice(0, 10))) return true;
-  }
-  return false;
 }
 
 /**
@@ -82,18 +76,18 @@ export async function PATCH(req: Request) {
   let resetApproval = false;
 
   if (startStr != null && endStr != null) {
-    const startDate = new Date(startStr);
-    const endDate = new Date(endStr);
-    startDate.setHours(0, 0, 0, 0);
-    endDate.setHours(0, 0, 0, 0);
-    if (startDate >= endDate) {
+    const sY = startStr.slice(0, 10);
+    const eY = endStr.slice(0, 10);
+    const startDate = jejuKstMidnightFromYmdStr(sY);
+    const endDate = jejuKstMidnightFromYmdStr(eY);
+    if (sY >= eY) {
       return NextResponse.json({ error: "제주도 숙소는 1박 이상(퇴실일이 입실일 다음 날 이상)만 선택할 수 있습니다." }, { status: 400 });
     }
     if (!isJejuDateBookable(startDate)) {
       return NextResponse.json({ error: "예약 시작일(입실일)은 매월 1일 기준 2달 후 말일까지만 선택 가능합니다." }, { status: 400 });
     }
     const blockedDates = await getBlockedDates();
-    if (periodOverlapsBlocked(startDate, endDate, blockedDates)) {
+    if (jejuPeriodTouchesBlockedYmds(startDate, endDate, blockedDates)) {
       return NextResponse.json({ error: "선택한 기간 중 예약이 불가한 날짜가 포함되어 있습니다." }, { status: 400 });
     }
     const nights = calcNights(startDate, endDate);

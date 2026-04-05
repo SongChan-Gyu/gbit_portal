@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { kstYmd } from "@/lib/dateUtils";
 
 export async function GET() {
   const session = await auth();
@@ -16,8 +17,8 @@ export async function GET() {
   return NextResponse.json(
     list.map((r) => ({
       id: r.id,
-      startDate: r.startDate.toISOString().slice(0, 10),
-      endDate: r.endDate.toISOString().slice(0, 10),
+      startDate: kstYmd(r.startDate),
+      endDate: kstYmd(r.endDate),
       nights: r.nights,
       reason: r.reason,
       guestName: r.guestName,

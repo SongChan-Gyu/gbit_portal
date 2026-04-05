@@ -68,7 +68,10 @@ export async function PATCH(req: Request) {
     depositAccount?: JejuDepositAccount;
     blockedDates?: string[];
     maxNights?: number;
-    notifyConfig?: { step1?: { phone?: string; email?: string }; step2?: { phone?: string; email?: string } };
+    notifyConfig?: {
+      step1?: { phone?: string; email?: string; notifyVia?: string };
+      step2?: { phone?: string; email?: string; notifyVia?: string };
+    };
   };
 
   if (body.depositAccount != null) {
@@ -109,14 +112,18 @@ export async function PATCH(req: Request) {
 
   if (body.notifyConfig != null) {
     const cfg = body.notifyConfig;
+    const via = (v: unknown) =>
+      v === "alimtalk" || v === "both" || v === "email" ? v : "email";
     const sanitized = {
       step1: {
         email: typeof cfg.step1?.email === "string" ? cfg.step1.email.trim() : "",
         phone: typeof cfg.step1?.phone === "string" ? cfg.step1.phone.trim() : "",
+        notifyVia: via(cfg.step1?.notifyVia),
       },
       step2: {
         email: typeof cfg.step2?.email === "string" ? cfg.step2.email.trim() : "",
         phone: typeof cfg.step2?.phone === "string" ? cfg.step2.phone.trim() : "",
+        notifyVia: via(cfg.step2?.notifyVia),
       },
     };
     await prisma.systemConfig.upsert({

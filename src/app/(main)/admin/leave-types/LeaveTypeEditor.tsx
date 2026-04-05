@@ -13,8 +13,10 @@ interface LT {
   usageCategory:string;
   displayHint:string|null;
   includeInFiscalInit:boolean;
-  carryoverEligible:boolean;
-  autoCarryoverOnFiscalInit:boolean;
+  /** 입사 N주년에 자동 부여(입사일기준 + allocationSourceCode 있을 때). 스케줄러·귀속 초기화 보강 */
+  hireAnniversaryYears:number|null;
+  /** 휴가 할당 탭에서 수동 이월(CARRYOVER) 버튼 허용 (LeaveType 메타) */
+  carryoverEligible?:boolean;
   validityBasis:string; validityMonths:number|null;
   isActive:boolean; sortOrder:number; color:string;
   /** LeaveAllocation.sourceCode 와 동일하면 그 부여 풀에서만 차감 */
@@ -57,8 +59,8 @@ function newBlank(): Partial<LT> {
     allowsFullDay:true, allowsHalfDay:false, halfDayAmPm:"BOTH", applyGroupKey:null,
     usageCategory:"ASSET", displayHint:null,
     includeInFiscalInit:true,
+    hireAnniversaryYears:null,
     carryoverEligible:false,
-    autoCarryoverOnFiscalInit:false,
     isHalf:false, isAmOnly:false, isPmOnly:false,
     validityBasis:"귀속연도", validityMonths:null, isActive:true, sortOrder:99, color:"#3b82f6",
   };
@@ -75,6 +77,8 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
   function openEdit(lt:LT){
     setEditing({
       ...lt,
+      hireAnniversaryYears: lt.hireAnniversaryYears ?? null,
+      carryoverEligible: lt.carryoverEligible === true,
       allowsFullDay: lt.allowsFullDay ?? !lt.isHalf,
       allowsHalfDay: lt.allowsHalfDay ?? lt.isHalf,
       halfDayAmPm: lt.halfDayAmPm ?? "BOTH",
@@ -125,6 +129,7 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
     if (lt.allowsFullDay) slotBadges.push("종일");
     if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "AM_ONLY")) slotBadges.push("오전");
     if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "PM_ONLY")) slotBadges.push("오후");
+    const showUnitDays = lt.daysPerUnit !== 1 || (lt.hireAnniversaryYears != null && lt.hireAnniversaryYears > 0);
     return (
       <tr key={lt.id} className={`hover:bg-gray-50 border-b border-gray-100 last:border-0 ${!lt.isActive ? "opacity-40" : ""}`}>
         {/* 유형명 */}
@@ -162,7 +167,8 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
         {/* 제한 */}
         <td className="px-2 sm:px-3 py-3 text-center hidden lg:table-cell">
           <div className="flex items-center justify-center gap-1 flex-wrap">
-            {lt.daysPerUnit !== 1 && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{lt.daysPerUnit}일/단위</span>}
+            {showUnitDays && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{lt.daysPerUnit}일/단위</span>}
+            {lt.carryoverEligible && <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded" title="휴가 할당에서 수동 이월 허용">이월가능</span>}
             {lt.maxPerMonth && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">월{lt.maxPerMonth}회</span>}
             {lt.maxPerYear  && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">연{lt.maxPerYear}일</span>}
             {lt.requiresStamp && <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">×{lt.stampCount}개</span>}
@@ -208,6 +214,7 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
     if (lt.allowsFullDay) slotBadges.push("종일");
     if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "AM_ONLY")) slotBadges.push("오전");
     if (lt.allowsHalfDay && (lt.halfDayAmPm === "BOTH" || lt.halfDayAmPm === "PM_ONLY")) slotBadges.push("오후");
+    const showUnitDaysCard = lt.daysPerUnit !== 1 || (lt.hireAnniversaryYears != null && lt.hireAnniversaryYears > 0);
     return (
       <div key={lt.id} className={`rounded-xl border border-gray-200 bg-white p-4 shadow-sm ${!lt.isActive ? "opacity-60" : ""}`}>
         <div className="flex items-start justify-between gap-3">
@@ -234,9 +241,10 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
           </span>
           {vb && <span className={`text-xs px-2 py-1 rounded-full font-medium ${vb.bg} ${vb.text}`}>{vb.label}</span>}
         </div>
-        {(lt.daysPerUnit !== 1 || lt.maxPerMonth || lt.maxPerYear || lt.requiresStamp) && (
+        {(showUnitDaysCard || lt.maxPerMonth || lt.maxPerYear || lt.requiresStamp || lt.carryoverEligible) && (
           <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-gray-500">
-            {lt.daysPerUnit !== 1 && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{lt.daysPerUnit}일/단위</span>}
+            {showUnitDaysCard && <span className="bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{lt.daysPerUnit}일/단위</span>}
+            {lt.carryoverEligible && <span className="bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded">이월가능</span>}
             {lt.maxPerMonth && <span>월{lt.maxPerMonth}회</span>}
             {lt.maxPerYear && <span>연{lt.maxPerYear}일</span>}
             {lt.requiresStamp && <span className="bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">×{lt.stampCount}개</span>}
@@ -459,6 +467,26 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
                     <p className="text-xs text-gray-400 mt-1">비워두면 귀속연도 4/30까지</p>
                   </div>
                 </div>
+                {(editing.validityBasis === "입사일기준" || editing.hireAnniversaryYears != null) && (
+                  <div>
+                    <label className="label">입사 주년 (N년 차)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      placeholder="예: 1, 5, 10"
+                      className="input"
+                      value={editing.hireAnniversaryYears ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        set("hireAnniversaryYears", v === "" ? null : Math.max(1, parseInt(v, 10) || 1));
+                      }}
+                    />
+                    <p className="text-xs text-gray-400 mt-1">
+                      전용 부여 풀 코드와 함께 쓰입니다. 비우면 AllocationSourceConfig의 근속 연수만 참고합니다.
+                    </p>
+                  </div>
+                )}
               </fieldset>
 
               {/* 제한 */}
@@ -512,12 +540,14 @@ export default function LeaveTypeEditor({ leaveTypes }: { leaveTypes:LT[] }) {
               {/* 기타 속성 */}
               <fieldset className="rounded-lg bg-gray-50 border border-gray-200 p-4">
                 <legend className="text-xs font-semibold text-gray-600 px-1">기타</legend>
+                <p className="text-xs text-gray-500 mb-2">
+                  「수동 이월 허용」은 휴가 할당 탭에서 잔여를 다음 귀속연도 CARRYOVER로 넘기는 버튼을 켭니다. 연차·근속가산 풀 등 정책에 맞게 설정하세요.
+                </p>
                 <div className="grid grid-cols-2 gap-2 mt-1">
                   {([
+                    ["carryoverEligible", "수동 이월 허용 (CARRYOVER)"],
                     ["requiresStamp", "스탬프 쿠폰 필요"],
                     ["includeInFiscalInit", "귀속연도 초기화 포함"],
-                    ["carryoverEligible", "이월 가능"],
-                    ["autoCarryoverOnFiscalInit", "귀속연도 초기화 시 자동 이월"],
                     ["isActive",      "활성화"],
                   ] as [keyof LT, string][]).map(([k,l]) => (
                     <label key={k as string} className="flex items-center gap-2 text-sm cursor-pointer py-1">

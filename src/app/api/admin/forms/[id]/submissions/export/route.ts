@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
+import { todayKstYmd } from "@/lib/dateUtils";
 import * as XLSX from "xlsx";
 
 export async function GET(
@@ -46,7 +47,7 @@ export async function GET(
   const sheetName = form.title.slice(0, 31).replace(/[/\\*?:\[\]]/g, " ");
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   const arr = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-  const filename = `form_${form.slug}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const filename = `form_${form.slug}_${todayKstYmd()}.xlsx`;
 
   return new NextResponse(new Uint8Array(arr), {
     headers: {

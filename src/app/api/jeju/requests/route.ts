@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
+import { kstYmd } from "@/lib/dateUtils";
 
 /** 복지부 또는 PM/ADMIN: 전체 신청 목록 */
 export async function GET() {
@@ -38,8 +39,8 @@ export async function GET() {
       employeeName: r.employee.name,
       empNo: r.employee.empNo,
       teamName: r.employee.team?.name ?? null,
-      startDate: r.startDate.toISOString().slice(0, 10),
-      endDate: r.endDate.toISOString().slice(0, 10),
+      startDate: kstYmd(r.startDate),
+      endDate: kstYmd(r.endDate),
       nights: r.nights,
       reason: r.reason,
       guestName: r.guestName,

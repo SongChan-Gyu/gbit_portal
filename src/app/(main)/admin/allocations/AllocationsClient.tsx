@@ -3,9 +3,10 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Pencil, ToggleLeft, ToggleRight, AlertTriangle, X,
-  CheckCircle, ArrowRightCircle, PlusCircle,
+  CheckCircle, ArrowRightCircle, PlusCircle, Trash2,
 } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
+import DatePickerButton from "@/components/ui/DatePickerButton";
 
 interface Emp { id: string; name: string; empNo: string; team: { name: string } | null; }
 interface Alloc {
@@ -164,6 +165,25 @@ export default function AllocationsClient({ employees, initialAllocations, selec
     }
   }
 
+  async function deleteAlloc(a: Alloc) {
+    const usedWarn = Number(a.usedDays) > 1e-6
+      ? `\n⚠️ 사용 일수(${a.usedDays}일)가 있어 삭제할 수 없습니다.`
+      : "";
+    if (usedWarn) {
+      alert(`${a.label} 삭제 불가${usedWarn}\n\n사용 내역이 있는 할당은 비활성화를 사용하세요.`);
+      return;
+    }
+    if (!confirm(`[${a.label}] 할당을 완전히 삭제하시겠습니까?\n삭제 후에는 복구할 수 없습니다.`)) return;
+    const res = await fetch(`/api/admin/allocations/${a.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setAllocs(prev => prev.filter(al => al.id !== a.id));
+      setMsg({ type: "ok", text: `${a.label} 삭제 완료` });
+    } else {
+      const data = await res.json();
+      setMsg({ type: "err", text: data.error ?? "삭제 실패" });
+    }
+  }
+
   const active   = allocs.filter(a =>  a.isActive);
   const inactive = allocs.filter(a => !a.isActive);
 
@@ -275,6 +295,12 @@ export default function AllocationsClient({ employees, initialAllocations, selec
                             className="inline-flex items-center gap-1 text-[11px] text-orange-600 hover:text-orange-800 px-2 py-1 rounded hover:bg-orange-50">
                             <ToggleLeft size={11}/> 비활성화
                           </button>
+                          {Number(a.usedDays) < 1e-6 && (
+                            <button onClick={() => deleteAlloc(a)}
+                              className="inline-flex items-center gap-1 text-[11px] text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">
+                              <Trash2 size={11}/> 삭제
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -303,10 +329,18 @@ export default function AllocationsClient({ employees, initialAllocations, selec
                       <td className="px-4 py-3 text-right text-gray-400">{a.usedDays}일 사용</td>
                       <td className="px-4 py-3 text-right text-gray-400">{(a.totalDays - a.usedDays).toFixed(1)}일</td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => toggleActive(a)}
-                          className="inline-flex items-center gap-1 text-[11px] text-teal-600 hover:text-teal-800 px-2 py-1 rounded hover:bg-teal-50">
-                          <ToggleRight size={11}/> 복구
-                        </button>
+                        <div className="flex items-center justify-center gap-1 flex-wrap">
+                          <button onClick={() => toggleActive(a)}
+                            className="inline-flex items-center gap-1 text-[11px] text-teal-600 hover:text-teal-800 px-2 py-1 rounded hover:bg-teal-50">
+                            <ToggleRight size={11}/> 복구
+                          </button>
+                          {Number(a.usedDays) < 1e-6 && (
+                            <button onClick={() => deleteAlloc(a)}
+                              className="inline-flex items-center gap-1 text-[11px] text-red-500 hover:text-red-700 px-2 py-1 rounded hover:bg-red-50">
+                              <Trash2 size={11}/> 삭제
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -330,21 +364,33 @@ export default function AllocationsClient({ employees, initialAllocations, selec
                 <AlertTriangle size={13} className="shrink-0 mt-0.5"/>
                 <span>모든 수정은 감사 로그에 기록됩니다.</span>
               </div>
-              {[
+              {([
                 ["label",    "표시명",      "text"],
                 ["totalDays","부여 일수",   "number"],
                 ["usedDays", "사용 일수",   "number"],
-                ["validFrom","유효기간 시작","date"],
-                ["validUntil","유효기간 종료","date"],
-              ].map(([k, l, t]) => (
+              ] as [string, string, string][]).map(([k, l, t]) => (
                 <div key={k}>
                   <label className="label">{l}</label>
                   <input type={t} step={t === "number" ? "0.5" : undefined}
                     className="input"
-                    value={t === "date" ? String(form[k as keyof typeof form] ?? "").slice(0, 10) : (form[k as keyof typeof form] as string) ?? ""}
+                    value={(form[k as keyof typeof form] as string) ?? ""}
                     onChange={e => setForm(p => ({ ...p, [k]: t === "number" ? (e.target.value === "" ? 0 : parseFloat(e.target.value)) : e.target.value }))} />
                 </div>
               ))}
+              <div>
+                <label className="label">유효기간 시작</label>
+                <DatePickerButton
+                  value={String(form.validFrom ?? "").slice(0, 10)}
+                  onChange={d => setForm(p => ({ ...p, validFrom: d }))}
+                />
+              </div>
+              <div>
+                <label className="label">유효기간 종료</label>
+                <DatePickerButton
+                  value={String(form.validUntil ?? "").slice(0, 10)}
+                  onChange={d => setForm(p => ({ ...p, validUntil: d }))}
+                />
+              </div>
               <div>
                 <label className="label">수정 사유 (필수)</label>
                 <input className="input" placeholder="ex: 오류 수정, 수기 조정 등"

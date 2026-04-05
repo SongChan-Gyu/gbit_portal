@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import prisma from "@/lib/db";
+import { kstYmd } from "@/lib/dateUtils";
 import EmployeeForm from "../EmployeeForm";
 
 export default async function EditEmployeePage({ params }: { params: Promise<{ id: string }> }) {
@@ -18,11 +19,12 @@ export default async function EditEmployeePage({ params }: { params: Promise<{ i
   // Date 객체를 ISO 문자열로 변환해서 클라이언트 컴포넌트에 전달
   const empForForm = {
     ...employee,
-    hireDate: employee.hireDate instanceof Date
-      ? employee.hireDate.toISOString()
-      : String(employee.hireDate),
+    hireDate:
+      employee.hireDate instanceof Date ? kstYmd(employee.hireDate) : String(employee.hireDate).slice(0, 10),
     birthDate: employee.birthDate
-      ? (employee.birthDate instanceof Date ? employee.birthDate.toISOString().slice(0, 10) : String(employee.birthDate).slice(0, 10))
+      ? employee.birthDate instanceof Date
+        ? kstYmd(employee.birthDate)
+        : String(employee.birthDate).slice(0, 10)
       : null,
   };
 

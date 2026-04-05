@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import { runBirthdayHalf } from "@/lib/scheduler";
+import { todayKstYmd } from "@/lib/dateUtils";
 
 export async function POST(req: NextRequest) {
   const cronSecret = req.headers.get("x-cron-secret");
@@ -17,16 +18,26 @@ export async function POST(req: NextRequest) {
     actorId = user?.employeeId;
   }
 
-  const body = (await req.json().catch(() => ({}))) as { yearMonth?: string; dryRun?: boolean };
-  const { yearMonth, dryRun = false } = body;
+  const body = (await req.json().catch(() => ({}))) as {
+    /** YYYY-MM-DD (권장) */
+    date?: string;
+    /** YYYY-MM — 해당 월 생일자 일괄 (레거시·배치) */
+    yearMonth?: string;
+    dryRun?: boolean;
+  };
+  const { date, yearMonth, dryRun = false } = body;
 
   try {
-    const result = await runBirthdayHalf(yearMonth, dryRun, actorId);
+    const result = await runBirthdayHalf({ date, yearMonth, dryRun, actorId });
+    const targetLabel =
+      date?.trim() ||
+      yearMonth?.trim() ||
+      todayKstYmd();
 
     return NextResponse.json({
       success: true,
       isDryRun: result.isDryRun,
-      yearMonth: yearMonth ?? "이번 달",
+      target: targetLabel,
       granted: result.granted.length,
       skipped: result.skipped.length,
       errors: result.errors.length,

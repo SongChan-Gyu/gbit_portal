@@ -71,6 +71,12 @@ export default function JejuApproveClient() {
   const [loading, setLoading] = useState(true);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
+  const [depositConfirm, setDepositConfirm] = useState<{
+    id: string;
+    action: "CONFIRM" | "CANCEL_DEPOSIT";
+    summary: string;
+  } | null>(null);
+  const [depositBusy, setDepositBusy] = useState(false);
 
   const loadAll = async () => {
     const res = await fetch("/api/jeju/requests");
@@ -103,14 +109,31 @@ export default function JejuApproveClient() {
     else { const d = await res.json().catch(() => ({})); alert(d.error || "처리 실패"); }
   }
 
-  async function depositAction(id: string, action: "CONFIRM" | "CANCEL_DEPOSIT") {
+  async function depositAction(id: string, action: "CONFIRM" | "CANCEL_DEPOSIT"): Promise<boolean> {
     const res = await fetch("/api/jeju/deposit-confirm", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ requestId: id, action }),
     });
-    if (res.ok) { loadAll(); router.refresh(); }
-    else { const d = await res.json().catch(() => ({})); alert(d.error || "처리 실패"); }
+    if (res.ok) {
+      loadAll();
+      router.refresh();
+      return true;
+    }
+    const d = await res.json().catch(() => ({}));
+    alert(d.error || "처리 실패");
+    return false;
+  }
+
+  async function confirmDepositExecute() {
+    if (!depositConfirm) return;
+    setDepositBusy(true);
+    try {
+      const ok = await depositAction(depositConfirm.id, depositConfirm.action);
+      if (ok) setDepositConfirm(null);
+    } finally {
+      setDepositBusy(false);
+    }
   }
 
   async function cancelApproveRequest(id: string, action: "APPROVE" | "REJECT") {
@@ -280,7 +303,13 @@ export default function JejuApproveClient() {
                   {r.isPmAdmin && (
                     <button
                       type="button"
-                      onClick={() => depositAction(r.id, "CONFIRM")}
+                      onClick={() =>
+                        setDepositConfirm({
+                          id: r.id,
+                          action: "CONFIRM",
+                          summary: `${r.employeeName} · ${r.guestName} · ${dateLine(r.startDate, r.endDate)}`,
+                        })
+                      }
                       className="w-full min-h-[48px] rounded-xl border border-blue-700 bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 touch-manipulation"
                     >
                       입금확인 완료
@@ -353,7 +382,13 @@ export default function JejuApproveClient() {
                   {r.isPmAdmin && (
                     <button
                       type="button"
-                      onClick={() => depositAction(r.id, "CANCEL_DEPOSIT")}
+                      onClick={() =>
+                        setDepositConfirm({
+                          id: r.id,
+                          action: "CANCEL_DEPOSIT",
+                          summary: `${r.employeeName} · ${r.guestName} · ${dateLine(r.startDate, r.endDate)}`,
+                        })
+                      }
                       className="w-full min-h-[48px] rounded-xl border border-rose-700 bg-rose-700 text-white text-sm font-semibold hover:bg-rose-800 touch-manipulation"
                     >
                       입금취소 처리 완료
@@ -451,6 +486,46 @@ export default function JejuApproveClient() {
           </>
         )}
       </div>
+
+      {depositConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 p-5 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">
+              {depositConfirm.action === "CONFIRM" ? "입금확인 완료" : "입금취소 처리 완료"}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {depositConfirm.action === "CONFIRM"
+                ? "입금 확인을 완료하면 예약이 최종 승인 처리됩니다. 계속하시겠습니까?"
+                : "입금취소 처리를 완료하면 해당 건의 입금 상태가 취소로 반영됩니다. 계속하시겠습니까?"}
+            </p>
+            <p className="text-sm font-medium text-slate-800 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
+              {depositConfirm.summary}
+            </p>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                disabled={depositBusy}
+                onClick={() => setDepositConfirm(null)}
+                className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                disabled={depositBusy}
+                onClick={() => void confirmDepositExecute()}
+                className={`min-h-[48px] rounded-xl text-white text-sm font-semibold disabled:opacity-50 ${
+                  depositConfirm.action === "CONFIRM"
+                    ? "border border-blue-800 bg-blue-800 hover:bg-blue-900"
+                    : "border border-rose-800 bg-rose-800 hover:bg-rose-900"
+                }`}
+              >
+                {depositBusy ? "처리 중…" : "확인 후 처리"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

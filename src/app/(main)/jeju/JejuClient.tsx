@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { formatJejuAccountNumber } from "@/lib/jeju";
-import { todayYMD, addDaysYMD, toYMD } from "@/lib/dateUtils";
+import { addDaysYMD, calendarUtcDowFromYMD, dowLabelKoFromYmd, todayKstYmd } from "@/lib/dateUtils";
 import {
   buildHolidayDisplaySet,
   isRedCalendarDay,
@@ -36,24 +36,23 @@ type ListRequest = {
 };
 
 function getMonthRange(year: number, month: number) {
-  const from = new Date(year, month - 1, 1);
-  const to = new Date(year, month, 0);
-  return { from: toYMD(from), to: toYMD(to) };
+  const m = String(month).padStart(2, "0");
+  const last = new Date(year, month, 0).getDate();
+  return {
+    from: `${year}-${m}-01`,
+    to: `${year}-${m}-${String(last).padStart(2, "0")}`,
+  };
 }
 
-const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
-function dowLabel(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
-  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-  return DOW_KO[dt.getDay()] ?? "";
-}
 function nightsBetween(startYmd: string, endYmd: string): number {
-  const [sy, sm, sd] = startYmd.split("-").map((x) => parseInt(x, 10));
-  const [ey, em, ed] = endYmd.split("-").map((x) => parseInt(x, 10));
-  const s = new Date(sy, (sm ?? 1) - 1, sd ?? 1).getTime();
-  const e = new Date(ey, (em ?? 1) - 1, ed ?? 1).getTime();
-  const diff = Math.round((e - s) / (24 * 60 * 60 * 1000));
-  return Math.max(0, diff);
+  let n = 0;
+  let cur = startYmd.slice(0, 10);
+  const end = endYmd.slice(0, 10);
+  while (cur < end) {
+    n++;
+    cur = addDaysYMD(cur, 1);
+  }
+  return n;
 }
 
 /** 입실일 S 기준 선택 가능한 퇴실일 (1박~maxNights박, [S,E) 구간에 예약/블록 없음). 퇴실일은 시작일 한도와 무관하게 S+1~S+maxNights까지 허용 */
@@ -91,10 +90,10 @@ export default function JejuClient({
   holidayYmds: string[];
 }) {
   const router = useRouter();
-  const now = new Date();
-  const todayYmd = todayYMD();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
+  const todayYmd = todayKstYmd();
+  const [ty, tm] = todayYmd.split("-").map((x) => parseInt(x, 10));
+  const [year, setYear] = useState(ty);
+  const [month, setMonth] = useState(tm);
   const { from, to } = getMonthRange(year, month);
   const { data: occupied = { welfare: false }, isLoading: loadingOccupied, mutate: mutateOccupied } = useSWR(
     `/api/jeju/occupied-dates?from=${from}&to=${to}`,
@@ -144,7 +143,7 @@ export default function JejuClient({
   const holidaySet = useMemo(() => buildHolidayDisplaySet(holidayYmds), [holidayYmds]);
 
   const daysInMonth = new Date(year, month, 0).getDate();
-  const firstDay = new Date(year, month - 1, 1).getDay();
+  const firstDay = calendarUtcDowFromYMD(`${year}-${String(month).padStart(2, "0")}-01`);
   const calendarDays: (string | null)[] = [];
   for (let i = 0; i < firstDay; i++) calendarDays.push(null);
   for (let d = 1; d <= daysInMonth; d++) {
@@ -361,10 +360,10 @@ export default function JejuClient({
             <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2">
               <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">이용 일정</p>
               <p className="text-[15px] font-semibold text-slate-900 leading-snug">
-                입실 {checkInDate.slice(5).replace("-", "/")}({dowLabel(checkInDate)}) 15:00
+                입실 {checkInDate.slice(5).replace("-", "/")}({dowLabelKoFromYmd(checkInDate)}) 15:00
               </p>
               <p className="text-[15px] font-semibold text-slate-900 leading-snug">
-                퇴실 {checkOutDate.slice(5).replace("-", "/")}({dowLabel(checkOutDate)}) 11:00
+                퇴실 {checkOutDate.slice(5).replace("-", "/")}({dowLabelKoFromYmd(checkOutDate)}) 11:00
               </p>
               <p className="text-sm text-slate-600 pt-1">
                 숙박 <span className="font-bold text-slate-900 tabular-nums">{nightsBetween(checkInDate, checkOutDate)}</span>박

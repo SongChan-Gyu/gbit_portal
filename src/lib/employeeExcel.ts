@@ -3,6 +3,8 @@
  * - 1행: 헤더(아래 TEMPLATE_HEADERS 순서)
  * - 2행~: 데이터. 사번은 비워두면 자동 부여됨.
  */
+import { kstYmd } from "@/lib/dateUtils";
+
 export const TEMPLATE_HEADERS = [
   "이름",
   "팀",
@@ -97,7 +99,7 @@ export interface ParsedEmployeeRow {
 /** 엑셀 시리얼 날짜(숫자) → YYYY-MM-DD */
 function excelDateToStr(n: number): string {
   const d = new Date((n - 25569) * 86400 * 1000);
-  return d.toISOString().slice(0, 10);
+  return kstYmd(d);
 }
 
 /** 셀 값을 문자열로 (날짜는 YYYY-MM-DD) */
@@ -108,7 +110,7 @@ function cellStr(val: unknown): string {
     if (val > 30000) return excelDateToStr(val);
     return String(val);
   }
-  if (val instanceof Date) return val.toISOString().slice(0, 10);
+  if (val instanceof Date) return kstYmd(val);
   return String(val).trim();
 }
 

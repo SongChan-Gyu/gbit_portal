@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
-
-const TENURE_CODES = ["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"];
+import { loadTenureMilestoneSourceCodes } from "@/lib/tenureMilestoneSourceCodes";
+import { kstYmd } from "@/lib/dateUtils";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -16,27 +16,26 @@ export async function GET(req: Request) {
   const take    = Math.min(parseInt(searchParams.get("take") ?? "100"), 500);
   const skip    = parseInt(searchParams.get("skip") ?? "0");
 
+  const tenureCodes = await loadTenureMilestoneSourceCodes(prisma);
+  if (type === "tenure" && tenureCodes.length === 0) {
+    return NextResponse.json({ total: 0, rows: [] });
+  }
+
+  const monthlyOr = [
+    { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
+    { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL:" } },
+    { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL_POOL" } },
+  ];
+  const tenureOr = tenureCodes.length > 0 ? [{ sourceCode: { in: tenureCodes } }] : [];
+
   // sourceCode/노트 기반 필터 — 월별적립은 신규(BASE_ANNUAL+note키) + 레거시(MONTHLY_ACCRUAL_*) 모두 포함
   const where: any = {
     ...(empId ? { employeeId: empId } : {}),
     ...(type === "monthly"
-      ? {
-          OR: [
-            { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
-            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL:" } },
-            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL_POOL" } },
-          ],
-        }
+      ? { OR: monthlyOr }
       : type === "tenure"
-      ? { sourceCode: { in: TENURE_CODES } }
-      : {
-          OR: [
-            { sourceCode: { startsWith: "MONTHLY_ACCRUAL_" } },
-            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL:" } },
-            { sourceCode: "BASE_ANNUAL", note: { contains: "MONTHLY_ACCRUAL_POOL" } },
-            { sourceCode: { in: TENURE_CODES } },
-          ],
-        }),
+      ? { sourceCode: { in: tenureCodes } }
+      : { OR: [...monthlyOr, ...tenureOr] }),
   };
 
   const [total, allocations] = await Promise.all([
@@ -106,7 +105,7 @@ export async function GET(req: Request) {
       empName:     a.employee.name,
       empNo:       a.employee.empNo,
       teamName:    a.employee.team?.name ?? "-",
-      hireDate:    a.employee.hireDate.toISOString().slice(0, 10),
+      hireDate:    kstYmd(a.employee.hireDate),
       sourceCode:  a.sourceCode,
       typeLabel,
       isMonthly,
@@ -114,8 +113,8 @@ export async function GET(req: Request) {
       totalDays:   a.totalDays,
       usedDays:    a.usedDays,
       remain,
-      validFrom:   a.validFrom.toISOString().slice(0, 10),
-      validUntil:  a.validUntil.toISOString().slice(0, 10),
+      validFrom:   kstYmd(a.validFrom),
+      validUntil:  kstYmd(a.validUntil),
       note:        a.note,
       isActive:    a.isActive,
       status,

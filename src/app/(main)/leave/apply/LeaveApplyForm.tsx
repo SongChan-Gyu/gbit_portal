@@ -1,9 +1,10 @@
 "use client";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import DatePickerButton from "@/components/ui/DatePickerButton";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
 import { calcHolidayExtFullDays } from "@/lib/holidayExt";
-import { formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
+import { calendarUtcDowFromYMD, eachYmdInInclusiveRange, formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
 import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
@@ -17,6 +18,7 @@ interface LT {
   deductFromBalance: boolean; approvalSteps: number;
   maxPerMonth: number | null; requiresStamp: boolean; stampCount: number | null;
   isHalf: boolean; isAmOnly: boolean; isPmOnly: boolean;
+  sortOrder?: number | null;
   applyGroupKey?: string | null;
   allowsFullDay?: boolean | null;
   allowsHalfDay?: boolean | null;
@@ -26,6 +28,17 @@ interface LT {
   usageCategory?: string | null;
   displayHint?: string | null;
 }
+/** 신청 구간 [minYmd,maxYmd]와 할당 validFrom~validUntil(날짜 문자열 앞 10자)이 겹치면 true */
+function allocationOverlapsApplicationYmd(
+  a: { validFrom: string; validUntil: string },
+  minYmd: string,
+  maxYmd: string,
+): boolean {
+  const from = a.validFrom.slice(0, 10);
+  const until = a.validUntil.slice(0, 10);
+  return from <= maxYmd && until >= minYmd;
+}
+
 interface Alloc {
   id: string; sourceCode: string; label: string; totalDays: number; usedDays: number;
   validFrom: string; validUntil: string;
@@ -56,7 +69,7 @@ function rowUsesSingleDayOnly(it: LeaveItem, lt: LT | undefined): boolean {
 }
 
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
-const HIDDEN_LT_CODES = new Set(["DEPT_BONUS"]);
+const HIDDEN_LT_CODES = new Set(["DEPT_BONUS", "POOL_TENURE_BONUS"]);
 
 // ── 휴가 그룹 정의 ────────────────────────────────────────────
 type SubDef = { label: string; code: string; desc?: string };
@@ -74,15 +87,29 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     ],
   },
   {
-    key: "public", label: "공가", meta: "",
-    color: "#64748b", borderClass: "border-slate-600",
+    key: "condolence",
+    label: "경조휴가",
+    meta: "",
+    color: "#f59e0b",
+    borderClass: "border-amber-500",
+    subs: [{ label: "신청", code: "CONDOLENCE" }],
+  },
+  {
+    key: "public",
+    label: "공가",
+    meta: "",
+    color: "#64748b",
+    borderClass: "border-slate-600",
     subs: [
       { label: "선택", code: "PUBLIC" },
     ],
   },
   {
-    key: "recognition", label: "인정휴가", meta: "",
-    color: "#475569", borderClass: "border-slate-500",
+    key: "recognition",
+    label: "인정휴가",
+    meta: "",
+    color: "#475569",
+    borderClass: "border-slate-500",
     subs: [
       { label: "선택", code: "RECOGNITION" },
     ],
@@ -95,15 +122,21 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     ],
   },
   {
-    key: "holidayExt", label: "연휴연장휴가", meta: "",
-    color: "#0ea5e9", borderClass: "border-sky-500",
+    key: "holidayExt",
+    label: "연휴연장휴가",
+    meta: "휴무 3일 이상 이어질 때 앞·뒤·징검다리 영업일만(귀속 1일)",
+    color: "#0ea5e9",
+    borderClass: "border-sky-500",
     subs: [
       { label: "선택", code: "HOLIDAY_EXT" },
     ],
   },
   {
-    key: "stamp", label: "스탬프", meta: "",
-    color: "#d97706", borderClass: "border-amber-500",
+    key: "stamp",
+    label: "스탬프",
+    meta: "오후인정·힐링데이",
+    color: "#d97706",
+    borderClass: "border-amber-500",
     subs: [
       { label: "힐링데이",   code: "HEALING_DAY" },
       { label: "오후 인정", code: "PM_RECOG_STAMP" },
@@ -115,8 +148,11 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     subs: [{ label: "하프데이", code: "PM_HALF_MONTH" }],
   },
   {
-    key: "sick", label: "병가", meta: "",
-    color: "#dc2626", borderClass: "border-red-500",
+    key: "sick",
+    label: "병가",
+    meta: "입원·통원 등",
+    color: "#dc2626",
+    borderClass: "border-red-500",
     subs: [{ label: "신청", code: "SICK" }],
   },
   {
@@ -125,17 +161,20 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     subs: [{ label: "신청", code: "AWARD" }],
   },
   {
-    key: "tenure", label: "근속휴가", meta: "",
-    color: "#10b981", borderClass: "border-emerald-600",
-    subs: [
-      { label: "1년 근속", code: "TENURE_1Y" },
-      { label: "5년 근속", code: "TENURE_5Y" },
-      { label: "10년 근속", code: "TENURE_10Y" },
-    ],
+    key: "tenure",
+    label: "근속휴가",
+    meta: "",
+    color: "#10b981",
+    borderClass: "border-emerald-600",
+    /** 하위 항목은 `dynamicLeaveGroups`에서 DB(`applyGroupKey === tenure`)로 채움 */
+    subs: [],
   },
   {
-    key: "birthday", label: "생일반차", meta: "",
-    color: "#ec4899", borderClass: "border-pink-500",
+    key: "birthday",
+    label: "생일반차",
+    meta: "생일이 있는 달에 자동 부여 0.5일",
+    color: "#ec4899",
+    borderClass: "border-pink-500",
     subs: [
       { label: "선택", code: "BIRTHDAY_HALF" },
     ],
@@ -149,7 +188,7 @@ LEAVE_GROUPS_BASE.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP_BASE[s.co
 const BASE_ASSET_GROUP_KEYS = new Set([
   "annual", "care", "holidayExt", "stamp", "halfday", "award", "birthday", "tenure",
 ]);
-const BASE_REASON_GROUP_KEYS = new Set(["public", "recognition", "sick"]);
+const BASE_REASON_GROUP_KEYS = new Set(["condolence", "public", "recognition", "sick"]);
 
 function leaveTypeMetaText(lt: LT): string {
   return lt.displayHint?.trim() ?? "";
@@ -157,9 +196,8 @@ function leaveTypeMetaText(lt: LT): string {
 
 const DOW_KO = ["일", "월", "화", "수", "목", "금", "토"] as const;
 function ymdWithDay(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map((x) => parseInt(x, 10));
-  const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-  const w = DOW_KO[dt.getDay()] ?? "";
+  const idx = calendarUtcDowFromYMD(ymd);
+  const w = Number.isFinite(idx) ? (DOW_KO[idx] ?? "") : "";
   return `${ymd}(${w})`;
 }
 
@@ -200,10 +238,9 @@ function detectOverlap(items: LeaveItem[], leaveTypes: LT[]): string | null {
     const lt = leaveTypes.find((t) => t.id === item.leaveTypeId);
     if (!lt) continue;
     const slot = resolveItemTimeSlot(item, leaveTypeWithPolicy(lt));
-    const cur = new Date(item.startDate);
-    const end = new Date(item.endDate);
-    while (cur <= end) {
-      const key = cur.toISOString().slice(0, 10);
+    const s = item.startDate.slice(0, 10);
+    const e = (item.endDate || item.startDate).slice(0, 10);
+    for (const key of eachYmdInInclusiveRange(s, e)) {
       if (!byDate[key]) byDate[key] = { am: false, pm: false, full: false };
       const d = byDate[key];
       if (slot === "FULL") {
@@ -216,7 +253,6 @@ function detectOverlap(items: LeaveItem[], leaveTypes: LT[]): string | null {
         if (d.full || d.pm) return `${key}: 오후 시간대 중복입니다.`;
         d.pm = true;
       }
-      cur.setDate(cur.getDate() + 1);
     }
   }
   return null;
@@ -246,8 +282,26 @@ export default function LeaveApplyForm({
   const [loading, setLoading] = useState(false);
 
   const todayYmd = todayStr();
-  const isAllocationUsableToday = (a: Alloc) =>
-    a.validFrom.slice(0, 10) <= todayYmd && a.validUntil.slice(0, 10) >= todayYmd;
+  /** 폼에 적힌 날짜들의 최소~최대 — 없으면 오늘(초기 안내용). 귀속연도가 아니라 이 구간과 유효기간 겹침만 본다 */
+  const applicationYmdRange = useMemo(() => {
+    const ys: string[] = [];
+    for (const it of items) {
+      if (!it.startDate?.trim()) continue;
+      ys.push(it.startDate.slice(0, 10));
+      ys.push((it.endDate || it.startDate).slice(0, 10));
+    }
+    if (ys.length === 0) return { min: todayYmd, max: todayYmd };
+    let min = ys[0]!;
+    let max = ys[0]!;
+    for (const y of ys) {
+      if (y < min) min = y;
+      if (y > max) max = y;
+    }
+    return { min, max };
+  }, [items, todayYmd]);
+
+  const isAllocationRelevantForApplication = (a: Alloc) =>
+    allocationOverlapsApplicationYmd(a, applicationYmdRange.min, applicationYmdRange.max);
 
   const ltByCode = useMemo(
     () => Object.fromEntries(leaveTypes.filter(t => !HIDDEN_LT_CODES.has(t.code)).map((t) => [t.code, t])),
@@ -256,17 +310,18 @@ export default function LeaveApplyForm({
 
   const holidaySet = useMemo(() => buildHolidayDisplaySet(holidays), [holidays]);
 
-  /** 연휴연장: 징검다리·공휴일 하루도 1일로 표시 (API와 동일) */
+  /** 연휴연장: 영업일만 일수에 포함 (API·calcHolidayExtFullDays와 동일) */
   function fullDaysForLeaveType(lt: LT | undefined, start: string, end: string) {
     if (lt?.code === "HOLIDAY_EXT") return calcHolidayExtFullDays(start, end, holidays);
     return calcWorkingDays(start, end, holidays);
   }
 
   const annualPoolAllocs = useMemo(
-    () => allocations
-      .filter((a) => isAnnualPoolSourceCode(a.sourceCode) && isAllocationUsableToday(a))
-      .sort((x, y) => x.validUntil < y.validUntil ? -1 : 1),
-    [allocations, todayYmd]
+    () =>
+      allocations
+        .filter((a) => isAnnualPoolSourceCode(a.sourceCode) && isAllocationRelevantForApplication(a))
+        .sort((x, y) => (x.validUntil < y.validUntil ? -1 : 1)),
+    [allocations, applicationYmdRange.min, applicationYmdRange.max],
   );
   const baseAnnualDisplayTotal = useMemo(
     () => annualPoolAllocs
@@ -282,23 +337,42 @@ export default function LeaveApplyForm({
   const poolRemainingBySource = useMemo(() => {
     const m: Record<string, number> = {};
     for (const a of allocations) {
-      if (!isAllocationUsableToday(a)) continue;
+      if (!isAllocationRelevantForApplication(a)) continue;
       m[a.sourceCode] = (m[a.sourceCode] ?? 0) + Math.max(0, a.totalDays - a.usedDays);
     }
     return m;
-  }, [allocations, todayYmd]);
+  }, [allocations, applicationYmdRange.min, applicationYmdRange.max]);
 
   const isSelectableCode = (code: string) => {
-    if (!ltByCode[code]) return false;
-    // 근속휴가는 실제 보유(할당 잔여)가 있는 사람에게만 신청 노출
-    if (code === "TENURE_1Y" || code === "TENURE_5Y" || code === "TENURE_10Y") {
+    const lt = ltByCode[code];
+    if (!lt) return false;
+    // 근속휴가 그룹: 실제 보유(할당 잔여)가 있는 경우만 신청 노출
+    if ((lt.applyGroupKey ?? "").trim().toLowerCase() === "tenure") {
       return (poolRemainingBySource[code] ?? 0) > 0;
     }
     return true;
   };
 
   const dynamicLeaveGroups = useMemo<GroupDef[]>(() => {
-    const base = LEAVE_GROUPS_BASE.map((g) => ({ ...g, subs: [...g.subs] }));
+    const base = LEAVE_GROUPS_BASE.map((g) => {
+      if (g.key !== "tenure") return { ...g, subs: [...g.subs] };
+      const tenureSubs = leaveTypes
+        .filter((t) => !HIDDEN_LT_CODES.has(t.code))
+        .filter((t) => (t.applyGroupKey ?? "").trim().toLowerCase() === "tenure")
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+        .map((t) => ({ label: t.name, code: t.code, desc: leaveTypeMetaText(t) }));
+      return {
+        ...g,
+        subs:
+          tenureSubs.length > 0
+            ? tenureSubs
+            : [
+                { label: "1년근속휴가", code: "TENURE_1Y" },
+                { label: "5년근속휴가", code: "TENURE_5Y" },
+                { label: "10년근속휴가", code: "TENURE_10Y" },
+              ],
+      };
+    });
     const knownCodes = new Set(base.flatMap((g) => g.subs.map((s) => s.code)));
     const extras = leaveTypes
       .filter((t) => !HIDDEN_LT_CODES.has(t.code))
@@ -354,7 +428,7 @@ export default function LeaveApplyForm({
         return { ...g, meta: groupMeta, subs };
       })
       .filter((g) => g.subs.length > 0);
-  }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource]);
+  }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource, applicationYmdRange.min, applicationYmdRange.max]);
   const leaveGroupsAsset = useMemo(
     () => visibleLeaveGroups.filter((g) => BASE_ASSET_GROUP_KEYS.has(g.key) || g.key.startsWith("custom-asset:")),
     [visibleLeaveGroups],
@@ -462,12 +536,13 @@ export default function LeaveApplyForm({
     setItems((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  // ── 달력 팝업 (시작일 클릭 → 종료일 클릭, 네이버 비행기 스타일) ──
+  // ── 달력 팝오버 (input 클릭 → 바로 드롭다운) ──
   const [calendarItemIdx, setCalendarItemIdx] = useState<number | null>(null);
   const [calendarStep, setCalendarStep] = useState<"start" | "end">("start");
   const [calendarPickedStart, setCalendarPickedStart] = useState<string | null>(null);
   const [calendarYear, setCalendarYear] = useState(() => new Date().getFullYear());
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().getMonth() + 1);
+  const calendarRef = useRef<HTMLDivElement>(null);
   /** 달력 팝업: DB만으로 부족할 수 있어 연도별 Nager+보강을 API로 합침 */
   const [calendarDisplayYmds, setCalendarDisplayYmds] = useState<string[]>([]);
   const holidaySetForCalendar = useMemo(() => {
@@ -495,15 +570,16 @@ export default function LeaveApplyForm({
     };
   }, [calendarItemIdx, calendarYear]);
 
-  function openCalendar(idx: number) {
+  function openCalendar(idx: number, step: "start" | "end" = "start") {
     const it = items[idx];
     if (!it) return;
     setCalendarItemIdx(idx);
-    setCalendarStep("start");
-    setCalendarPickedStart(null);
-    const [y, m] = it.startDate.split("-").map(Number);
-    setCalendarYear(y);
-    setCalendarMonth(m);
+    setCalendarStep(step);
+    setCalendarPickedStart(step === "end" ? it.startDate : null);
+    const dateStr = step === "end" ? (it.endDate || it.startDate) : it.startDate;
+    const [y, m] = dateStr ? dateStr.split("-").map(Number) : [new Date().getFullYear(), new Date().getMonth() + 1];
+    setCalendarYear(y || new Date().getFullYear());
+    setCalendarMonth(m || new Date().getMonth() + 1);
   }
   function closeCalendar() {
     setCalendarItemIdx(null);
@@ -571,7 +647,7 @@ export default function LeaveApplyForm({
       if (actualDays <= 0) {
         setError(
           lt?.code === "HOLIDAY_EXT"
-            ? "연휴연장휴가 일수가 0입니다. 「종일(기간)·오전·오후」를 선택했는지 확인하세요. 날짜가 연휴 규칙에 맞지 않거나, 공휴일·대체공휴일이 DB에 없으면 일수가 0이 됩니다. (로컬: npm run db:seed:base 등으로 휴일 반영)"
+            ? "연휴연장은 주말·공휴일만 고르면 영업일 0일입니다. 앞·뒤·징검다리 영업일을 골랐는지, 휴무 3일 이상 연속 조건에 맞는지 확인하세요. 공휴일 DB는 npm run db:seed:base 등으로 반영하세요."
             : "휴가 일수를 확인해 주세요.",
         );
         return;
@@ -589,9 +665,19 @@ export default function LeaveApplyForm({
       if (lt?.code === "PM_HALF_MONTH" && halfDayUsed >= 1) {
         setError("하프데이는 이번 달 이미 사용하셨습니다."); return;
       }
-      if (lt?.deductFromBalance && annualPoolRemaining < actualDays) {
-        setError(`잔여 연차 부족 — 신청 ${actualDays}일, 잔여 ${annualPoolRemaining.toFixed(1)}일`); return;
-      }
+    }
+    let annualNeed = 0;
+    for (const it of items) {
+      if (!needsLeaveRowValidation(it)) continue;
+      const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
+      if (!lt?.deductFromBalance || lt.allocationSourceCode) continue;
+      annualNeed += leaveItemDeductDays(it, lt);
+    }
+    if (annualNeed > annualPoolRemaining + 1e-6) {
+      setError(
+        `잔여 연차 부족 — 연차·반차 등 ${annualNeed.toFixed(1)}일 필요, 신청 일정과 겹치는 연차 풀 잔여 ${annualPoolRemaining.toFixed(1)}일`,
+      );
+      return;
     }
     const dedicatedTotals: Record<string, number> = {};
     for (const it of items) {
@@ -769,39 +855,6 @@ export default function LeaveApplyForm({
                   </section>
                 )}
 
-                {/* 스탬프 > 힐링데이: 전용 경로 안내 (일수 표기 없음, 1시간 40분 개념) */}
-                {item._groupKey === "stamp" && item._healingSelected && (
-                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                    <p className="text-sm font-semibold text-amber-800 mb-1">힐링데이 — 스탬프 쿠폰 메뉴에서 신청</p>
-                    <p className="text-xs text-amber-700 mb-3 leading-relaxed">
-                      스탬프 5개 소진 시 10:20 출근 또는 16:00 퇴근(1시간 40분 단축)으로 처리됩니다.
-                      결재 없이 자동 등록되며, 연차 일수에 포함되지 않습니다.
-                    </p>
-                    <a href="/stamp" target="_blank"
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 underline hover:text-amber-900">
-                      <ExternalLink size={12} />
-                      스탬프 쿠폰 페이지로 이동
-                    </a>
-                    <div className="mt-3">
-                      <label className="block text-sm text-amber-900 mb-1">힐링데이 신청 날짜</label>
-                      <input
-                        type="date"
-                        className="input bg-white"
-                        value={item.startDate}
-                        onChange={(e) =>
-                          setItems((prev) =>
-                            prev.map((it, i) =>
-                              i === idx ? { ...it, startDate: e.target.value, endDate: e.target.value } : it,
-                            ),
-                          )
-                        }
-                        required
-                      />
-                      <p className="text-xs text-amber-700 mt-1">중복 날짜/이미 신청된 날짜는 제출 시 자동 검증됩니다.</p>
-                    </div>
-                  </section>
-                )}
-
                 {/* STEP 2: 시간대 (서브 옵션이 여러 개인 경우) */}
                 {/* 종일+반차 겸용 유형(코드 하나): 신청 시 택일 */}
                 {item.leaveTypeId && lt && polUi?.allowsFullDay && polUi?.allowsHalfDay && (
@@ -875,7 +928,7 @@ export default function LeaveApplyForm({
                     <div className="flex gap-2">
                       {grp.subs.map((sub) => {
                         const subLt = ltByCode[sub.code];
-                        const isHealing = sub.code === "HEALING";
+                        const isHealing = sub.code === "HEALING" || sub.code === "HEALING_DAY";
                         const isSelected = isHealing ? item._healingSelected : lt?.code === sub.code;
                         return (
                           <button key={sub.code} type="button"
@@ -897,6 +950,32 @@ export default function LeaveApplyForm({
                           </button>
                         );
                       })}
+                    </div>
+                  </section>
+                )}
+
+                {/* 스탬프 > 힐링데이: 02에서 힐링 선택 후에만 안내·날짜 (그룹만 고른 상태에서는 숨김) */}
+                {item._groupKey === "stamp" && item._healingSelected && (
+                  <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-sm font-semibold text-amber-800 mb-1">힐링데이 — 스탬프 쿠폰 메뉴에서 신청</p>
+                    <p className="text-xs text-amber-700 mb-3 leading-relaxed">
+                      스탬프 5개 소진 시 10:20 출근 또는 16:00 퇴근(1시간 40분 단축)으로 처리됩니다.
+                      결재 없이 자동 등록되며, 연차 일수에 포함되지 않습니다.
+                    </p>
+                    <a href="/stamp" target="_blank"
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 underline hover:text-amber-900">
+                      <ExternalLink size={12} />
+                      스탬프 쿠폰 페이지로 이동
+                    </a>
+                    <div className="mt-3">
+                      <label className="block text-sm text-amber-900 mb-1">힐링데이 신청 날짜</label>
+                      <DatePickerButton
+                        value={item.startDate}
+                        onChange={(d) => setItems((prev) => prev.map((it, i) => i === idx ? { ...it, startDate: d, endDate: d } : it))}
+                        holidaySet={holidaySetForCalendar}
+                        className="bg-white"
+                      />
+                      <p className="text-xs text-amber-700 mt-1">중복 날짜/이미 신청된 날짜는 제출 시 자동 검증됩니다.</p>
                     </div>
                   </section>
                 )}
@@ -924,28 +1003,28 @@ export default function LeaveApplyForm({
                         <label className="block text-sm text-gray-500 mb-1">
                           {singleDayField ? "날짜" : "시작일"}
                         </label>
-                        <input type="date" className="input"
-                          value={item.startDate}
-                          onChange={(e) => changeDate(idx, "startDate", e.target.value)}
-                          required />
+                        <button type="button"
+                          onClick={() => openCalendar(idx, "start")}
+                          className="input w-full text-left flex items-center justify-between gap-2 cursor-pointer">
+                          <span className={item.startDate ? "text-gray-800" : "text-gray-400"}>
+                            {item.startDate || "날짜 선택"}
+                          </span>
+                          <Calendar size={15} className="text-gray-400 shrink-0" />
+                        </button>
                       </div>
                       {!singleDayField && (
                         <div>
                           <label className="block text-sm text-gray-500 mb-1">종료일</label>
-                          <input type="date" className="input"
-                            value={item.endDate} min={item.startDate}
-                            onChange={(e) => changeDate(idx, "endDate", e.target.value)}
-                            required />
+                          <button type="button"
+                            onClick={() => openCalendar(idx, "end")}
+                            className="input w-full text-left flex items-center justify-between gap-2 cursor-pointer">
+                            <span className={item.endDate ? "text-gray-800" : "text-gray-400"}>
+                              {item.endDate || "날짜 선택"}
+                            </span>
+                            <Calendar size={15} className="text-gray-400 shrink-0" />
+                          </button>
                         </div>
                       )}
-                    </div>
-                    <div className="mt-2">
-                      <button type="button"
-                        onClick={() => openCalendar(idx)}
-                        className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium">
-                        <Calendar size={16} />
-                        달력에서 선택
-                      </button>
                     </div>
 
                     {/* 일수 카운터 (힐링데이는 스탬프 페이지에서만 사용, 여기서는 연차/반차/하프데이 등) */}
@@ -965,7 +1044,7 @@ export default function LeaveApplyForm({
                           <strong>0.5일</strong>
                           <span className="ml-2 text-xs opacity-70">(반일 근무)</span>
                         </span>
-                      ) : actualDays > 0 ? (
+                      ) : item.startDate?.trim() && (item.endDate || item.startDate)?.trim() ? (
                         <span>
                           영업일 기준 <strong>{actualDays}일</strong>
                           <span className="ml-2 text-xs opacity-70">주말·공휴일 자동 제외</span>
@@ -981,6 +1060,9 @@ export default function LeaveApplyForm({
                 {/* 연차 가용 현황 */}
                 {isAnnualDeduct && item.leaveTypeId && (
                   <section className="rounded-lg border border-orange-100 bg-orange-50/60 p-3">
+                    <p className="text-[10px] text-orange-700/90 mb-1.5 leading-snug">
+                      위 신청 날짜 구간과 <strong>유효기간이 겹치는</strong> 연차만 반영합니다.
+                    </p>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs font-semibold text-orange-800">연차 가용 현황</span>
                       <span className={`text-sm font-bold ${
@@ -1180,7 +1262,7 @@ export default function LeaveApplyForm({
         </div>
       )}
 
-      {/* 달력 팝업: 시작일 클릭 → 종료일 클릭 */}
+      {/* 달력 팝오버: input 클릭 → 드롭다운 */}
       {calendarItemIdx != null && (() => {
         const it = items[calendarItemIdx];
         const lt = leaveTypes.find((t) => t.id === it?.leaveTypeId);
@@ -1203,46 +1285,66 @@ export default function LeaveApplyForm({
           cells.push(`${y}-${m}-${day}`);
         }
         const prevMonth = () => {
-          if (calendarMonth === 1) {
-            setCalendarMonth(12);
-            setCalendarYear((y) => y - 1);
-          } else setCalendarMonth((m) => m - 1);
+          if (calendarMonth === 1) { setCalendarMonth(12); setCalendarYear((y) => y - 1); }
+          else setCalendarMonth((m) => m - 1);
         };
         const nextMonth = () => {
-          if (calendarMonth === 12) {
-            setCalendarMonth(1);
-            setCalendarYear((y) => y + 1);
-          } else setCalendarMonth((m) => m + 1);
+          if (calendarMonth === 12) { setCalendarMonth(1); setCalendarYear((y) => y + 1); }
+          else setCalendarMonth((m) => m + 1);
         };
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-            onClick={closeCalendar}>
-            <div className="bg-white rounded-xl shadow-xl max-w-sm w-full p-4"
-              onClick={(e) => e.stopPropagation()}>
+          <>
+            {/* 오버레이: 달력 바깥 클릭 시 닫힘 */}
+            <div className="fixed inset-0 z-40" onClick={closeCalendar} />
+            {/* 팝오버 패널 */}
+            <div
+              ref={calendarRef}
+              className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-100 p-4 w-[min(340px,95vw)]"
+              style={{ top: "50%", left: "50%", transform: "translate(-50%, -50%)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* 헤더 */}
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold text-gray-800">
-                  {calendarStep === "start"
-                    ? (isHalf ? "날짜 선택" : "시작일 선택")
-                    : "종료일 선택"}
-                </h3>
+                <span className="text-sm font-semibold text-gray-700">
+                  {calendarStep === "start" ? (isHalf ? "날짜 선택" : "시작일") : "종료일"} 선택
+                </span>
                 <button type="button" onClick={closeCalendar}
-                  className="text-gray-400 hover:text-gray-600 p-1">✕</button>
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100">✕</button>
               </div>
+              {/* 선택된 날짜 표시 */}
+              {it && (it.startDate || it.endDate) && (
+                <div className="flex gap-2 mb-3">
+                  <div className={`flex-1 text-center py-1.5 rounded-lg text-sm font-medium border ${
+                    calendarStep === "start" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 bg-gray-50"
+                  }`}>
+                    <p className="text-[10px] opacity-60 mb-0.5">{isHalf ? "날짜" : "시작일"}</p>
+                    <p>{(calendarStep === "end" ? (calendarPickedStart || it.startDate) : it.startDate) || "—"}</p>
+                  </div>
+                  {!isHalf && (
+                    <div className={`flex-1 text-center py-1.5 rounded-lg text-sm font-medium border ${
+                      calendarStep === "end" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-500 bg-gray-50"
+                    }`}>
+                      <p className="text-[10px] opacity-60 mb-0.5">종료일</p>
+                      <p>{it.endDate || "—"}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {/* 월 네비게이션 */}
               <div className="flex items-center justify-between gap-2 mb-3">
                 <button type="button" onClick={prevMonth}
-                  className="p-1.5 rounded hover:bg-gray-100 text-gray-600">‹</button>
+                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 font-bold">‹</button>
                 <span className="text-sm font-semibold tabular-nums">
                   {calendarYear}년 {calendarMonth}월
                 </span>
                 <button type="button" onClick={nextMonth}
-                  className="p-1.5 rounded hover:bg-gray-100 text-gray-600">›</button>
+                  className="p-2 rounded-lg hover:bg-gray-100 text-gray-600 font-bold">›</button>
               </div>
+              {/* 달력 그리드 */}
               <div className="grid grid-cols-7 gap-0.5 text-center">
                 {weekDays.map((w, wi) => (
-                  <div
-                    key={w}
-                    className={`text-[10px] font-medium py-1 ${wi === 0 ? "text-red-400" : "text-gray-400"}`}
-                  >
+                  <div key={w}
+                    className={`text-[10px] font-semibold py-1 ${wi === 0 || wi === 6 ? "text-red-400" : "text-gray-400"}`}>
                     {w}
                   </div>
                 ))}
@@ -1250,46 +1352,46 @@ export default function LeaveApplyForm({
                   if (!dateStr) return <div key={`e-${i}`} />;
                   const isPast = dateStr < today;
                   const isStart = dateStr === start;
-                  const isInRange = calendarStep === "end" && start && dateStr >= start;
+                  const isEnd = calendarStep === "end" && dateStr === it?.endDate;
+                  const isInRange = calendarStep === "end" && start && dateStr > start && it?.endDate && dateStr < it.endDate;
                   const isRedDay = isRedCalendarDay(dateStr, holidaySetForCalendar);
-                  /** 글자색은 인라인으로만 지정 (Tailwind !text-* 가 빌드/상속에 따라 먹지 않는 경우 방지) */
-                  const spanStyle: React.CSSProperties = isStart
-                    ? { color: "#fff", fontWeight: 600 }
+                  const isSat = new Date(calendarYear, calendarMonth - 1, parseInt(dateStr.slice(8))).getDay() === 6;
+                  const spanStyle: React.CSSProperties = (isStart || isEnd)
+                    ? { color: "#fff", fontWeight: 700 }
                     : isRedDay
                       ? { color: CALENDAR_HOLIDAY_COLOR, fontWeight: 600 }
-                      : isInRange
-                        ? { color: "#1e40af" }
-                        : isPast
-                          ? { color: "#6b7280" }
-                          : { color: "#374151" };
+                      : isSat
+                        ? { color: "#3b82f6" }
+                        : isInRange
+                          ? { color: "#1e40af" }
+                          : isPast
+                            ? { color: "#9ca3af" }
+                            : { color: "#111827" };
                   return (
                     <button key={dateStr} type="button"
                       onClick={() => onCalendarDateClick(dateStr)}
-                      className={`aspect-square rounded text-sm font-medium transition-colors ${
-                        isStart
+                      disabled={isPast && calendarStep === "start"}
+                      className={`aspect-square rounded-lg text-sm transition-colors ${
+                        isStart || isEnd
                           ? "bg-blue-600 hover:bg-blue-700"
                           : isInRange
-                            ? "bg-blue-100 hover:bg-blue-200"
+                            ? "bg-blue-100"
                             : isPast
-                              ? "hover:bg-gray-100"
+                              ? "cursor-not-allowed opacity-40"
                               : isRedDay
                                 ? "hover:bg-red-50"
                                 : "hover:bg-gray-100"
                       }`}>
-                      <span style={spanStyle}>
-                        {dateStr.slice(8, 10)}
-                      </span>
+                      <span style={spanStyle}>{dateStr.slice(8, 10).replace(/^0/, "")}</span>
                     </button>
                   );
                 })}
               </div>
-              {calendarStep === "end" && (
-                <p className="mt-3 text-xs text-gray-500 text-center">
-                  종료일을 클릭하세요 (같은 날 클릭 시 1일)
-                </p>
+              {calendarStep === "end" && !isHalf && (
+                <p className="mt-3 text-xs text-gray-400 text-center">종료일을 선택하세요 (같은 날 = 1일)</p>
               )}
             </div>
-          </div>
+          </>
         );
       })()}
     </form>

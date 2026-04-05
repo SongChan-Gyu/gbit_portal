@@ -1,12 +1,11 @@
 /**
  * 영업일 계산 유틸 (공휴일 배열 포함)
  *
- * [타임존 주의]
- * 서버가 UTC 환경(미국 클라우드 등)이면 TZ=Asia/Seoul 환경변수를 설정해야
- * new Date() / getMonth() 등이 KST 기준으로 동작한다.
- * 설정 없이도 날짜 문자열("YYYY-MM-DD") 비교는 KST를 가정한 입력이면 정상이나,
- * todayStr() · getFiscalYear(new Date()) 등 "현재 시각" 기반 함수는 영향받는다.
+ * kstMidnight / kstEndOfDay / fiscalPeriod(leaveCalc)는 +09:00 고정으로 서버 TZ와 무관.
+ * getFiscalYear·todayStr 등은 KST 오프셋 보정(UTC 환경에서도 동일 동작).
  */
+
+import { addCalendarYearsToYmd, addDaysYMD, calendarUtcDowFromYMD, kstYmd, todayKstYmd } from "./dateUtils";
 
 export function calcWorkingDays(
   startStr: string,
@@ -14,48 +13,58 @@ export function calcWorkingDays(
   holidays: string[] = []   // "YYYY-MM-DD" 배열
 ): number {
   if (!startStr || !endStr) return 0;
-  const start = new Date(startStr);
-  const end   = new Date(endStr);
-  if (isNaN(start.getTime()) || isNaN(end.getTime()) || start > end) return 0;
+  const s = startStr.slice(0, 10);
+  const e = endStr.slice(0, 10);
+  if (s > e) return 0;
 
   const holidaySet = new Set(holidays);
   let count = 0;
-  const cur = new Date(start);
-  while (cur <= end) {
-    const dow = cur.getDay();               // 0=일,6=토
-    const ds  = cur.toISOString().slice(0, 10);
-    if (dow !== 0 && dow !== 6 && !holidaySet.has(ds)) count++;
-    cur.setDate(cur.getDate() + 1);
+  let cur = s;
+  while (cur <= e) {
+    const dow = calendarUtcDowFromYMD(cur);
+    if (dow !== 0 && dow !== 6 && !holidaySet.has(cur)) count++;
+    cur = addDaysYMD(cur, 1);
   }
   return count;
 }
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+/** 구간 내 영업일 YYYY-MM-DD 목록 (주말·공휴일 제외, 달력 문자열 순회·요일은 calcWorkingDays와 동일) */
+export function listWorkingYmds(startStr: string, endStr: string, holidays: string[] = []): string[] {
+  if (!startStr || !endStr) return [];
+  const s = startStr.slice(0, 10);
+  const e = endStr.slice(0, 10);
+  if (s > e) return [];
+  const holidaySet = new Set(holidays);
+  const out: string[] = [];
+  let cur = s;
+  while (cur <= e) {
+    const dow = calendarUtcDowFromYMD(cur);
+    if (dow !== 0 && dow !== 6 && !holidaySet.has(cur)) out.push(cur);
+    cur = addDaysYMD(cur, 1);
+  }
+  return out;
+}
 
 /**
- * Date → KST 기준 "YYYY-MM-DD"
- * TZ=Asia/Seoul 환경이면 toLocaleDateString도 동작하지만,
- * UTC 환경에서도 정확하도록 수동 오프셋 보정을 사용한다.
+ * Date → KST 달력 "YYYY-MM-DD" (`dateUtils.kstYmd`와 동일)
  */
 export function toKSTDateStr(d: Date = new Date()): string {
-  const kst = new Date(d.getTime() + KST_OFFSET_MS);
-  return kst.toISOString().slice(0, 10);
+  return kstYmd(d);
 }
 
-/** ISO 날짜 → "YYYY-MM-DD" (이미 KST 기준 Date이거나 날짜 전용 사용 시) */
+/** DB DateTime 등 → KST 달력 "YYYY-MM-DD" */
 export function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return kstYmd(d);
 }
 
-/** 오늘 날짜 문자열 (KST 기준) */
+/** 오늘 날짜 문자열 (한국 달력, Intl Asia/Seoul) */
 export function todayStr(): string {
-  return toKSTDateStr(new Date());
+  return todayKstYmd();
 }
 
-/** 귀속연도 계산 (5월 기준, KST 기준) */
+/** 귀속연도 계산 (5월 기준, KST 달력일) */
 export function getFiscalYear(date: Date = new Date()): number {
-  const kst = new Date(date.getTime() + KST_OFFSET_MS);
-  return kst.getUTCMonth() + 1 >= 5 ? kst.getUTCFullYear() : kst.getUTCFullYear() - 1;
+  return getFiscalYearFromStr(kstYmd(date));
 }
 
 /** "YYYY-MM-DD" 문자열 → 귀속연도 (문자열 자체가 KST 날짜인 경우 바로 사용) */
@@ -66,22 +75,58 @@ export function getFiscalYearFromStr(dateStr: string): number {
 }
 
 /**
- * KST 기준 특정 날짜의 자정(00:00:00) Date 객체 생성.
- * TZ=Asia/Seoul 환경에서 new Date(y, m-1, d)와 동일하나,
- * "YYYY-MM-DD" 문자열 파싱(UTC 자정)과 혼용되는 버그를 방지한다.
- *
- * @param year  연도 (예: 2025)
- * @param month 월 1-indexed (예: 5 = 5월)
- * @param day   일 (예: 1)
+ * 달력 구간 [startYmd, endYmd]를 귀속연도(5/1~익년 4/30) 경계에서 잘라낸 연속 구간들.
+ * 전용 부여 풀·BASE_ANNUAL 등 "한 할당이 구간 전체를 덮어야" 하는 차감을 귀속별로 나눌 때 사용.
  */
-export function kstMidnight(year: number, month: number, day: number): Date {
-  return new Date(year, month - 1, day, 0, 0, 0, 0);
+export function splitYmdRangeByFiscalYear(startYmd: string, endYmd: string): { startYmd: string; endYmd: string }[] {
+  if (!startYmd || !endYmd || startYmd > endYmd) return [];
+  const segments: { startYmd: string; endYmd: string }[] = [];
+  let cur = startYmd;
+  while (cur <= endYmd) {
+    const fy = getFiscalYearFromStr(cur);
+    const fyEndYmd = `${fy + 1}-04-30`;
+    const segEnd = endYmd < fyEndYmd ? endYmd : fyEndYmd;
+    segments.push({ startYmd: cur, endYmd: segEnd });
+    if (segEnd >= endYmd) break;
+    cur = addDaysYMD(segEnd, 1);
+  }
+  return segments;
 }
 
 /**
- * KST 기준 특정 날짜의 하루 끝(23:59:59.999) Date 객체 생성.
- * validUntil 용도로 사용하면 당일 KST 자정까지 유효하다.
+ * 한국 달력 해당일 00:00 KST (서버 TZ와 무관, 항상 +09:00 오프셋).
  */
+export function kstMidnight(year: number, month: number, day: number): Date {
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return new Date(`${year}-${mm}-${dd}T00:00:00.000+09:00`);
+}
+
+/** 한국 달력 YYYY-MM-DD → 해당일 KST 자정 */
+export function kstMidnightFromYmd(ymd: string): Date {
+  const [y, m, d] = ymd.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return new Date(NaN);
+  return kstMidnight(y, m, d);
+}
+
+/** 한국 달력 해당일 23:59:59.999 KST */
 export function kstEndOfDay(year: number, month: number, day: number): Date {
-  return new Date(year, month - 1, day, 23, 59, 59, 999);
+  const mm = String(month).padStart(2, "0");
+  const dd = String(day).padStart(2, "0");
+  return new Date(`${year}-${mm}-${dd}T23:59:59.999+09:00`);
+}
+
+/**
+ * 근속 마일스톤 부여의 validUntil (KST)
+ * - 입사 **1주년** 구간(마일스톤 연수 1): 부여일이 속한 귀속연도 말(익년 4/30)까지 — 코드명이 아니라 주년 수로 판별
+ * - 그 외 주년: 부여일부터 달력 1년
+ */
+export function tenureMilestoneValidUntil(grantDate: Date, milestoneYears: number): Date {
+  if (milestoneYears === 1) {
+    const fiscalYearOfGrant = getFiscalYear(grantDate);
+    return new Date(`${fiscalYearOfGrant + 1}-04-30T23:59:59.999+09:00`);
+  }
+  const untilYmd = addCalendarYearsToYmd(kstYmd(grantDate), 1);
+  const [uy, um, ud] = untilYmd.split("-").map(Number);
+  return kstEndOfDay(uy, um, ud);
 }

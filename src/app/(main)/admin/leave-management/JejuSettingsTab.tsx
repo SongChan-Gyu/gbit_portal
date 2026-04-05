@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { formatJejuAccountNumber } from "@/lib/jeju";
+import DatePickerButton from "@/components/ui/DatePickerButton";
 import type { JejuDepositAccount } from "@/lib/jeju";
 
-type NotifyContact = { phone?: string; email?: string };
+type NotifyVia = "email" | "alimtalk" | "both";
+type NotifyContact = { phone?: string; email?: string; notifyVia?: NotifyVia };
 type JejuNotifyConfig = { step1?: NotifyContact; step2?: NotifyContact };
 
 export default function JejuSettingsTab() {
@@ -121,14 +123,31 @@ export default function JejuSettingsTab() {
       <div className="card max-w-xl">
         <h3 className="font-semibold text-gray-800 mb-1">결재 알림 수신자</h3>
         <p className="text-xs text-gray-500 mb-4">
-          각 결재 단계에서 이메일로 알림을 받을 담당자 정보를 입력합니다.
-          알림톡 번호를 입력하면 추후 알림톡 연동 시 사용됩니다.
+          1차(복지)·2차(PM) 각각 이메일·알림톡 수신 방식을 선택합니다. 알림톡만 선택한 경우 전화번호가 필요하고,
+          이메일만 선택한 경우 이메일이 필요합니다. 둘 다 선택 시 두 채널 모두 발송됩니다.
         </p>
         <div className="space-y-4">
           {/* 1차 (복지부) */}
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">1차 결재 담당자 (복지부)</p>
             <div className="grid gap-2 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="label">알림 채널</label>
+                <select
+                  className="input w-full"
+                  value={notifyConfig.step1?.notifyVia ?? "email"}
+                  onChange={(e) =>
+                    setNotifyConfig((c) => ({
+                      ...c,
+                      step1: { ...c.step1, notifyVia: e.target.value as NotifyVia },
+                    }))
+                  }
+                >
+                  <option value="email">이메일만</option>
+                  <option value="alimtalk">알림톡만</option>
+                  <option value="both">이메일 + 알림톡</option>
+                </select>
+              </div>
               <div>
                 <label className="label">이메일</label>
                 <input
@@ -155,6 +174,23 @@ export default function JejuSettingsTab() {
           <div>
             <p className="text-sm font-medium text-gray-700 mb-2">2차 결재 담당자 (PM — 입금확인)</p>
             <div className="grid gap-2 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="label">알림 채널</label>
+                <select
+                  className="input w-full"
+                  value={notifyConfig.step2?.notifyVia ?? "email"}
+                  onChange={(e) =>
+                    setNotifyConfig((c) => ({
+                      ...c,
+                      step2: { ...c.step2, notifyVia: e.target.value as NotifyVia },
+                    }))
+                  }
+                >
+                  <option value="email">이메일만</option>
+                  <option value="alimtalk">알림톡만</option>
+                  <option value="both">이메일 + 알림톡</option>
+                </select>
+              </div>
               <div>
                 <label className="label">이메일</label>
                 <input
@@ -252,11 +288,10 @@ export default function JejuSettingsTab() {
         <h3 className="font-semibold text-gray-800 mb-3">예약 불가일</h3>
         <p className="text-xs text-gray-500 mb-4">날짜를 선택 후 추가를 누르고, 필요 시 목록에서 ×로 삭제한 뒤 저장하세요. 여러 날짜를 추가·삭제한 후 한 번에 저장할 수 있습니다.</p>
         <div className="flex flex-wrap gap-2 items-center">
-          <input
-            type="date"
-            className="input w-40"
+          <DatePickerButton
             value={newBlockDate}
-            onChange={(e) => setNewBlockDate(e.target.value)}
+            onChange={setNewBlockDate}
+            className="w-40"
           />
           <button type="button" onClick={addBlockedDate} className="btn-secondary btn-sm">
             추가

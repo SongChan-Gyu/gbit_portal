@@ -146,10 +146,10 @@ model LeaveType {
   displayHint      String?
   // 귀속연도 초기화(fiscal-year init) 대상 여부. 귀속연도 유형이어도 false면 자동 부여 제외.
   includeInFiscalInit Boolean @default(true)
-  // 이월 가능 여부(관리 메타)
+  // 입사 N주년에 부여 (입사일기준·allocationSourceCode 있을 때). 스케줄러·초기화 보강이 이 값을 사용.
+  hireAnniversaryYears Int?
+  // 관리자 수동 이월(다음 귀속연도 CARRYOVER 생성) UI 허용. 귀속연도형·자산형 연차 등만 true 권장. 자동 이월 없음.
   carryoverEligible Boolean @default(false)
-  // 귀속연도 초기화 시 잔여 자동 이월 여부(관리 메타)
-  autoCarryoverOnFiscalInit Boolean @default(false)
   // 반차 여부 (AM or PM 선택) — 기존 데이터·간편 조회용. allows* 로부터 저장 시 동기화 권장.
   isHalf           Boolean @default(false)
   isAmOnly         Boolean @default(false)

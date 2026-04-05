@@ -5,7 +5,15 @@ import Link from "next/link";
 import { getFiscalYear } from "@/lib/workdays";
 import { Bell, Calendar, ChevronLeft, ChevronRight, Home } from "lucide-react";
 import { isWelfareDept } from "@/lib/jeju";
-import { formatMDWithDay, holidayDateToYmd, ymdRangeUtcBounds } from "@/lib/dateUtils";
+import {
+  eachYmdInInclusiveRange,
+  formatMDWithDay,
+  holidayDateToYmd,
+  kstYmd,
+  todayKstYmd,
+  ymdRangeUtcBounds,
+} from "@/lib/dateUtils";
+import { kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
 import { itemSlotLabelKo } from "@/lib/leaveTimeSlot";
 import DashboardMonthCalendar from "./DashboardMonthCalendar";
 import { redirect } from "next/navigation";
@@ -41,9 +49,11 @@ export default async function DashboardPage({
   const user = session.user as any;
   const fy = getFiscalYear();
   const now = new Date();
+  const kstToday = todayKstYmd();
+  const [kY, kM] = kstToday.split("-").map((x) => parseInt(x, 10));
   const params = await searchParams;
-  let teamCalYear = params.teamY ? parseInt(params.teamY, 10) : now.getFullYear();
-  let teamCalMonth = params.teamM ? parseInt(params.teamM, 10) : now.getMonth() + 1;
+  let teamCalYear = params.teamY ? parseInt(params.teamY, 10) : kY;
+  let teamCalMonth = params.teamM ? parseInt(params.teamM, 10) : kM;
   if (teamCalMonth < 1) {
     teamCalMonth += 12;
     teamCalYear -= 1;
@@ -174,8 +184,11 @@ export default async function DashboardPage({
     const dates = getMonthDates(year, month);
     const first = dates[0];
     const last = dates[dates.length - 1];
-    const firstDt = new Date(`${first}T00:00:00.000Z`);
-    const lastDt = new Date(`${last}T23:59:59.999Z`);
+    const firstDt = kstMidnightFromYmd(first);
+    const lastDt = (() => {
+      const [y, m, d] = last.split("-").map((x) => parseInt(x, 10));
+      return kstEndOfDay(y, m, d);
+    })();
     const { gte: holGte, lte: holLte } = ymdRangeUtcBounds(first, last);
     const holRows = await prisma.holiday.findMany({
       where: { date: { gte: holGte, lte: holLte } },
@@ -195,11 +208,9 @@ export default async function DashboardPage({
     const byDay: Record<string, { name: string; status: string }[]> = {};
     for (const req of leaves) {
       for (const item of req.items) {
-        const s = new Date(item.startDate);
-        const e = new Date(item.endDate);
-        const cur = new Date(s);
-        while (cur <= e) {
-          const ds = cur.toISOString().slice(0, 10);
+        const sY = kstYmd(new Date(item.startDate));
+        const eY = kstYmd(new Date(item.endDate));
+        for (const ds of eachYmdInInclusiveRange(sY, eY)) {
           if (dates.includes(ds)) {
             const status = itemSlotLabelKo(item, item.leaveType);
             if (!byDay[ds]) byDay[ds] = [];
@@ -208,7 +219,6 @@ export default async function DashboardPage({
             if (!ex) byDay[ds].push({ name, status });
             else ex.status = ex.status === status ? status : "휴가";
           }
-          cur.setDate(cur.getDate() + 1);
         }
       }
     }
@@ -416,7 +426,7 @@ export default async function DashboardPage({
                 <span className="font-semibold text-gray-800">
                   {teamMonthData.year}년 {teamMonthData.month}월
                 </span>
-                {(teamCalYear !== now.getFullYear() || teamCalMonth !== now.getMonth() + 1) && (
+                {(teamCalYear !== kY || teamCalMonth !== kM) && (
                   <Link href="/dashboard" className="text-xs text-blue-600 hover:underline shrink-0">이번 달</Link>
                 )}
               </div>
@@ -433,7 +443,7 @@ export default async function DashboardPage({
               dates={teamMonthData.dates}
               byDay={teamMonthData.byDay}
               holidayYmds={teamMonthData.holidayYmds}
-              todayStr={now.toISOString().slice(0, 10)}
+              todayStr={kstToday}
             />
           </div>
         </div>

@@ -5,6 +5,7 @@ import {
   getTenureMilestones,
   fiscalMonthIndex,
 } from "./leaveCalc";
+import { kstYmd } from "./dateUtils";
 
 describe("calcAnnualDays", () => {
   it("프리랜서는 항상 15일", () => {
@@ -35,16 +36,16 @@ describe("calcAnnualDays", () => {
 });
 
 describe("fiscalPeriod", () => {
-  it("귀속연도 2025 → 2025-05-01 ~ 2026-04-30", () => {
+  it("귀속연도 2025 → KST 달력 2025-05-01 ~ 2026-04-30", () => {
     const { start, end } = fiscalPeriod(2025);
-    expect(start.toISOString().slice(0, 10)).toBe("2025-05-01");
-    expect(end.toISOString().slice(0, 10)).toBe("2026-04-30");
+    expect(kstYmd(start)).toBe("2025-05-01");
+    expect(kstYmd(end)).toBe("2026-04-30");
   });
 });
 
 describe("fiscalMonthIndex", () => {
-  it("5월 = 0, 4월 = 11", () => {
-    expect(fiscalMonthIndex(new Date("2025-05-01"), 2025)).toBe(0);
-    expect(fiscalMonthIndex(new Date("2026-04-30"), 2025)).toBe(11);
+  it("5월 = 0, 4월 = 11 (KST 달력)", () => {
+    expect(fiscalMonthIndex(new Date("2025-05-01T12:00:00+09:00"), 2025)).toBe(0);
+    expect(fiscalMonthIndex(new Date("2026-04-30T12:00:00+09:00"), 2025)).toBe(11);
   });
 });

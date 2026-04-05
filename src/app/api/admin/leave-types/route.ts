@@ -49,14 +49,27 @@ export async function POST(req: Request) {
       usageCategory,
       displayHint,
       includeInFiscalInit: body.includeInFiscalInit ?? true,
-      carryoverEligible: body.carryoverEligible ?? false,
-      autoCarryoverOnFiscalInit: body.autoCarryoverOnFiscalInit ?? false,
+      carryoverEligible: body.carryoverEligible === true,
+      hireAnniversaryYears:
+        typeof body.hireAnniversaryYears === "number" && body.hireAnniversaryYears > 0
+          ? Math.floor(body.hireAnniversaryYears)
+          : null,
       isHalf: legacy.isHalf, isAmOnly: legacy.isAmOnly, isPmOnly: legacy.isPmOnly,
       validityBasis:body.validityBasis??"FISCAL", validityMonths:body.validityMonths??null,
       isActive:body.isActive??true, sortOrder:body.sortOrder??99, color:body.color??"#3b82f6",
       allocationSourceCode: allocSrc,
     },
   });
+  if (allocSrc && typeof body.hireAnniversaryYears === "number" && body.hireAnniversaryYears > 0) {
+    const dpu = Number(body.daysPerUnit ?? 1);
+    await prisma.allocationSourceConfig.updateMany({
+      where: { sourceCode: allocSrc },
+      data: {
+        tenureYears: Math.floor(body.hireAnniversaryYears),
+        defaultDays: Number.isFinite(dpu) ? dpu : null,
+      },
+    });
+  }
   if (allocSrc && (body.validityBasis ?? "FISCAL") === "귀속연도") {
     const defaultDays =
       body.maxPerYear != null ? Number(body.maxPerYear) : Number(body.daysPerUnit ?? 1);

@@ -4,15 +4,13 @@
  * 또는: npx tsx scripts/verify-leave-policy.ts
  */
 import { PrismaClient } from "@prisma/client";
+import type { DB } from "../src/lib/db";
+import { fiscalPeriod } from "../src/lib/leaveCalc";
+import { kstYmd } from "../src/lib/dateUtils";
+import { getFiscalYear } from "../src/lib/workdays";
+import { loadTenureMilestoneSourceCodes } from "../src/lib/tenureMilestoneSourceCodes";
 
 const prisma = new PrismaClient();
-
-const FISCAL_START_MONTH = 5; // 5월 1일
-const FISCAL_END_MONTH = 4;   // 다음해 4월 30일
-
-function getFiscalYear(d: Date): number {
-  return d.getMonth() + 1 >= FISCAL_START_MONTH ? d.getFullYear() : d.getFullYear() - 1;
-}
 
 type AssertResult = { ok: boolean; message: string };
 
@@ -21,18 +19,25 @@ async function runChecks(): Promise<AssertResult[]> {
   const ok = (msg: string) => results.push({ ok: true, message: msg });
   const fail = (msg: string) => results.push({ ok: false, message: msg });
 
-  // ── 1. 귀속연도 로직 (5월~다음해 4월) ─────────────────────
-  const may1 = new Date(2025, 4, 1);   // 2025-05-01
-  const apr30 = new Date(2026, 3, 30); // 2026-04-30
+  // ── 1. 귀속연도 로직 (KST 달력, workdays.getFiscalYear) ─────────────────────
+  const may1 = new Date("2025-05-01T12:00:00+09:00");
+  const apr30 = new Date("2026-04-30T12:00:00+09:00");
   if (getFiscalYear(may1) === 2025 && getFiscalYear(apr30) === 2025) {
     ok("귀속연도: 5/1~익년 4/30 → 2025년도");
   } else {
     fail(`귀속연도 계산 오류: 5/1=${getFiscalYear(may1)}, 4/30=${getFiscalYear(apr30)}`);
   }
 
-  const apr29 = new Date(2025, 3, 29);
+  const apr29 = new Date("2025-04-29T12:00:00+09:00");
   if (getFiscalYear(apr29) === 2024) ok("귀속연도: 4/29 → 2024년도");
   else fail(`귀속연도: 4/29 기대 2024, 실제 ${getFiscalYear(apr29)}`);
+
+  const { start: fpS, end: fpE } = fiscalPeriod(2025);
+  if (kstYmd(fpS) === "2025-05-01" && kstYmd(fpE) === "2026-04-30") {
+    ok("fiscalPeriod(2025): KST 2025-05-01 ~ 2026-04-30 (+09:00 고정)");
+  } else {
+    fail(`fiscalPeriod KST 경계: ${kstYmd(fpS)} ~ ${kstYmd(fpE)}`);
+  }
 
   // ── 2. 휴가 유형 규정 매칭 ─────────────────────────────
   const leaveTypes = await prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } });
@@ -72,11 +77,20 @@ async function runChecks(): Promise<AssertResult[]> {
     fail(`하프데이: steps=${pmHalfMonth?.approvalSteps}, maxPerMonth=${pmHalfMonth?.maxPerMonth}`);
   }
 
-  const tenure1y = leaveTypes.find((t) => t.code === "TENURE_1Y");
-  if (tenure1y?.approvalSteps === 1) {
-    ok("근속휴가(1년): 팀장에서 끝(1단계)");
+  const tenureLeaveTypes = leaveTypes.filter(
+    (t) => t.hireAnniversaryYears != null && t.hireAnniversaryYears > 0,
+  );
+  if (tenureLeaveTypes.length === 0) {
+    ok("입사 주년 근속 휴가 유형 없음(설정 생략 가능)");
   } else {
-    fail(`1년근속: approvalSteps 기대 1, 실제 ${tenure1y?.approvalSteps}`);
+    const bad = tenureLeaveTypes.filter((t) => t.approvalSteps !== 1);
+    if (bad.length === 0) {
+      ok(`근속 주년 휴가 유형 ${tenureLeaveTypes.length}개: 팀장 1단계 결재`);
+    } else {
+      bad.forEach((t) =>
+        fail(`근속 주년 유형 ${t.code}: approvalSteps 기대 1, 실제 ${t.approvalSteps}`),
+      );
+    }
   }
 
   // ── 3. 할당 usedDays 정합성 ─────────────────────────────
@@ -111,10 +125,24 @@ async function runChecks(): Promise<AssertResult[]> {
   }
   ok(`승인된 휴가 결재 단계 일치: ${approvedRequests.length}건`);
 
-  // ── 5. 동일 사원·동일 sourceCode·동일 귀속연도 할당 1개 (근속 마일스톤은 fiscalYear null 허용) ─────────────────
+  // ── 5. 동일 사원·동일 sourceCode·(귀속연도 또는 근속 마일스톤 주년일) 할당 1개 ─────────────────
+  const tenureCodes = await loadTenureMilestoneSourceCodes(prisma as unknown as DB);
+  const TENURE_MILESTONE = new Set(
+    tenureCodes.length > 0 ? tenureCodes : ["TENURE_1Y", "TENURE_5Y", "TENURE_10Y"],
+  );
+  if (tenureCodes.length === 0) {
+    ok("근속 마일스톤 sourceCode: DB에 없음 → 중복 검사만 예전 3코드로 폴백");
+  } else {
+    ok(`근속 마일스톤 sourceCode: DB 기준 ${tenureCodes.length}개`);
+  }
   const byEmpSourceFy = new Map<string, number>();
   for (const a of allocations) {
-    const key = `${a.employeeId}:${a.sourceCode}:${a.fiscalYear ?? "null"}`;
+    let key: string;
+    if (TENURE_MILESTONE.has(a.sourceCode) && a.fiscalYear == null) {
+      key = `${a.employeeId}:${a.sourceCode}:m:${kstYmd(a.validFrom)}`;
+    } else {
+      key = `${a.employeeId}:${a.sourceCode}:${a.fiscalYear ?? "null"}`;
+    }
     byEmpSourceFy.set(key, (byEmpSourceFy.get(key) ?? 0) + 1);
   }
   const dupes = [...byEmpSourceFy.entries()].filter(([, c]) => c > 1);

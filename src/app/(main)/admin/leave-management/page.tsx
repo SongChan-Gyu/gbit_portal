@@ -5,14 +5,17 @@ import FiscalYearManager from "@/app/(main)/admin/fiscal-year/FiscalYearManager"
 import SchedulerPanel from "@/app/(main)/admin/scheduler/SchedulerPanel";
 import LeaveApprovalsTab from "@/app/(main)/admin/leave-management/LeaveApprovalsTab";
 import { getFiscalYear } from "@/lib/workdays";
+import { fiscalPeriod } from "@/lib/leaveCalc";
 import { serializeDates } from "@/lib/serialize";
 import { prorateLeaveDaysToFiscalYear } from "@/lib/fiscalLeaveStats";
+import { loadTenureMilestoneSourceCodes } from "@/lib/tenureMilestoneSourceCodes";
 import {
   aggregateAllocationsByOverviewKey,
   buildOverviewColumns,
   formatLeaveDayDisplay,
   formatOverviewCell,
 } from "@/lib/leaveOverviewTable";
+import StampGrantTab, { type StampGrantRow } from "@/app/(main)/admin/leave-management/StampGrantTab";
 
 export const metadata = { title: "휴가 부여·현황 | GBIT Portal" };
 
@@ -26,15 +29,27 @@ export default async function LeaveManagementPage({
   const { tab: tabRaw, fy: fyRaw, empId } = await searchParams;
   const tab = tabRaw ?? "overview";
   const fy  = parseInt(fyRaw ?? String(getFiscalYear()));
+  const { start: fyRangeStart, end: fyRangeEnd } = fiscalPeriod(fy);
 
-  // ── 탭별 데이터 (overview·allocations 모두 해당 연도 할당 포함) ──
+  // ── 탭별 데이터: fiscalYear=선택 FY 이거나, 선택 귀속 구간(KST 5/1~익년 4/30)과 validFrom~validUntil 이 겹치는 할당 → 2025·2026 탭 모두에서 유효기간이 걸치면 동시에 보임 ──
   const employees = await prisma.employee.findMany({
     where: { status: "ACTIVE" },
     include: {
       team: true,
-      leaveAllocations: (tab === "overview" || tab === "allocations")
-        ? { where: { fiscalYear: fy }, orderBy: { sourceCode: "asc" } }
-        : false,
+      leaveAllocations:
+        tab === "overview" || tab === "allocations"
+          ? {
+              where: {
+                OR: [
+                  { fiscalYear: fy },
+                  {
+                    AND: [{ validFrom: { lte: fyRangeEnd } }, { validUntil: { gte: fyRangeStart } }],
+                  },
+                ],
+              },
+              orderBy: [{ sourceCode: "asc" }],
+            }
+          : false,
     },
     orderBy: [{ team: { sortOrder: "asc" } }, { name: "asc" }],
   });
@@ -42,13 +57,23 @@ export default async function LeaveManagementPage({
   const leaveTypes = await prisma.leaveType.findMany({
     where: { isActive: true },
     orderBy: { sortOrder: "asc" },
-    select: { id: true, code: true, name: true, allocationSourceCode: true },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      allocationSourceCode: true,
+      validityBasis: true,
+      daysPerUnit: true,
+      sortOrder: true,
+      carryoverEligible: true,
+    },
   });
   const allocationSourceConfigs = await prisma.allocationSourceConfig.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-    select: { sourceCode: true, label: true, sortOrder: true },
+    select: { sourceCode: true, label: true, sortOrder: true, defaultDays: true },
   });
+  const tenureMilestoneSourceCodes = await loadTenureMilestoneSourceCodes(prisma);
 
   /** 승인된 사유형 휴가 일수(귀속 구간 비율 배분) — 할당 used와 별도 */
   const reasonDaysByEmployee = new Map<string, number>();
@@ -91,9 +116,61 @@ export default async function LeaveManagementPage({
   const overviewColumns =
     tab === "overview" ? buildOverviewColumns(allocationSourceConfigs, overviewPerEmployeeMaps) : [];
 
+  /** 스탬프 수동 부여 탭: 유효기간 없음 — StampCoupon·StampCard 집계만 */
+  let stampGrantRows: StampGrantRow[] = [];
+  if (tab === "stamps") {
+    const stampEmployees = await prisma.employee.findMany({
+      where: { status: "ACTIVE" },
+      select: {
+        id: true,
+        name: true,
+        empNo: true,
+        team: { select: { name: true } },
+        _count: { select: { stampCoupons: true } },
+      },
+      orderBy: [{ team: { sortOrder: "asc" } }, { name: "asc" }],
+    });
+    const empIds = stampEmployees.map((e) => e.id);
+    const [healingGroups, afternoonGroups] =
+      empIds.length === 0
+        ? [[], []] as const
+        : await Promise.all([
+            prisma.stampCard.groupBy({
+              by: ["employeeId"],
+              where: {
+                employeeId: { in: empIds },
+                filledCount: { gte: 5 },
+                healingUsed: false,
+              },
+              _count: { _all: true },
+            }),
+            prisma.stampCard.groupBy({
+              by: ["employeeId"],
+              where: {
+                employeeId: { in: empIds },
+                filledCount: { gte: 10 },
+                afternoonUsed: false,
+              },
+              _count: { _all: true },
+            }),
+          ]);
+    const healingMap = new Map(healingGroups.map((g) => [g.employeeId, g._count._all]));
+    const afternoonMap = new Map(afternoonGroups.map((g) => [g.employeeId, g._count._all]));
+    stampGrantRows = stampEmployees.map((e) => ({
+      id: e.id,
+      name: e.name,
+      empNo: e.empNo,
+      teamName: e.team?.name ?? null,
+      stampCouponCount: e._count.stampCoupons,
+      healingEligibleCards: healingMap.get(e.id) ?? 0,
+      afternoonEligibleCards: afternoonMap.get(e.id) ?? 0,
+    }));
+  }
+
   const TABS = [
     { id: "overview", label: "휴가 현황" },
     { id: "allocations", label: "휴가 할당" },
+    { id: "stamps", label: "스탬프 부여" },
     { id: "approvals", label: "전체 결재 내역" },
     { id: "scheduler", label: "자동 스케줄러" },
   ];
@@ -102,7 +179,19 @@ export default async function LeaveManagementPage({
     <div className="space-y-4">
       <div>
         <h1 className="page-title">휴가 부여·현황</h1>
-        <p className="page-subtitle">귀속연도별 잔여·사용 현황, 일괄 초기화·할당 조정·이월, 자동 스케줄러·결재 내역을 한 곳에서 관리합니다.</p>
+        <p className="page-subtitle">
+          {tab === "stamps" ? (
+            <>
+              스탬프 칸은 <strong>휴가 할당(유효기간)</strong>과 별도이며, 귀속연도와 무관합니다. PM·관리자가 필요 시 칸을
+              수동으로 채울 수 있습니다.
+            </>
+          ) : (
+            <>
+              선택한 귀속 구간에 태그된(fiscalYear) 할당과, 구간과 유효기간이 겹치는 부여일·입사일 기준 할당을 함께 봅니다.
+              이월은 <strong>귀속연도형</strong> 할당만 수동 처리할 수 있습니다.
+            </>
+          )}
+        </p>
       </div>
 
       {/* 탭 */}
@@ -111,7 +200,7 @@ export default async function LeaveManagementPage({
           <a
             key={t.id}
             href={
-              t.id === "overview" || t.id === "allocations" || t.id === "approvals"
+              t.id === "overview" || t.id === "allocations" || t.id === "approvals" || t.id === "stamps"
                 ? `?tab=${t.id}&fy=${fy}`
                 : `?tab=${t.id}`
             }
@@ -133,7 +222,7 @@ export default async function LeaveManagementPage({
               <p>귀속연도별 직원별 현황입니다.</p>
               <ul className="list-disc list-inside text-xs text-gray-500 space-y-0.5">
                 <li>
-                  <strong className="text-gray-600">자산형</strong>: 해당 연도 <strong>휴가 할당</strong>의 부여·사용·잔여입니다. 소스별 열 순서·이름은 <strong>메타정보(AllocationSourceConfig)</strong>를 따르며, 월별 적립 행은 &quot;기본연차(월별적립)&quot; 열에 합산됩니다.
+                  <strong className="text-gray-600">자산형</strong>: 위 귀속 구간에 <code className="text-[11px]">fiscalYear</code>가 맞거나, <strong>유효기간이 그 구간과 겹치는</strong> 할당을 합산합니다. 소스별 열은 <strong>AllocationSourceConfig</strong> 순서를 따릅니다.
                 </li>
                 <li>
                   <strong className="text-gray-600">사유형 사용</strong>: 승인된 사유형(부여 없이 신청) 일수이며, 귀속 구간(5/1~익년 4/30)과 겹치는 날짜 비율로 배분합니다.
@@ -220,7 +309,15 @@ export default async function LeaveManagementPage({
             </table>
           </div>
           <p className="text-xs text-gray-400 mt-3">
-            일괄 초기화·할당 추가/수정/이월은 <a href={`?tab=allocations&fy=${fy}`} className="text-blue-500 hover:underline">휴가 할당</a> 탭에서 진행하세요.
+            일괄 초기화·할당 추가/수정/이월은{" "}
+            <a href={`?tab=allocations&fy=${fy}`} className="text-blue-500 hover:underline">
+              휴가 할당
+            </a>{" "}
+            탭에서, 스탬프 칸 수동 부여는{" "}
+            <a href={`?tab=stamps&fy=${fy}`} className="text-amber-700 hover:underline">
+              스탬프 부여
+            </a>{" "}
+            탭에서 진행하세요.
           </p>
         </div>
       )}
@@ -230,7 +327,7 @@ export default async function LeaveManagementPage({
         <div>
           <div className="mb-4 space-y-3">
             <p className="text-sm text-gray-500 max-w-3xl">
-              귀속연도 일괄 초기화, 직원별 할당 추가·수정·이월·비활성화를 한 화면에서 처리합니다.
+              귀속연도형 휴가는 초기화로 자동 생성·<strong className="text-gray-600">부여일·입사일형은 해당 구간에 없을 때만</strong> 보강 생성합니다. <strong className="text-gray-600">근속 마일스톤은 초기화가 아니라 근속 스케줄러에서만</strong> 부여합니다. 목록은 구간과 유효기간이 겹치는 할당을 모두 표시합니다. 이월은 귀속연도형만 수동 가능합니다.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {[fy - 1, fy, fy + 1].map((y) => (
@@ -246,17 +343,58 @@ export default async function LeaveManagementPage({
           <FiscalYearManager
             employees={serializeDates(employees) as any}
             fiscalYear={fy}
-            sourceOptions={Array.from(
-              new Map(
-                [
-                  ...allocationSourceConfigs.map((s) => [s.sourceCode, s.label] as const),
-                  ...leaveTypes
-                    .filter((t) => !!t.allocationSourceCode)
-                    .map((t) => [String(t.allocationSourceCode), t.name] as const),
-                ],
-              ).entries(),
-            ).map(([value, label]) => ({ value, label }))}
+            tenureMilestoneSourceCodes={tenureMilestoneSourceCodes}
+            sourceOptions={(() => {
+              type Opt = {
+                sortOrder: number;
+                sourceCode: string;
+                label: string;
+                validityBasis: string | null;
+                defaultDays: number | null;
+                carryoverEligible: boolean;
+              };
+              const m = new Map<string, Opt>();
+              for (const s of allocationSourceConfigs) {
+                m.set(s.sourceCode, {
+                  sortOrder: s.sortOrder,
+                  sourceCode: s.sourceCode,
+                  label: s.label,
+                  validityBasis: null,
+                  defaultDays: s.defaultDays != null ? Number(s.defaultDays) : null,
+                  carryoverEligible: false,
+                });
+              }
+              for (const t of leaveTypes) {
+                if (!t.allocationSourceCode) continue;
+                const key = t.allocationSourceCode;
+                const cur = m.get(key);
+                m.set(key, {
+                  sortOrder: cur?.sortOrder ?? t.sortOrder,
+                  sourceCode: key,
+                  label: cur?.label ?? t.name,
+                  validityBasis: t.validityBasis ?? cur?.validityBasis ?? null,
+                  defaultDays: cur?.defaultDays != null ? cur.defaultDays : Number(t.daysPerUnit),
+                  carryoverEligible: (cur?.carryoverEligible ?? false) || t.carryoverEligible === true,
+                });
+              }
+              return [...m.values()]
+                .sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label))
+                .map((cfg) => ({
+                  value: cfg.sourceCode,
+                  label: cfg.label,
+                  validityBasis: cfg.validityBasis,
+                  defaultDays: cfg.defaultDays,
+                  carryoverEligible: cfg.carryoverEligible,
+                }));
+            })()}
           />
+        </div>
+      )}
+
+      {/* ── 스탬프 수동 부여 (유효기간 없음, 휴가 할당과 별도) ── */}
+      {tab === "stamps" && (
+        <div>
+          <StampGrantTab rows={stampGrantRows} />
         </div>
       )}
 

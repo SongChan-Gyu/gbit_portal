@@ -1,8 +1,43 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const session = await auth();
+    const u = session?.user as any;
+    const guard = requirePMOrAdmin(u); if (guard) return guard;
+
+    const prev = await prisma.leaveAllocation.findUnique({ where: { id } });
+    if (!prev) return NextResponse.json({ error: "해당 할당을 찾을 수 없습니다." }, { status: 404 });
+
+    if (Number(prev.usedDays) > 1e-6) {
+      return NextResponse.json(
+        { error: `사용 일수(${prev.usedDays}일)가 있어 삭제할 수 없습니다. 관련 휴가를 취소한 후 삭제하거나 비활성화를 사용하세요.` },
+        { status: 400 },
+      );
+    }
+
+    await prisma.leaveAllocation.delete({ where: { id } });
+
+    await writeAudit({
+      entityType: "LeaveAllocation",
+      entityId: id,
+      action: "DELETED" as any,
+      actorId: u.employeeId,
+      before: prev,
+      note: `관리자 삭제 — ${prev.label} (${prev.sourceCode})`,
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("[allocations DELETE]", e);
+    return NextResponse.json({ error: "삭제 중 오류가 발생했습니다." }, { status: 500 });
+  }
+}
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id:string }> }) {
   try {

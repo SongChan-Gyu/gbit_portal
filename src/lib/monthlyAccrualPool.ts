@@ -6,8 +6,9 @@
 import prisma from "@/lib/db";
 import type { DB, DBTx } from "@/lib/db";
 import { writeAudit } from "@/lib/audit";
-import { getFiscalYear, kstMidnight, kstEndOfDay } from "@/lib/workdays";
+import { getFiscalYear, kstMidnight, kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
 import { fiscalPeriod } from "@/lib/leaveCalc";
+import { kstYmd, ymMonthEndYmd, ymNext } from "@/lib/dateUtils";
 
 // 순수 함수는 클라이언트 안전 파일에서 re-export
 export {
@@ -40,11 +41,19 @@ function legacySourceCodeToYm(sourceCode: string): string | null {
 }
 
 export function eligibleForMonth(hire: Date, tYear: number, tMonth: number): boolean {
-  const monthEnd = new Date(tYear, tMonth, 0);
+  const mendYmd = ymMonthEndYmd(`${tYear}-${String(tMonth).padStart(2, "0")}`);
+  const [ey, em, ed] = mendYmd.split("-").map(Number);
+  const monthEnd = kstEndOfDay(ey, em, ed);
   if (hire > monthEnd) return false;
   const monthsWorked =
     (tYear - hire.getFullYear()) * 12 + (tMonth - (hire.getMonth() + 1));
   if (monthsWorked < 0 || monthsWorked >= 12) return false;
+  // 월별 적립은 입사 귀속연도(부분 첫 FY) 내 달에서만 발생한다.
+  // 다음 귀속연도부터는 귀속연도 초기화에서 BASE_ANNUAL 고정 부여로 전환.
+  const hireFY = getFiscalYear(hire);
+  const monthFirstYmd = `${tYear}-${String(tMonth).padStart(2, "0")}-01`;
+  const targetFY = getFiscalYear(kstMidnightFromYmd(monthFirstYmd));
+  if (targetFY !== hireFY) return false;
   return true;
 }
 
@@ -56,20 +65,26 @@ export function monthlyAccrualCapDate(asOf: Date, fyEnd: Date): Date {
 
 export function listEligibleMonthlyMonths(hire: Date, fy: number, capDate: Date): string[] {
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
-  const hireMonthStart = new Date(hire.getFullYear(), hire.getMonth(), 1);
-  let cur = new Date(fyStart.getFullYear(), fyStart.getMonth(), 1);
-  if (hireMonthStart.getTime() > cur.getTime()) cur = new Date(hireMonthStart);
-  const end = capDate.getTime() < fyEnd.getTime() ? capDate : fyEnd;
+  const fyStartYmd = kstYmd(fyStart);
+  const fyEndYmd = kstYmd(fyEnd);
+  const hireYmd = kstYmd(hire);
+  const capYmd = kstYmd(capDate);
+
+  const hireYm = hireYmd.slice(0, 7);
+  const fyStYm = fyStartYmd.slice(0, 7);
+  let ym = fyStYm > hireYm ? fyStYm : hireYm;
+  const endYm = (capYmd <= fyEndYmd ? capYmd : fyEndYmd).slice(0, 7);
+
   const out: string[] = [];
-  for (let guard = 0; guard < 48; guard++) {
-    const tYear = cur.getFullYear();
-    const tMonth = cur.getMonth() + 1;
-    const monthEnd = new Date(tYear, tMonth, 0);
-    if (monthEnd.getTime() > end.getTime()) break;
+  for (let guard = 0; guard < 48 && ym <= endYm; guard++) {
+    const [tYear, tMonth] = ym.split("-").map(Number);
+    const mend = ymMonthEndYmd(ym);
+    if (mend > fyEndYmd) break;
+    if (mend > capYmd) break;
     if (eligibleForMonth(hire, tYear, tMonth)) {
       out.push(`${tYear}-${String(tMonth).padStart(2, "0")}`);
     }
-    cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    ym = ymNext(ym);
   }
   return out;
 }

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
+import DatePickerButton from "@/components/ui/DatePickerButton";
 
 const STATUS_KO: Record<string, string> = {
   PENDING: "1차 승인 대기",
@@ -53,6 +54,7 @@ export default function JejuMyClient() {
   const [list, setList] = useState<MyRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [editId, setEditId] = useState<string | null>(null);
+  const [editDates, setEditDates] = useState<Record<string, { startDate: string; endDate: string }>>({});
   const [cancelReasons, setCancelReasons] = useState<Record<string, string>>({});
 
   const load = async () => {
@@ -85,14 +87,20 @@ export default function JejuMyClient() {
     }
   }
 
+  function openEdit(r: MyRequest) {
+    setEditId(r.id);
+    setEditDates((prev) => ({ ...prev, [r.id]: { startDate: r.startDate, endDate: r.endDate } }));
+  }
+
   async function submitEdit(e: React.FormEvent<HTMLFormElement>, requestId: string) {
     e.preventDefault();
     const form = e.currentTarget;
     const reasonEl = form.querySelector('[name="reason"]') as HTMLInputElement | HTMLTextAreaElement | null;
+    const dates = editDates[requestId] ?? {};
     const payload = {
       requestId,
-      startDate: (form.querySelector('[name="startDate"]') as HTMLInputElement)?.value,
-      endDate: (form.querySelector('[name="endDate"]') as HTMLInputElement)?.value,
+      startDate: dates.startDate,
+      endDate: dates.endDate,
       reason: reasonEl?.value?.trim() || undefined,
       guestName: (form.querySelector('[name="guestName"]') as HTMLInputElement)?.value?.trim(),
       guestPhone: (form.querySelector('[name="guestPhone"]') as HTMLInputElement)?.value?.trim(),
@@ -144,22 +152,16 @@ export default function JejuMyClient() {
                   <div className="grid grid-cols-1 gap-3">
                     <div>
                       <label className="label">이용 시작일</label>
-                      <input
-                        name="startDate"
-                        type="date"
-                        defaultValue={r.startDate}
-                        className="input w-full min-h-[48px]"
-                        required
+                      <DatePickerButton
+                        value={editDates[r.id]?.startDate ?? r.startDate}
+                        onChange={(d) => setEditDates((prev) => ({ ...prev, [r.id]: { ...prev[r.id], startDate: d } }))}
                       />
                     </div>
                     <div>
                       <label className="label">이용 종료일</label>
-                      <input
-                        name="endDate"
-                        type="date"
-                        defaultValue={r.endDate}
-                        className="input w-full min-h-[48px]"
-                        required
+                      <DatePickerButton
+                        value={editDates[r.id]?.endDate ?? r.endDate}
+                        onChange={(d) => setEditDates((prev) => ({ ...prev, [r.id]: { ...prev[r.id], endDate: d } }))}
                       />
                     </div>
                   </div>
@@ -277,7 +279,7 @@ export default function JejuMyClient() {
                     <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setEditId(r.id)}
+                        onClick={() => openEdit(r)}
                         className="min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-white touch-manipulation"
                       >
                         수정
@@ -296,7 +298,7 @@ export default function JejuMyClient() {
                     <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => setEditId(r.id)}
+                        onClick={() => openEdit(r)}
                         className="min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-white touch-manipulation"
                       >
                         정정
@@ -316,7 +318,7 @@ export default function JejuMyClient() {
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => setEditId(r.id)}
+                          onClick={() => openEdit(r)}
                           className="min-h-[44px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-white touch-manipulation"
                         >
                           정정

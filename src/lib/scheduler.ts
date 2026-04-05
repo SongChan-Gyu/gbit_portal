@@ -3,16 +3,25 @@
  *
  * 두 가지 작업:
  * 1. runMonthlyAccrual  — 매월 1일: 입사 1년 미만 직원에게 1일 연차 적립
- * 2. runTenureCheck     — 매일: 1·5·10년 근속 기념일 도래 직원에게 근속휴가 부여
+ * 2. runTenureCheck     — 매일: 1·5·10년 근속 기념일 도래 직원에게 근속휴가 부여(귀속연도 초기화와는 별도·단일 출처)
  *
  * dryRun=true 이면 DB 변경 없이 "부여 예정자"만 반환합니다.
  */
 
 import prisma from "@/lib/db";
 import { writeAudit, writeSchedulerLog } from "@/lib/audit";
-import { getFiscalYear } from "@/lib/workdays";
-import { getTenureMilestones, fiscalPeriod, DEFAULT_TENURE_MILESTONES, type TenureMilestoneConfig } from "@/lib/leaveCalc";
+import { getFiscalYear, kstMidnightFromYmd, tenureMilestoneValidUntil } from "@/lib/workdays";
+import { addCalendarYearsToYmd, kstYmd } from "@/lib/dateUtils";
+import { findTenureMilestoneAllocation } from "@/lib/tenureAllocationDedupe";
+import {
+  formatTenureMilestoneAutoNote,
+  getTenureMilestones,
+  fiscalPeriod,
+  DEFAULT_TENURE_MILESTONES,
+  type TenureMilestoneConfig,
+} from "@/lib/leaveCalc";
 import { appendMonthlyAccrualMonth } from "@/lib/monthlyAccrualPool";
+import { loadTenureMilestoneConfigs } from "@/lib/tenureMilestoneFromDb";
 
 export interface AccrualItem {
   employeeId: string;
@@ -148,23 +157,13 @@ export async function runMonthlyAccrual(
 // 2. 근속 기념일 체크
 // ──────────────────────────────────────────────────────
 
-/** AllocationSourceConfig에서 근속 마일스톤 목록 로드 (tenureYears != null인 항목) */
+/** LeaveType.hireAnniversaryYears 우선, 없으면 AllocationSourceConfig.tenureYears, 실패 시 기본 목록 */
 async function loadTenureMilestones(): Promise<TenureMilestoneConfig[]> {
   try {
-    const configs = await prisma.allocationSourceConfig.findMany({
-      where: { isActive: true, tenureYears: { not: null } },
-      orderBy: { tenureYears: "asc" },
-    });
-    if (configs.length > 0) {
-      return configs.map((c) => ({
-        years: c.tenureYears!,
-        code:  c.sourceCode,
-        label: c.label,
-        days:  Number(c.defaultDays ?? 0),
-      }));
-    }
+    const cfgs = await loadTenureMilestoneConfigs(prisma);
+    if (cfgs.length > 0) return cfgs;
   } catch {
-    // DB 조회 실패 시 기본값 사용
+    /* DB 조회 실패 */
   }
   return DEFAULT_TENURE_MILESTONES;
 }
@@ -189,46 +188,33 @@ export async function runTenureCheck(
   });
 
   for (const emp of employees) {
-    const hire = new Date(emp.hireDate); hire.setHours(0, 0, 0, 0);
+    const hire = new Date(emp.hireDate);
+    const hireYmd = kstYmd(hire);
 
     for (const m of TENURE_MILESTONES) {
-      const anniversary = new Date(hire);
-      anniversary.setFullYear(hire.getFullYear() + m.years);
-      if (anniversary < checkFrom || anniversary > checkTo) continue;
+      const anniversaryYmd = addCalendarYearsToYmd(hireYmd, m.years);
+      const grantStart = kstMidnightFromYmd(anniversaryYmd);
+      if (grantStart < checkFrom || grantStart > checkTo) continue;
 
-      const anniversaryStr = anniversary.toISOString().slice(0, 10);
-
-      const existing = await prisma.leaveAllocation.findFirst({
-        where: { employeeId: emp.id, sourceCode: m.code, note: { contains: anniversaryStr } },
-      });
+      const existing = await findTenureMilestoneAllocation(prisma, emp.id, m.code, anniversaryYmd);
       if (existing) {
         result.skipped.push({
           employeeId: emp.id, name: emp.name,
-          code: m.code, days: m.days, anniversary: anniversaryStr,
+          code: m.code, days: m.days, anniversary: anniversaryYmd,
           reason: "이미 부여됨",
         });
         continue;
       }
 
       if (dryRun) {
-        result.granted.push({ employeeId: emp.id, name: emp.name, code: m.code, days: m.days, anniversary: anniversaryStr });
+        result.granted.push({
+          employeeId: emp.id, name: emp.name, code: m.code, days: m.days, anniversary: anniversaryYmd,
+        });
         continue;
       }
 
-      const validFrom  = anniversary;
-      // 스케줄러는 "부여 + 기본 만료일 세팅"만 담당.
-      // 1년근속 특례 이월은 귀속연도 초기화(init) 정책에서 처리한다.
-      let validUntil: Date;
-      if (m.code === "TENURE_1Y") {
-        const fiscalYearOfGrant = getFiscalYear(anniversary); // anniversary가 속한 귀속연도
-        const fyEnd = new Date(fiscalYearOfGrant + 1, 3, 30, 23, 59, 59, 999); // (fy+1)-04-30 23:59:59.999
-        validUntil = fyEnd;
-      } else {
-        const d = new Date(anniversary);
-        d.setMonth(d.getMonth() + 12);
-        validUntil = d;
-      }
-      // 근속휴가는 입사 기념일 기준이라 귀속연도 없음 (스케줄러 전용)
+      const validFrom = grantStart;
+      const validUntil = tenureMilestoneValidUntil(validFrom, m.years);
       const fiscalYear = null;
 
       try {
@@ -237,20 +223,22 @@ export async function runTenureCheck(
             employeeId: emp.id, fiscalYear, sourceCode: m.code,
             label: m.label, totalDays: m.days, usedDays: 0,
             validFrom, validUntil, isActive: true,
-            note: `${anniversaryStr} 자동 부여 (입사 ${m.years}년 근속)`,
+            note: formatTenureMilestoneAutoNote(anniversaryYmd, m.years),
           },
         });
         await writeAudit({
           entityType: "LeaveAllocation", entityId: alloc.id,
           action: "GRANTED", actorId: actorId ?? null,
           actorName: actorId ? undefined : "스케줄러(근속)",
-          after: { sourceCode: m.code, totalDays: m.days, anniversary: anniversaryStr },
+          after: { sourceCode: m.code, totalDays: m.days, anniversary: anniversaryYmd },
           note: `${emp.name} ${m.years}년 근속휴가 자동 부여`,
         });
-        result.granted.push({ employeeId: emp.id, name: emp.name, code: m.code, days: m.days, anniversary: anniversaryStr });
+        result.granted.push({
+          employeeId: emp.id, name: emp.name, code: m.code, days: m.days, anniversary: anniversaryYmd,
+        });
       } catch (e: unknown) {
         result.errors.push({
-          employeeId: emp.id, name: emp.name, code: m.code, days: m.days, anniversary: anniversaryStr,
+          employeeId: emp.id, name: emp.name, code: m.code, days: m.days, anniversary: anniversaryYmd,
           error: e instanceof Error ? e.message : String(e),
         });
       }
@@ -263,7 +251,7 @@ export async function runTenureCheck(
       : "SUCCESS";
     await writeSchedulerLog({
       jobName: "tenure_check",
-      targetParam: `${target.toISOString().slice(0,10)}±${window}`,
+      targetParam: `${kstYmd(target)}±${window}`,
       isDryRun: false, status: st,
       grantedCount: result.granted.length,
       skippedCount: result.skipped.length,
@@ -296,23 +284,20 @@ export async function getUpcomingAnniversaries(days = 30) {
   }[] = [];
 
   for (const emp of employees) {
-    const hire = new Date(emp.hireDate); hire.setHours(0, 0, 0, 0);
+    const hireYmd = kstYmd(new Date(emp.hireDate));
     for (const m of TENURE_MILESTONES) {
-      const anniversary = new Date(hire);
-      anniversary.setFullYear(hire.getFullYear() + m.years);
-      if (anniversary < today || anniversary > until) continue;
+      const anniversaryYmd = addCalendarYearsToYmd(hireYmd, m.years);
+      const grantStart = kstMidnightFromYmd(anniversaryYmd);
+      if (grantStart < today || grantStart > until) continue;
 
-      const anniversaryStr = anniversary.toISOString().slice(0, 10);
-      const daysLeft = Math.ceil((anniversary.getTime() - today.getTime()) / 86400000);
+      const daysLeft = Math.ceil((grantStart.getTime() - today.getTime()) / 86400000);
 
-      const existing = await prisma.leaveAllocation.findFirst({
-        where: { employeeId: emp.id, sourceCode: m.code, note: { contains: anniversaryStr } },
-      });
+      const existing = await findTenureMilestoneAllocation(prisma, emp.id, m.code, anniversaryYmd);
 
       upcoming.push({
         employeeId: emp.id, name: emp.name, teamName: emp.team?.name ?? "-",
         code: m.code, label: m.label, years: m.years, days: m.days,
-        anniversary: anniversaryStr, daysLeft, alreadyGranted: !!existing,
+        anniversary: anniversaryYmd, daysLeft, alreadyGranted: !!existing,
       });
     }
   }
@@ -356,14 +341,7 @@ export async function getTenureScheduleForFiscalYears(fy?: number): Promise<Tenu
       const milestones = getTenureMilestones(hire, fyStart, fyEnd, milestoneCfgs);
 
       for (const m of milestones) {
-        const grantDateStr = m.grantDate.toISOString().slice(0, 10);
-        const existing = await prisma.leaveAllocation.findFirst({
-          where: {
-            employeeId: emp.id,
-            sourceCode: m.code,
-            note: { contains: grantDateStr },
-          },
-        });
+        const existing = await findTenureMilestoneAllocation(prisma, emp.id, m.code, m.anniversaryYmd);
 
         rows.push({
           fiscalYear: targetFy,
@@ -373,7 +351,7 @@ export async function getTenureScheduleForFiscalYears(fy?: number): Promise<Tenu
           code: m.code,
           label: m.label,
           days: m.days,
-          grantDate: grantDateStr,
+          grantDate: m.anniversaryYmd,
           alreadyGranted: !!existing,
         });
       }
@@ -385,12 +363,14 @@ export async function getTenureScheduleForFiscalYears(fy?: number): Promise<Tenu
 }
 
 // ──────────────────────────────────────────────────────
-// 3. 생일반차쿠폰 (해당 월에 생일인 재직자에게 0.5일 부여)
+// 3. 생일반차쿠폰 (일 단위 권장: 선택한 달력 날짜에 생일인 직원만 부여)
 // ──────────────────────────────────────────────────────
 export interface BirthdayHalfItem {
   employeeId: string;
   name: string;
   birthMonth: number;
+  /** 부여·미리보기용 달력 생일 YYYY-MM-DD */
+  birthdayDateStr?: string;
   reason?: string;
   error?: string;
 }
@@ -401,21 +381,42 @@ export interface BirthdayHalfResult {
   isDryRun: boolean;
 }
 
-export async function runBirthdayHalf(
-  targetYearMonth?: string,
-  dryRun = false,
-  actorId?: string,
-): Promise<BirthdayHalfResult> {
+export type RunBirthdayHalfArgs = {
+  /** YYYY-MM-DD — 이 날짜(월·일)에 생일이 맞는 직원만 부여 */
+  date?: string;
+  /** YYYY-MM — 레거시·배치: 해당 월 생일자 전원 (월 단위) */
+  yearMonth?: string;
+  dryRun?: boolean;
+  actorId?: string;
+};
+
+export async function runBirthdayHalf(args: RunBirthdayHalfArgs = {}): Promise<BirthdayHalfResult> {
+  const { date: dateRaw, yearMonth: yearMonthRaw, dryRun = false, actorId } = args;
   const result: BirthdayHalfResult = { granted: [], skipped: [], errors: [], isDryRun: dryRun };
   const now = new Date();
-  let tYear: number, tMonth: number;
-  if (targetYearMonth) {
-    [tYear, tMonth] = targetYearMonth.split("-").map(Number);
+
+  const dateTrim = dateRaw?.trim();
+  const ymTrim = yearMonthRaw?.trim();
+
+  type Mode = { kind: "day"; tYear: number; tMonth: number; tDay: number; targetParam: string }
+    | { kind: "month"; tYear: number; tMonth: number; targetParam: string };
+
+  let mode: Mode;
+  if (dateTrim && /^\d{4}-\d{2}-\d{2}$/.test(dateTrim)) {
+    const [y, m, d] = dateTrim.split("-").map(Number);
+    mode = { kind: "day", tYear: y, tMonth: m, tDay: d, targetParam: dateTrim };
+  } else if (ymTrim && /^\d{4}-\d{2}$/.test(ymTrim)) {
+    const [y, m] = ymTrim.split("-").map(Number);
+    mode = { kind: "month", tYear: y, tMonth: m, targetParam: ymTrim };
+  } else if (!dateTrim && !ymTrim) {
+    const y = now.getFullYear();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+    const p = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    mode = { kind: "day", tYear: y, tMonth: m, tDay: d, targetParam: p };
   } else {
-    tYear = now.getFullYear();
-    tMonth = now.getMonth() + 1;
+    throw new Error("생일반차: date는 YYYY-MM-DD, yearMonth는 YYYY-MM 형식이어야 합니다.");
   }
-  const yearMonthStr = `${tYear}-${String(tMonth).padStart(2, "0")}`;
 
   // 유효기간: LeaveType.validityMonths (BIRTHDAY_HALF) 기준, 없으면 3개월 폴백
   const birthdayHalfLT = await prisma.leaveType.findFirst({
@@ -431,23 +432,45 @@ export async function runBirthdayHalf(
 
   for (const emp of employees) {
     const birth = emp.birthDate ? new Date(emp.birthDate) : null;
-    if (!birth || birth.getMonth() + 1 !== tMonth) {
+    if (!birth) {
       result.skipped.push({
         employeeId: emp.id,
         name: emp.name,
-        birthMonth: birth ? birth.getMonth() + 1 : 0,
-        reason: !birth ? "생년월일 미입력" : "해당 월 생일 아님",
+        birthMonth: 0,
+        reason: "생년월일 미입력",
       });
       continue;
     }
 
-    // 실제 생일 날짜 (해당 연도) — 2월 29일 윤년 보정: 해당 연도에 29일이 없으면 28일로 처리
-    const birthMonth = birth.getMonth(); // 0-indexed
+    const birthMonth0 = birth.getMonth();
     const birthDay = birth.getDate();
-    const maxDay = new Date(tYear, birthMonth + 1, 0).getDate(); // 해당 월의 마지막 날
-    const safeDay = Math.min(birthDay, maxDay);
-    const birthdayThisYear = new Date(tYear, birthMonth, safeDay);
-    const birthdayDateStr = `${tYear}-${String(birthMonth + 1).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+    const tYear = mode.tYear;
+    const maxDayInBirthMonth = new Date(tYear, birthMonth0 + 1, 0).getDate();
+    const safeDay = Math.min(birthDay, maxDayInBirthMonth);
+    const birthdayThisYear = new Date(tYear, birthMonth0, safeDay);
+    const birthdayDateStr = `${tYear}-${String(birthMonth0 + 1).padStart(2, "0")}-${String(safeDay).padStart(2, "0")}`;
+
+    if (mode.kind === "day") {
+      if (birthMonth0 + 1 !== mode.tMonth || safeDay !== mode.tDay) {
+        result.skipped.push({
+          employeeId: emp.id,
+          name: emp.name,
+          birthMonth: birthMonth0 + 1,
+          reason: "해당 일 생일 아님",
+        });
+        continue;
+      }
+    } else {
+      if (birthMonth0 + 1 !== mode.tMonth) {
+        result.skipped.push({
+          employeeId: emp.id,
+          name: emp.name,
+          birthMonth: birthMonth0 + 1,
+          reason: "해당 월 생일 아님",
+        });
+        continue;
+      }
+    }
 
     const existing = await prisma.leaveAllocation.findFirst({
       where: {
@@ -457,12 +480,23 @@ export async function runBirthdayHalf(
       },
     });
     if (existing) {
-      result.skipped.push({ employeeId: emp.id, name: emp.name, birthMonth: tMonth, reason: "이미 부여됨" });
+      result.skipped.push({
+        employeeId: emp.id,
+        name: emp.name,
+        birthMonth: birthMonth0 + 1,
+        birthdayDateStr,
+        reason: "이미 부여됨",
+      });
       continue;
     }
 
     if (dryRun) {
-      result.granted.push({ employeeId: emp.id, name: emp.name, birthMonth: tMonth });
+      result.granted.push({
+        employeeId: emp.id,
+        name: emp.name,
+        birthMonth: birthMonth0 + 1,
+        birthdayDateStr,
+      });
       continue;
     }
 
@@ -478,7 +512,7 @@ export async function runBirthdayHalf(
           label: "생일반차",
           totalDays: daysPerUnit,
           usedDays: 0,
-          validFrom: birthdayThisYear,  // 생일 당일부터 사용 가능
+          validFrom: birthdayThisYear,
           validUntil,
           fiscalYear: null,
           isActive: true,
@@ -491,15 +525,21 @@ export async function runBirthdayHalf(
         action: "GRANTED",
         actorId: actorId ?? null,
         actorName: actorId ? undefined : "스케줄러(생일반차)",
-        after: { sourceCode: "BIRTHDAY_HALF", totalDays: 0.5, birthday: birthdayDateStr },
+        after: { sourceCode: "BIRTHDAY_HALF", totalDays: daysPerUnit, birthday: birthdayDateStr },
         note: `${emp.name} ${birthdayDateStr} 생일반차 부여`,
       });
-      result.granted.push({ employeeId: emp.id, name: emp.name, birthMonth: tMonth });
+      result.granted.push({
+        employeeId: emp.id,
+        name: emp.name,
+        birthMonth: birthMonth0 + 1,
+        birthdayDateStr,
+      });
     } catch (e: unknown) {
       result.errors.push({
         employeeId: emp.id,
         name: emp.name,
-        birthMonth: tMonth,
+        birthMonth: birthMonth0 + 1,
+        birthdayDateStr,
         error: e instanceof Error ? e.message : String(e),
       });
     }
@@ -514,7 +554,7 @@ export async function runBirthdayHalf(
         : "SUCCESS";
     await writeSchedulerLog({
       jobName: "birthday_half",
-      targetParam: yearMonthStr,
+      targetParam: mode.targetParam,
       isDryRun: false,
       status: st,
       grantedCount: result.granted.length,
@@ -570,7 +610,7 @@ export async function getAccrualCandidates(targetMonth?: string) {
 
     candidates.push({
       employeeId: emp.id, name: emp.name, teamName: emp.team?.name ?? "-",
-      hireDate: hire.toISOString().slice(0, 10),
+      hireDate: kstYmd(hire),
       monthsWorked, alreadyGranted,
     });
   }

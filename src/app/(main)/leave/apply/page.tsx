@@ -27,14 +27,10 @@ export default async function LeaveApplyPage() {
   const [leaveTypes, allocations, employee, holidays, totalStamps, afternoonStampSlots, healingStampSlots] =
     await Promise.all([
       prisma.leaveType.findMany({ where: { isActive: true }, orderBy: { sortOrder: "asc" } }),
+      // 신청 화면은 귀속연도가 아니라 유효기간 겹침으로만 판단 — 익년도 부여도 포함해 전부 로드
       prisma.leaveAllocation.findMany({
-        where: {
-          employeeId: user.employeeId,
-          isActive: true,
-          validFrom:  { lte: dayEnd },
-          validUntil: { gte: dayStart },
-        },
-        orderBy: [{ fiscalYear: "desc" }, { sourceCode: "asc" }],
+        where: { employeeId: user.employeeId, isActive: true },
+        orderBy: [{ validFrom: "desc" }, { sourceCode: "asc" }],
       }),
       prisma.employee.findUnique({ where: { id: user.employeeId }, include: { team: true } }),
       prisma.holiday.findMany({ orderBy: { date: "asc" } }),
@@ -77,7 +73,10 @@ export default async function LeaveApplyPage() {
       {/* 페이지 헤더 */}
       <div className="mb-3">
         <h1 className="page-title">휴가 신청</h1>
-        <p className="page-subtitle">{fy}년도 귀속 · {employee?.name} · {employee?.team?.name}</p>
+        <p className="page-subtitle">
+          {employee?.name} · {employee?.team?.name}
+          <span className="text-gray-400 font-normal"> · 신청 일정과 유효기간이 맞는 부여만 집계·차감</span>
+        </p>
       </div>
 
       {/* 사용 가능 자산 요약 (공가·병가 미포함) */}
@@ -103,8 +102,8 @@ export default async function LeaveApplyPage() {
             </div>
             <div className="flex-1" />
             <div className="text-right text-xs text-gray-400 hidden sm:block">
-              <p>귀속연도 {fy}년도</p>
-              <p>{formatYMD(new Date())} 기준</p>
+              <p>참고 귀속연도 {fy}년도</p>
+              <p>상단 숫자: {formatYMD(new Date())} 유효 부여 합산</p>
             </div>
           </div>
         </div>

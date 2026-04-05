@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { holidayDateToYmd } from "@/lib/dateUtils";
 import AttendanceClient from "./AttendanceClient";
 import { redirect } from "next/navigation";
+import { fiscalPeriod } from "@/lib/leaveCalc";
 
 export default async function AttendancePage({
   searchParams,
@@ -28,8 +29,7 @@ export default async function AttendancePage({
 
   // 귀속연도 계산 (5월 기준)
   const fy = month >= 5 ? year : year - 1;
-  const fyStart = new Date(fy, 4, 1, 0, 0, 0, 0);
-  const fyEnd   = new Date(fy + 1, 3, 30, 23, 59, 59, 999);
+  const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
 
   // 직원 목록
   const empWhere = isAdmin ? { status:"ACTIVE" } : { id:user.employeeId };
@@ -61,12 +61,15 @@ export default async function AttendancePage({
     include: { items: { include: { leaveType: true } } },
   });
 
-  // 할당 (잔여일수용)
+  // 할당 (잔여일수용) — 휴가관리와 동일: FY 태그 또는 해당 귀속 구간과 유효기간 겹침
   const allocations = await prisma.leaveAllocation.findMany({
     where: {
       employeeId: { in: employees.map((e)=>e.id) },
-      fiscalYear: fy,
       isActive: true,
+      OR: [
+        { fiscalYear: fy },
+        { AND: [{ validFrom: { lte: fyEnd } }, { validUntil: { gte: fyStart } }] },
+      ],
     },
   });
 

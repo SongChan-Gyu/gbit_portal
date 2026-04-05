@@ -1,6 +1,15 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { APPLY_GROUP_BY_CODE } from "@/lib/leaveApplyGroups";
+import {
+  fiscalPeriod,
+  formatTenureMilestoneAutoNote,
+  getTenureMilestones,
+} from "@/lib/leaveCalc";
+import { findTenureMilestoneAllocation } from "@/lib/tenureAllocationDedupe";
+import type { DB } from "@/lib/db";
+import { loadTenureMilestoneConfigs } from "@/lib/tenureMilestoneFromDb";
+import { tenureMilestoneValidUntil } from "@/lib/workdays";
 
 // ── 인라인 유틸 (src/lib/leaveCalc 대신)
 /** 기본연차 일수 (항상 15, 근속가산 별도) */
@@ -17,23 +26,6 @@ function calcTenureBonus(hireDate: Date, fiscalYearStart: Date): number {
   const years = Math.floor(ms / (365.25 * 24 * 3600 * 1000));
   return Math.min(Math.floor(years / 2), 10);
 }
-function getTenureMilestones(hireDate: Date, fyStart: Date, fyEnd: Date) {
-  const milestones = [
-    { years:1,  label:"1년근속휴가",  days:3,  code:"TENURE_1Y"  },
-    { years:5,  label:"5년근속휴가",  days:5,  code:"TENURE_5Y"  },
-    { years:10, label:"10년근속휴가", days:10, code:"TENURE_10Y" },
-  ];
-  return milestones.map((m) => {
-    const anniversary = new Date(hireDate);
-    anniversary.setFullYear(hireDate.getFullYear() + m.years);
-    if (anniversary >= fyStart && anniversary <= fyEnd) return { ...m, grantDate: anniversary };
-    return null;
-  }).filter(Boolean) as any[];
-}
-function fiscalPeriod(fy: number) {
-  return { start: new Date(`${fy}-05-01`), end: new Date(`${fy+1}-04-30`) };
-}
-
 const prisma = new PrismaClient();
 
 async function main() {
@@ -160,7 +152,7 @@ async function main() {
   const jobTypes = [
     { jobKey: "monthly_accrual", name: "월별 연차 적립", description: "입사 1년 미만 직원 월 1일 적립", sortOrder: 1 },
     { jobKey: "tenure_check", name: "근속 기념일 휴가", description: "1·5·10년 근속일 도래 시 자동 부여", sortOrder: 2 },
-    { jobKey: "birthday_half", name: "생일반차쿠폰", description: "생일 해당 월에 0.5일 부여", sortOrder: 3 },
+    { jobKey: "birthday_half", name: "생일반차쿠폰", description: "생일 당일(또는 API yearMonth 시 해당 월) 0.5일 부여", sortOrder: 3 },
   ];
   for (const j of jobTypes) {
     if (await prisma.schedulerJobType.findUnique({ where: { jobKey: j.jobKey } })) continue;
@@ -170,6 +162,7 @@ async function main() {
   // ── 귀속연도 2025 할당 + 샘플 신청 내역 (없을 때만 생성)
   const fy = 2025;
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
+  const milestoneConfigsForSeed = await loadTenureMilestoneConfigs(prisma as unknown as DB);
 
   // 각 사원별 자동 계산 + 할당 생성 (없을 때만 insert)
   for (const e of empDefs) {
@@ -193,16 +186,13 @@ async function main() {
       }
     }
 
-    // 근속 마일스톤 (없을 때만 생성)
-    const milestones = getTenureMilestones(hire, fyStart, fyEnd);
+    // 근속 마일스톤 (운영과 동일: LeaveType·AllocationSourceConfig 메타 → 일수/코드/주년)
+    const milestones = getTenureMilestones(hire, fyStart, fyEnd, milestoneConfigsForSeed);
     for (const m of milestones) {
-      const existing = await prisma.leaveAllocation.findFirst({
-        where: { employeeId: emp.id, sourceCode: m.code },
-      });
-      if (existing) continue;
-      const validUntil = new Date(m.grantDate);
-      validUntil.setFullYear(validUntil.getFullYear() + 1);
-      const note = `${m.grantDate.toLocaleDateString("ko-KR")} 부여`;
+      const dup = await findTenureMilestoneAllocation(prisma, emp.id, m.code, m.anniversaryYmd);
+      if (dup) continue;
+      const validUntil = tenureMilestoneValidUntil(m.grantDate, m.years);
+      const note = formatTenureMilestoneAutoNote(m.anniversaryYmd, m.years);
       await prisma.leaveAllocation.create({
         data: {
           id: `a-${e.empNo}-${m.code}`,
@@ -548,11 +538,12 @@ async function seedLeaveRequests(empMap: Record<string, any>) {
 }
 
 // ─── 휴가유형 ────────────────────────────────────────────
-// approvalSteps: 연차·반차·돌봄·연휴연장 1(팀장), 공가·병가·인정·경조·포상 2(PM), 스탬프·하프데이 등 1. (seed-base.ts와 동일)
+// approvalSteps: 저장 시 0·1로 통일(역할 1단). 예전 2도 동일 의미. (seed-base.ts와 동일)
 async function seedLeaveTypes() {
   const types = [
     // [code, name, dpu, deduct, steps, maxMon, maxYr, stamp, stampCnt, isHalf, amOnly, pmOnly, vBasis, vMon, color, sort]
     ["ANNUAL",         "연차",              1,   true,  1, null, null, false, null, false,false,false,"귀속연도",    null,  "#3b82f6",  0],
+    ["POOL_TENURE_BONUS", "근속가산(시스템)", 1, false, 1, null, null, false, null, false,false,false,"귀속연도", null, "#94a3b8", 98],
     ["CONDOLENCE",     "경조휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  null,  "#f59e0b",  3],
     ["CARE",           "돌봄휴가",          1,   false, 1, null, 2,    false, null, false,false,false,"귀속연도",    null,  "#10b981",  4],
     ["PUBLIC",         "공가",              1,   false, 2, null, null, false, null, false,false,false,"귀속연도",    null,  "#64748b",  7],
@@ -561,15 +552,17 @@ async function seedLeaveTypes() {
     ["SICK",           "병가",              1,   false, 2, null, null, false, null, false,false,false,"귀속연도",    null,  "#ef4444", 14],
     ["HEALING_DAY",    "힐링데이",          0,   false, 0, null, null, true,  5,    false,false,false,"부여일기준",  null,  "#f59e0b", 15],
     ["PM_RECOG_STAMP", "오후인정(스탬프)",  0.5, false, 1, null, null, true,  10,   true, false,true, "부여일기준",  null,  "#a855f7", 16],
-    ["TENURE_1Y",      "1년근속휴가",       1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#10b981", 17],
-    ["TENURE_5Y",      "5년근속휴가",       1,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 18],
-    ["TENURE_10Y",     "10년근속휴가",      1,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 19],
+    ["TENURE_1Y",      "1년근속휴가",       3,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 17],
+    ["TENURE_5Y",      "5년근속휴가",       5,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 18],
+    ["TENURE_10Y",     "10년근속휴가",      10,  false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 19],
     ["AWARD",          "포상휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  12,    "#f59e0b", 20],
     ["HOLIDAY_EXT",       "연휴연장휴가",        1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 21],
     ["BIRTHDAY_HALF",     "생일반차",            0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 3,   "#ec4899", 25],
   ] as const;
 
   function allocationSourceForCode(lc: string): string | null {
+    if (lc === "ANNUAL") return "BASE_ANNUAL";
+    if (lc === "POOL_TENURE_BONUS") return "TENURE_BONUS";
     if (lc === "CARE") return "CARE";
     if (lc === "HOLIDAY_EXT") return "HOLIDAY_EXT";
     if (lc === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
@@ -581,25 +574,31 @@ async function seedLeaveTypes() {
     if (["PUBLIC", "RECOGNITION", "SICK", "CONDOLENCE"].includes(code)) return "REASON";
     return "ASSET";
   }
-  function carryoverEligibleForCode(code: string): boolean {
-    // CARE·HOLIDAY_EXT: 귀속연도 기준 소멸 → 이월 불필요
-    // 나머지 전용 풀(부여일·입사일 기준)은 유효기간이 귀속연도를 넘을 수 있어 이월 대상
-    return ["AWARD", "BIRTHDAY_HALF", "TENURE_5Y", "TENURE_10Y"].includes(code);
-  }
-  function autoCarryoverOnFiscalInitForCode(code: string): boolean {
-    // 귀속연도 초기화 시 자동이월: 부여일/입사일 기준 유효기간이 다음 귀속연도로 넘어갈 수 있는 소스
-    // TENURE_1Y: 별도 TENURE_1Y_CARRYOVER 특례 로직으로 처리 (여기서 제외)
-    return ["AWARD", "BIRTHDAY_HALF", "TENURE_5Y", "TENURE_10Y"].includes(code);
+  function hireAnniversaryYearsForCode(code: string): number | null {
+    if (code === "TENURE_1Y") return 1;
+    if (code === "TENURE_5Y") return 5;
+    if (code === "TENURE_10Y") return 10;
+    return null;
   }
   function displayHintForCode(code: string): string | null {
-    if (code === "ANNUAL") return "연차 차감";
+    if (code === "ANNUAL") return "귀속연도 자산형, 1일 단위 (관리자 수동 이월 대상)";
+    if (code === "SICK") return "입원·통원 등";
     if (code === "CARE") return "연 2일 한도";
-    if (code === "HOLIDAY_EXT") return "귀속연도 1일 (오전·오후·종일)";
+    if (code === "HOLIDAY_EXT") return "휴무 3일 이상 이어질 때 앞·뒤·징검다리 영업일(귀속 1일)";
     if (code === "PM_HALF_MONTH") return "수요일 오후";
-    if (code === "BIRTHDAY_HALF") return "생일 월 자동 부여 0.5일 (부여일 기준 3개월)";
+    if (code === "BIRTHDAY_HALF") return "생일이 있는 달에 자동 부여 0.5일(부여 후 3개월 유효)";
     if (code === "AWARD") return "별도 부여";
     if (code === "PM_RECOG_STAMP") return "10칸 완성 장당 1회";
+    if (code === "TENURE_1Y") return "입사 1주년 3일 (휴가규정)";
+    if (code === "TENURE_5Y") return "입사 5주년 5일 (휴가규정)";
+    if (code === "TENURE_10Y") return "입사 10주년 10일 (휴가규정)";
     return null;
+  }
+  function carryoverEligibleForCode(code: string): boolean {
+    return code === "ANNUAL" || code === "POOL_TENURE_BONUS";
+  }
+  function includeInFiscalInitForCode(code: string): boolean {
+    return code !== "AWARD" && code !== "POOL_TENURE_BONUS";
   }
 
   for (const [code,name,dpu,deduct,steps,maxMon,maxYr,stamp,stampCnt,isHalf,amOnly,pmOnly,vBasis,vMon,color,sort] of types) {
@@ -626,8 +625,9 @@ async function seedLeaveTypes() {
       allocationSourceCode: allocationSourceForCode(code),
       usageCategory: usageCategoryForCode(code),
       displayHint: displayHintForCode(code),
+      hireAnniversaryYears: hireAnniversaryYearsForCode(code),
       carryoverEligible: carryoverEligibleForCode(code),
-      autoCarryoverOnFiscalInit: autoCarryoverOnFiscalInitForCode(code),
+      includeInFiscalInit: includeInFiscalInitForCode(code),
       allowsFullDay,
       allowsHalfDay,
       halfDayAmPm,
