@@ -54,37 +54,50 @@ export async function POST(req: Request) {
   }
 
   /** 스탬프 적립과 감사 로그를 한 트랜잭션으로 — 로그 실패 시 부여만 되고 클라이언트는 실패로 보이는 불일치 방지 */
-  const createdIds = await prisma.$transaction(async (tx) => {
-    const ids: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const { stampId } = await appendStampCouponToCard(tx, employeeId, stampDate);
-      ids.push(stampId);
-    }
-    await tx.auditLog.create({
-      data: {
-        entityType: "StampCoupon",
-        entityId: ids[0] ?? employeeId,
-        action: "GRANTED",
-        actorId: u?.employeeId ?? null,
-        after: JSON.stringify({
-          employeeId,
-          employeeName: emp.name,
-          granted: count,
-          stampIds: ids,
-          stampDateYmd: grantYmdStr,
-        }),
-        note: `관리자 스탬프 칸 수동 부여 ${count}칸`,
+  try {
+    const createdIds = await prisma.$transaction(
+      async (tx) => {
+        const ids: string[] = [];
+        for (let i = 0; i < count; i++) {
+          const { stampId } = await appendStampCouponToCard(tx, employeeId, stampDate);
+          ids.push(stampId);
+        }
+        await tx.auditLog.create({
+          data: {
+            entityType: "StampCoupon",
+            entityId: ids[0] ?? employeeId,
+            action: "GRANTED",
+            actorId: u?.employeeId ?? null,
+            after: JSON.stringify({
+              employeeId,
+              employeeName: emp.name,
+              granted: count,
+              stampIds: ids,
+              stampDateYmd: grantYmdStr,
+            }),
+            note: `관리자 스탬프 칸 수동 부여 ${count}칸`,
+          },
+        });
+        return ids;
       },
+      { maxWait: 10_000, timeout: 30_000 },
+    );
+
+    const totalAfter = await prisma.stampCoupon.count({ where: { employeeId } });
+
+    return NextResponse.json({
+      ok: true,
+      granted: count,
+      totalStampCoupons: totalAfter,
+      stampIds: createdIds,
     });
-    return ids;
-  });
-
-  const totalAfter = await prisma.stampCoupon.count({ where: { employeeId } });
-
-  return NextResponse.json({
-    ok: true,
-    granted: count,
-    totalStampCoupons: totalAfter,
-    stampIds: createdIds,
-  });
+  } catch (e) {
+    console.error("[stamp-grant]", e);
+    const msg =
+      e instanceof Error ? e.message : typeof e === "string" ? e : "알 수 없는 오류";
+    return NextResponse.json(
+      { error: `스탬프 부여 처리 중 오류가 났습니다. (${msg})` },
+      { status: 500 },
+    );
+  }
 }
