@@ -38,7 +38,8 @@
     "test": "vitest run",
     "test:unit": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "smtp:test": "npx tsx scripts/test-smtp.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.8.0",
