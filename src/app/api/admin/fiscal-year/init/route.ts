@@ -17,8 +17,12 @@ import {
   ensureTenureMilestonesForFiscalYear,
   loadTenureMilestoneConfigs,
 } from "@/lib/tenureMilestoneFromDb";
+import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
 
 const MONTHLY_POOL_PREVIEW_KEY = "MONTHLY_ACCRUAL_POOL";
+/** 미리보기 표: 생일·근속 주년은 열 폭증 방지를 위해 한 열에 합쳐 표시 */
+const PREVIEW_COL_BD = "PREVIEW_BIRTHDAY_MERGED";
+const PREVIEW_COL_MS = "PREVIEW_TENURE_MS_MERGED";
 
 /**
  * POST /api/admin/fiscal-year/init
@@ -122,8 +126,8 @@ export async function POST(req: Request) {
         if (key === "BASE_ANNUAL") return [0, 0, key];
         if (key === MONTHLY_POOL_PREVIEW_KEY) return [0, 0.45, key];
         if (key === "TENURE_BONUS") return [0, 1, key];
-        if (key.startsWith("MS:")) return [2.5, 0, key];
-        if (key.startsWith("BD:")) return [2.55, 0, key];
+        if (key === PREVIEW_COL_MS) return [2.5, 0, key];
+        if (key === PREVIEW_COL_BD) return [2.55, 0, key];
         const cfg = sourceConfigs.find((c) => c.sourceCode === key);
         return [2, cfg?.sortOrder ?? 9999, key];
       };
@@ -229,12 +233,27 @@ export async function POST(req: Request) {
     }
 
     const keySet = new Set<string>();
-    for (const row of preview) for (const it of row.items) keySet.add(it.key);
-    const columnKeys = sortInitPreviewColumnKeys([...keySet]);
-    const labelByKey = new Map<string, string>();
-    for (const row of preview) for (const it of row.items) {
-      if (!labelByKey.has(it.key)) labelByKey.set(it.key, it.label);
+    for (const row of preview) {
+      for (const it of row.items) {
+        if (it.key.startsWith("BD:")) keySet.add(PREVIEW_COL_BD);
+        else if (it.key.startsWith("MS:")) keySet.add(PREVIEW_COL_MS);
+        else keySet.add(it.key);
+      }
     }
+    const columnKeys = sortInitPreviewColumnKeys([...keySet]);
+
+    const bhLtGlobal = [...leaveTypeSourceMap.values()].find(
+      (lt) => lt.applyGroupKey === "birthday" && lt.includeInFiscalInit !== false,
+    );
+    const labelByKey = new Map<string, string>();
+    for (const row of preview) {
+      for (const it of row.items) {
+        if (it.key.startsWith("BD:") || it.key.startsWith("MS:")) continue;
+        if (!labelByKey.has(it.key)) labelByKey.set(it.key, it.label);
+      }
+    }
+    labelByKey.set(PREVIEW_COL_BD, bhLtGlobal?.name ?? "생일반차");
+    labelByKey.set(PREVIEW_COL_MS, "근속 마일스톤");
     for (const k of columnKeys) {
       if (!labelByKey.has(k)) labelByKey.set(k, k);
     }
@@ -242,9 +261,22 @@ export async function POST(req: Request) {
     const previewMatrix = {
       columns: columnKeys.map((key) => ({ key, label: labelByKey.get(key) ?? key })),
       rows: preview.map((r) => {
-        const values: Record<string, number | null> = {};
+        const values: Record<string, number | string | null> = {};
         for (const k of columnKeys) values[k] = null;
-        for (const it of r.items) values[it.key] = it.totalDays;
+        const bdParts: string[] = [];
+        const msParts: string[] = [];
+        for (const it of r.items) {
+          if (it.key.startsWith("BD:")) {
+            const d = it.key.slice(3);
+            bdParts.push(`${formatLeaveDayDisplay(it.totalDays)}일(${d})`);
+          } else if (it.key.startsWith("MS:")) {
+            msParts.push(`${formatLeaveDayDisplay(it.totalDays)}일(${it.label})`);
+          } else {
+            values[it.key] = it.totalDays;
+          }
+        }
+        if (bdParts.length) values[PREVIEW_COL_BD] = bdParts.join("\n");
+        if (msParts.length) values[PREVIEW_COL_MS] = msParts.join("\n");
         return { employeeId: r.employeeId, name: r.name, values };
       }),
     };

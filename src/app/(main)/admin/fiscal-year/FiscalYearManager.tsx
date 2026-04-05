@@ -102,17 +102,20 @@ export default function FiscalYearManager({
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [initPreviewMatrix, setInitPreviewMatrix] = useState<{
     columns: { key: string; label: string }[];
-    rows: { employeeId: string; name: string; values: Record<string, number | null> }[];
+    rows: { employeeId: string; name: string; values: Record<string, number | string | null> }[];
   } | null>(null);
+  const [initPreviewTotalToCreate, setInitPreviewTotalToCreate] = useState<number | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
   const fyD = fyDates(fiscalYear);
 
   async function loadInitPreview() {
     setLoadingPreview(true);
     setInitPreviewMatrix(null);
+    setInitPreviewTotalToCreate(null);
     setInitResult("");
     const res = await fetch("/api/admin/fiscal-year/init", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fy: fiscalYear, dryRun: true }),
     });
@@ -121,8 +124,9 @@ export default function FiscalYearManager({
     if (!res.ok) { setInitResult("❌ 미리보기 실패: " + (data.error ?? "")); return; }
     const matrix = data.previewMatrix as {
       columns: { key: string; label: string }[];
-      rows: { employeeId: string; name: string; values: Record<string, number | null> }[];
+      rows: { employeeId: string; name: string; values: Record<string, number | string | null> }[];
     } | null;
+    setInitPreviewTotalToCreate(typeof data.totalToCreate === "number" ? data.totalToCreate : null);
     setInitPreviewMatrix(matrix && matrix.rows?.length ? matrix : null);
     if (!matrix?.rows?.length) setInitResult("추가될 할당이 없습니다. (이미 모두 존재)");
   }
@@ -159,12 +163,14 @@ export default function FiscalYearManager({
         (s, r) => s + initPreviewMatrix.columns.filter((c) => r.values[c.key] != null).length,
         0,
       ) ?? 0;
+    const plannedCount = initPreviewTotalToCreate ?? cellCount;
     if (!initPreviewMatrix?.rows?.length && !confirm(`${fiscalYear}년도 귀속연도를 일괄 초기화하시겠습니까?`)) return;
-    if (initPreviewMatrix?.rows?.length && !confirm(`미리보기대로 ${cellCount}건 할당을 생성하시겠습니까?`)) return;
+    if (initPreviewMatrix?.rows?.length && !confirm(`미리보기대로 ${plannedCount}건 할당을 생성하시겠습니까?`)) return;
     setInitializing(true);
     setInitResult("");
     const res = await fetch("/api/admin/fiscal-year/init", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fy: fiscalYear }),
     });
@@ -173,6 +179,7 @@ export default function FiscalYearManager({
     if (!res.ok) { setInitResult("❌ " + (data.error ?? "실패")); return; }
     setInitResult(`✅ 완료: ${data.summary.created}건 생성, ${data.summary.skipped}건 이미 존재 (총 ${data.total}명)`);
     setInitPreviewMatrix(null);
+    setInitPreviewTotalToCreate(null);
     router.refresh();
   }
 
@@ -371,11 +378,15 @@ export default function FiscalYearManager({
                       return (
                         <td
                           key={c.key}
-                          className={`px-2 py-2 text-right tabular-nums text-xs ${
-                            v != null ? "text-red-900 font-semibold bg-red-50/80" : "text-gray-300"
+                          className={`px-2 py-2 text-right text-xs whitespace-pre-line break-words max-w-[10rem] ${
+                            v != null ? "text-red-900 font-semibold bg-red-50/80 tabular-nums" : "text-gray-300"
                           }`}
                         >
-                          {v != null ? `${formatLeaveDayDisplay(Number(v))}일` : "—"}
+                          {v == null
+                            ? "—"
+                            : typeof v === "string"
+                              ? v
+                              : `${formatLeaveDayDisplay(Number(v))}일`}
                         </td>
                       );
                     })}
@@ -386,10 +397,11 @@ export default function FiscalYearManager({
           </div>
           <p className="text-xs text-red-600 mt-2">
             총{" "}
-            {initPreviewMatrix.rows.reduce(
-              (s, row) => s + initPreviewMatrix.columns.filter((c) => row.values[c.key] != null).length,
-              0,
-            )}
+            {initPreviewTotalToCreate ??
+              initPreviewMatrix.rows.reduce(
+                (s, row) => s + initPreviewMatrix.columns.filter((c) => row.values[c.key] != null).length,
+                0,
+              )}
             건 생성 예정 · 저장(적용)으로 반영
           </p>
         </div>

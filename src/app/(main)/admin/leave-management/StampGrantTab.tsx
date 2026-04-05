@@ -41,6 +41,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
     try {
       const res = await fetch("/api/admin/stamp-grant", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeId, count: n }),
       });
