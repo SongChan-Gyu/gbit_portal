@@ -13,6 +13,8 @@ export default defineConfig({
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
+    // @playwright/test 1.58 기준 번들에 포함된 iPhone 중 가장 최신 라인 (iPhone 16 프리셋은 아직 없음)
+    { name: "iphone", use: { ...devices["iPhone 15 Pro Max"] } },
   ],
   webServer: process.env.CI
     ? { command: "npm run start", url: "http://localhost:3000", timeout: 60_000 }
