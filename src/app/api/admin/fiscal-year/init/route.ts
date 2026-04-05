@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { fiscalPeriod, getTenureMilestones } from "@/lib/leaveCalc";
-import { getFiscalYear, kstEndOfDay } from "@/lib/workdays";
+import { getFiscalYear, kstEndOfDay, todayStr } from "@/lib/workdays";
 import { addCalendarMonthsToYmd, addDaysYMD } from "@/lib/dateUtils";
 import { birthdayInstancesInFiscalYear } from "@/lib/fiscalYearInitGrants";
 import { DUTY_DEPT_CODES, DUTY_DEPT_TO_LABEL } from "@/lib/employeeExcel";
@@ -34,9 +34,8 @@ const PREVIEW_COL_MS = "PREVIEW_TENURE_MS_MERGED";
  * 귀속연도 일괄 초기화:
  *  1. 기본연차(BASE_ANNUAL) + 근속가산(TENURE_BONUS)
  *  2. AllocationSourceConfig 루프: includeInFiscalInit 이고 LeaveType.validityBasis === 귀속연도 인 소스만 FY 통째 부여
- *  3. 입사 주년 부여: LeaveType.hireAnniversaryYears(및 allocationSourceCode) 메타로 해당 FY 안 기념일이 있으면
- *     스케줄러와 동일 중복 규칙으로 없을 때만 생성(일괄 초기화 보강 + 매일 스케줄러 병행 가능).
- *  4. 생일반차: applyGroupKey=birthday 이고 includeInFiscalInit 인 유형 — FY 안 달력 생일, note 중복 없으면 생성
+ *  3. 입사 주년 부여: FY 안 기념일 중 KST 오늘까지 도래한 것만(미래 기념일은 스케줄러 전제), 없을 때만 생성.
+ *  4. 생일반차: FY 안 생일 중 달력일이 KST 오늘 이하인 것만, note 중복 없으면 생성(스케줄러 미실행 보강).
  *  자동 이월(PENDING) 없음 — 수동 이월만.
  */
 export async function POST(req: Request) {
@@ -47,6 +46,9 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const { fy, dryRun } = body;
   if (!fy || isNaN(fy)) return NextResponse.json({ error:"귀속연도(fy) 필요" }, { status:400 });
+
+  /** 스케줄러형 부여(생일·입사주년) 보강 기준일 — 요청 시점 KST 오늘까지 도래한 것만 */
+  const kstTodayYmd = todayStr();
 
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
   const employees = await prisma.employee.findMany({
@@ -194,6 +196,7 @@ export async function POST(req: Request) {
       const bhSrc = bhLt?.allocationSourceCode;
       if (bhLt && bhSrc && emp.birthDate) {
         for (const { birthdayDateStr } of birthdayInstancesInFiscalYear(fy, new Date(emp.birthDate as Date))) {
+          if (birthdayDateStr > kstTodayYmd) continue;
           const alreadyBh = await prisma.leaveAllocation.findFirst({
             where: {
               employeeId: emp.id,
@@ -211,6 +214,7 @@ export async function POST(req: Request) {
       }
 
       for (const m of getTenureMilestones(hire, fyStart, fyEnd, tenureMilestoneConfigs)) {
+        if (m.anniversaryYmd > kstTodayYmd) continue;
         if (m.days <= 0) continue;
         const dup = await findTenureMilestoneAllocation(prisma, emp.id, m.code, m.anniversaryYmd);
         if (dup) continue;
@@ -221,7 +225,13 @@ export async function POST(req: Request) {
         });
       }
 
-      const mp = await previewMonthlyPoolSyncNeeded(prisma, emp.id, hire, fy, new Date());
+      const mp = await previewMonthlyPoolSyncNeeded(
+        prisma,
+        emp.id,
+        hire,
+        fy,
+        asOfKstTodayForMonthlyAccrual(),
+      );
       if (mp.needed) {
         items.push({
           key: MONTHLY_POOL_PREVIEW_KEY,
@@ -359,6 +369,7 @@ export async function POST(req: Request) {
           fy,
           new Date(emp.birthDate as Date),
         )) {
+          if (birthdayDateStr > kstTodayYmd) continue;
           const alreadyBh = await tx.leaveAllocation.findFirst({
             where: {
               employeeId: emp.id,
@@ -396,6 +407,7 @@ export async function POST(req: Request) {
         employeeId: emp.id,
         hireDate: hire,
         milestoneConfigs: tenureMilestoneConfigs,
+        asOfYmd: kstTodayYmd,
       });
 
       for (const cfg of sourceConfigs) {

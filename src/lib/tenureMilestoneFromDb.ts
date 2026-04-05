@@ -5,7 +5,7 @@ import {
   getTenureMilestones,
   type TenureMilestoneConfig,
 } from "@/lib/leaveCalc";
-import { tenureMilestoneValidUntil } from "@/lib/workdays";
+import { tenureMilestoneValidUntil, todayStr } from "@/lib/workdays";
 import { findTenureMilestoneAllocation } from "@/lib/tenureAllocationDedupe";
 
 /**
@@ -58,7 +58,11 @@ export async function loadTenureMilestoneConfigs(db: DB): Promise<TenureMileston
     .filter((m) => m.days > 0);
 }
 
-/** 귀속연도 구간 안에서 아직 없는 입사 주년 부여만 DB에 생성 (스케줄러와 동일 중복 규칙). */
+/**
+ * 귀속연도 구간 안에서 아직 없는 입사 주년 부여만 DB에 생성 (스케줄러와 동일 중복 규칙).
+ * `asOfYmd`(기본 KST 오늘) **이전 또는 당일**인 기념일만 만든다 — 미래 기념일은 일할 스케줄러에 맡기고,
+ * 지나간 날짜에 스케줄러가 못 돌린 분만 귀속 초기화로 보강한다.
+ */
 export async function ensureTenureMilestonesForFiscalYear(
   tx: DBTx,
   params: {
@@ -66,13 +70,17 @@ export async function ensureTenureMilestonesForFiscalYear(
     employeeId: string;
     hireDate: Date;
     milestoneConfigs: TenureMilestoneConfig[];
+    /** KST YYYY-MM-DD — 이 날짜까지 도래한 기념일만 생성 */
+    asOfYmd?: string;
   },
 ): Promise<number> {
-  const { fy, employeeId, hireDate, milestoneConfigs } = params;
+  const { fy, employeeId, hireDate, milestoneConfigs, asOfYmd } = params;
+  const asOf = (asOfYmd ?? todayStr()).slice(0, 10);
   if (milestoneConfigs.length === 0) return 0;
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
   let created = 0;
   for (const m of getTenureMilestones(hireDate, fyStart, fyEnd, milestoneConfigs)) {
+    if (m.anniversaryYmd > asOf) continue;
     if (m.days <= 0) continue;
     const dup = await findTenureMilestoneAllocation(tx, employeeId, m.code, m.anniversaryYmd);
     if (dup) continue;
