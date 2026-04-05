@@ -114,12 +114,12 @@ npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 - `NEXTAUTH_URL` — 배포 시 실제 도메인
 - `NEXTAUTH_SECRET` — 운영 시 강한 랜덤 시크릿
 - `FIELD_ENCRYPT_KEY` — `openssl rand -hex 32` 로 **한 번 생성 후 고정**. 변경하면 기존 암호화 데이터 복호화 불가.
-- `TZ` — `Asia/Seoul` (KST 기준 귀속연도 계산)
+- `TZ` — 선택 (`Asia/Seoul`). 날짜 비즈니스 로직은 코드에서 KST 처리.
 - `NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY` — 제주 숙소 지도 (선택, Kakao Developers에서 JavaScript 키 + Web 도메인 등록)
 
 **운영(클라우드) 이메일:** Railway 등 Variables에 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` 입력. 회사 메일 서버(smtp.gmail.com / smtp.office365.com / smtp.naver.com 등)와 발신용 계정·비밀번호만 맞추면 됨. 시스템 메일(아이디 찾기/비밀번호 재설정/초대/관리자 초기화)은 등록 이메일 기준으로 발송됨. 자세한 예시는 `.env.example` 주석 참고.
 
-**카카오 알림톡:** 카카오 비즈니스 채널 개설 후 알리고(Aligo)·비즈고 등 중계 서비스에서 연동·템플릿 검수 후 API 키 발급. **템플릿 코드·본문:** `docs/alimtalk-templates.md`. `.env.example` 하단에 설정 흐름. 미설정 시 알림톡은 스킵되고 로그만 남음.
+**카카오 알림톡:** 다이렉트센드(DirectSend) `api_v2/kakao_notice` 연동 (`src/lib/kakao.ts`). `DIRECTSEND_USERNAME`, `DIRECTSEND_API_KEY`, `DIRECTSEND_KAKAO_PLUS_ID`, `DIRECTSEND_ALIMTALK_TEMPLATE_NOS`(내부 코드→템플릿 번호 JSON). **템플릿·note1~5 매핑:** `docs/alimtalk-templates.md`. 미설정 시 MOCKED로 로그만 남김.
 
 ---
 
@@ -127,7 +127,7 @@ npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 
 **스케줄러:** 월별 연차 발생·근속 체크·생일반차 등은 **Next.js 앱과 별도 프로세스**인 `cron-runner.mjs`로 동작합니다. 클라우드에 웹 앱만 띄우면 스케줄러는 실행되지 않습니다. 다음 중 하나가 필요합니다.
 - **방법 1:** 같은 프로젝트를 두 번째 서비스로 배포하고, 그 서비스에서는 `npm run cron`만 실행하도록 설정 (Railway 등에서 Run Command를 `node cron-runner.mjs`로 지정).
-- **방법 2:** 외부 cron 서비스(cron-job.org, GitHub Actions 등)에서 매일 지정 시간에 `POST /api/cron/monthly-accrual`, `POST /api/cron/tenure-check` 등을 호출. 이때 `CRON_SECRET`을 Header `x-cron-secret`에 넣어야 함.
+- **방법 2:** 외부 cron 서비스(cron-job.org, GitHub Actions 등)에서 매일 지정 시간에 `POST /api/cron/monthly-accrual`, `POST /api/cron/tenure-check`, `POST /api/cron/birthday-half`, `POST /api/cron/jeju-deposit-deadline` 등을 호출. `CRON_SECRET`을 Header `x-cron-secret`에 넣어야 함. (저장소 `.github/workflows/scheduler-cron.yml` 참고)
 - **방법 3:** 서버/VM에서 systemd 또는 launchd로 `node cron-runner.mjs`를 백그라운드 서비스로 등록. (README 상단 cron-runner.mjs 주석 참고.)
 
 **데이터 백업:** 클라우드 DB(PlanetScale, Railway MySQL 등)를 쓰더라도 **별도 백업**을 권장합니다. 제공업체의 자동 스냅샷만 믿지 말고, 주기적으로 `mysqldump` 또는 DB 서비스의 export 기능으로 덤프를 받아 두거나, 별도 백업 스크립트를 돌리는 것이 좋습니다. 마이그레이션 히스토리(`prisma/migrations`)는 Git에 있으므로, 덤프만 있으면 특정 시점으로 복구 가능합니다.

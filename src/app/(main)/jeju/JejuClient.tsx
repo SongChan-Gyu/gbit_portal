@@ -21,6 +21,7 @@ type JejuConfig = {
   depositAmount?: number;
   depositAccount?: { bankName: string; accountHolder: string; accountNumber: string };
   blockedDates?: string[];
+  depositDeadlineDays?: number;
 };
 
 type ListRequest = {
@@ -454,7 +455,11 @@ export default function JejuClient({
                   {formatJejuAccountNumber(config.depositAccount.accountNumber)}
                 </p>
               )}
-              <p className="text-[11px] text-amber-800/90 leading-relaxed">신청 후 24시간 내 미이체 시 자동 취소될 수 있습니다.</p>
+              <p className="text-[11px] text-amber-800/90 leading-relaxed">
+                복지부 1차 승인 후 예약금 입금이 확인되어야 합니다. 1차 승인일부터{" "}
+                <span className="font-semibold">{config?.depositDeadlineDays ?? 5}일</span> 안에 입금 확인이
+                되지 않으면 예약은 자동으로 취소됩니다.
+              </p>
             </div>
 
             <div className="space-y-4">

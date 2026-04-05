@@ -162,10 +162,11 @@ export async function sendJejuNotification(
         );
       }
       if (ch.alimtalk && stepCfg?.phone) {
-        await tryJejuStaffAlimtalk(prisma, "step1_notify", stepCfg.phone, "JEJU_STAFF_STEP1", {
+        await tryJejuStaffAlimtalk(prisma, "step1_notify", stepCfg.phone, "JEJU_STAFF", {
           신청자명: row.guestName,
           이용기간: period,
           입금자명: row.depositorName ?? "-",
+          처리단계: "1차 승인 필요",
         });
       }
       break;
@@ -181,10 +182,11 @@ export async function sendJejuNotification(
         );
       }
       if (ch.alimtalk && stepCfg?.phone) {
-        await tryJejuStaffAlimtalk(prisma, "step2_notify", stepCfg.phone, "JEJU_STAFF_STEP2", {
+        await tryJejuStaffAlimtalk(prisma, "step2_notify", stepCfg.phone, "JEJU_STAFF", {
           신청자명: row.guestName,
           이용기간: period,
           입금자명: row.depositorName ?? "-",
+          처리단계: "입금 확인 필요",
         });
       }
       break;
@@ -234,9 +236,11 @@ export async function sendJejuNotification(
         );
       }
       if (ch.alimtalk && stepCfg?.phone) {
-        await tryJejuStaffAlimtalk(prisma, "cancel_step1_notify", stepCfg.phone, "JEJU_STAFF_CANCEL1", {
+        await tryJejuStaffAlimtalk(prisma, "cancel_step1_notify", stepCfg.phone, "JEJU_STAFF_CANCEL", {
           신청자명: row.guestName,
           이용기간: period,
+          입금자명: "",
+          처리단계: "취소 1차 승인",
         });
       }
       break;
@@ -252,10 +256,11 @@ export async function sendJejuNotification(
         );
       }
       if (ch.alimtalk && stepCfg?.phone) {
-        await tryJejuStaffAlimtalk(prisma, "cancel_step2_notify", stepCfg.phone, "JEJU_STAFF_CANCEL2", {
+        await tryJejuStaffAlimtalk(prisma, "cancel_step2_notify", stepCfg.phone, "JEJU_STAFF_CANCEL", {
           신청자명: row.guestName,
           이용기간: period,
           입금자명: row.depositorName ?? "-",
+          처리단계: "입금 취소 처리",
         });
       }
       break;

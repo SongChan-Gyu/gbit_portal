@@ -1,306 +1,184 @@
 import type { DB } from "@/lib/db";
 import { dowLabelKoFromYmd } from "@/lib/dateUtils";
+import { directsendKakaoAlimtalk } from "@/lib/directsendKakao";
 
 /**
- * 카카오 알림톡 발송 (Aligo 연동)
+ * 카카오 알림톡 — 다이렉트센드(DirectSend) `api_v2/kakao_notice` 연동
  *
- * 템플릿 코드·본문·변수 목록: docs/alimtalk-templates.md
+ * 환경변수
+ * - DIRECTSEND_USERNAME: 다이렉트센드 ID
+ * - DIRECTSEND_API_KEY: 다이렉트센드 API key (문자/메일용)
+ * - DIRECTSEND_KAKAO_PLUS_ID: 발신프로필 @검색용아이디
+ * - DIRECTSEND_ALIMTALK_TEMPLATE_NOS: JSON. 포털 내부 템플릿 코드 → 다이렉트센드 user_template_no
+ *   예: {"LEAVE_REQUEST":"12345","LEAVE_RESULT":"12346", ...}
+ *   코드별 note1~note5 매핑은 docs/alimtalk-templates.md 참고 (카카오 템플릿 변수와 맞출 것)
  *
- * 필요 환경변수
- * - KAKAO_API_KEY: 알리고 API Key
- * - KAKAO_USER_ID: 알리고 userid
- * - KAKAO_TOKEN: 알리고 토큰(token/create로 발급)
- * - KAKAO_SENDER_KEY: 발신프로필키(senderkey) - 알리고 콘솔에서 발급
- * - KAKAO_SENDER: 발신자 연락처(알리고 등록된 발신번호)
+ * 선택
+ * - ALIMTALK_ALLOWED_RECEIVER: 설정 시 해당 번호로만 발송, 그 외 SKIPPED
  *
- * 테스트 안전장치
- * - ALIMTALK_ALLOWED_RECEIVER: 설정 시, 이 번호로만 알림톡 발송 허용 (그 외는 SKIPPED로 로깅)
- *   예: 01044234532
- *
- * KAKAO_* 미설정: 외부 발송 없음(MOCKED). NotificationLog에는 기록(운영 추적용). 프로덕션에서는 MOCK 콘솔 로그 생략.
+ * 위 설정이 없거나 해당 템플릿 번호가 JSON에 없으면 MOCKED(미발송), NotificationLog 기록.
  */
+
+function loadDirectsendTemplateNos(): Record<string, string> {
+  const raw = process.env.DIRECTSEND_ALIMTALK_TEMPLATE_NOS?.trim();
+  if (!raw) return {};
+  try {
+    const o = JSON.parse(raw) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(o)) {
+      if (v != null && String(v).trim() !== "") out[k] = String(v).trim();
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/** 다이렉트센드 API는 수신자당 note1~note5만 치환 가능 — 포털 템플릿 코드별 매핑 */
+function directsendNotesForPortalTemplate(
+  templateCode: string,
+  params: Record<string, string>,
+): [string, string, string, string, string] {
+  const g = (k: string) => (params[k] ?? "").trim();
+  const periodJeju = () =>
+    `${g("입실일")}(${g("입실요일")}) ~ ${g("퇴실일")}(${g("퇴실요일")})`;
+
+  switch (templateCode) {
+    case "LEAVE_REQUEST":
+      return [
+        g("결재자명"),
+        g("신청자명"),
+        g("휴가유형"),
+        `${g("시작일")}(${g("시작요일")}) ~ ${g("종료일")}(${g("종료요일")})`,
+        "",
+      ];
+    case "LEAVE_WITHDRAWN":
+      return [g("결재자명"), g("신청자명"), g("요약"), "", ""];
+    case "LEAVE_RESULT":
+      return [g("신청자명"), g("처리결과"), g("처리코멘트"), "", ""];
+    case "JEJU_APPROVED":
+      return [g("신청자명"), periodJeju(), `${g("숙박일수")}박`, `${g("입실인원")}명`, ""];
+    case "JEJU_REJECTED":
+      return [g("신청자명"), periodJeju(), g("반려사유"), "", ""];
+    case "JEJU_CANCELLED":
+      return [g("신청자명"), periodJeju(), "", "", ""];
+    case "JEJU_APPLICANT_STEP1_OK":
+      return [g("신청자명"), g("투숙객명"), periodJeju(), "", ""];
+    /** 복지 1차 · PM 입금확인 공통 템플릿 — note4 처리단계로 구분 */
+    case "JEJU_STAFF":
+      return [g("신청자명"), g("이용기간"), g("입금자명"), g("처리단계"), ""];
+    /** 취소 1차 · PM 입금취소 공통 — note3 입금자명은 취소 1차일 때 빈 값 */
+    case "JEJU_STAFF_CANCEL":
+      return [g("신청자명"), g("이용기간"), g("입금자명"), g("처리단계"), ""];
+    default:
+      return ["", "", "", "", ""];
+  }
+}
+
+function receiverDisplayName(params: Record<string, string>): string {
+  return (
+    params["결재자명"]?.trim() ||
+    params["신청자명"]?.trim() ||
+    params["수신자명"]?.trim() ||
+    "GBIT"
+  );
+}
+
 async function sendAlimtalk(
   prisma: DB,
   targetId: string,
   phone: string,
   templateCode: string,
-  params: Record<string, string>
+  params: Record<string, string>,
 ) {
   const sentAt = new Date();
-
-  const apikey = process.env.KAKAO_API_KEY?.trim();
-  const userid = process.env.KAKAO_USER_ID?.trim();
-  const token = process.env.KAKAO_TOKEN?.trim();
-  const senderkey = process.env.KAKAO_SENDER_KEY?.trim();
-  const sender = process.env.KAKAO_SENDER?.trim();
-  const allowedReceiver = process.env.ALIMTALK_ALLOWED_RECEIVER?.trim();
-
   const normalizePhone = (s: string) => s.replace(/[^\d]/g, "");
   const receiver = normalizePhone(phone || "");
+  const allowedReceiver = process.env.ALIMTALK_ALLOWED_RECEIVER?.trim();
   const allowed = allowedReceiver ? normalizePhone(allowedReceiver) : "";
 
-  const isMocked = !apikey || !userid || !token || !senderkey || !sender;
-  let status = isMocked ? "MOCKED" : "SENT";
+  const username = process.env.DIRECTSEND_USERNAME?.trim();
+  const apiKey = process.env.DIRECTSEND_API_KEY?.trim();
+  const plusId = process.env.DIRECTSEND_KAKAO_PLUS_ID?.trim();
+  const templateNos = loadDirectsendTemplateNos();
+  const userTemplateNo = templateNos[templateCode] ?? "";
+
+  const credsOk = Boolean(username && apiKey && plusId && userTemplateNo);
+  let status: string = credsOk ? "SENT" : "MOCKED";
   let errorMsg: string | null = null;
-
-  // 템플릿 본문: 알리고에 등록한 내용과 동일하게 맞춰야 검수/발송이 안정적
-  const templates: Record<string, { subject: string; body: string }> = {
-    // 휴가
-    LEAVE_REQUEST: {
-      subject: "휴가 결재 요청",
-      body:
-`[GBIT Portal]
-#{결재자명}님, 휴가 결재 요청이 도착했습니다.
-
-- 신청자: #{신청자명}
-- 휴가유형: #{휴가유형}
-- 기간: #{시작일}(#{시작요일}) ~ #{종료일}(#{종료요일})
-
-GBIT Portal에서 확인 후 처리 부탁드립니다.
-본 메시지는 발신 전용입니다.`,
-    },
-    LEAVE_WITHDRAWN: {
-      subject: "휴가 신청 철회 안내",
-      body:
-`[GBIT Portal]
-#{결재자명}님, #{신청자명}님이 휴가 신청을 철회했습니다.
-
-#{요약}
-
-결재함에서 해당 건은 더 이상 처리할 필요가 없습니다.
-본 메시지는 발신 전용입니다.`,
-    },
-    LEAVE_RESULT: {
-      subject: "휴가 처리 결과",
-      body:
-`[GBIT Portal]
-#{신청자명}님, 신청하신 휴가가 #{처리결과}(으)로 처리되었습니다.
-
-#{처리코멘트}
-
-GBIT Portal에서 상세 내역을 확인해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    // 제주 숙소
-    JEJU_REQUEST: {
-      subject: "제주 숙소 예약 결재 요청",
-      body:
-`[GBIT Portal]
-#{결재자명}님, 제주도 숙소 예약 결재 요청이 도착했습니다.
-
-- 신청자: #{신청자명}
-- 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
-- 숙박: #{숙박일수}박
-- 입실인원: #{입실인원}명
-
-GBIT Portal에서 확인 후 처리 부탁드립니다.
-본 메시지는 발신 전용입니다.`,
-    },
-    JEJU_APPROVED: {
-      subject: "제주 숙소 예약 승인",
-      body:
-`[GBIT Portal]
-#{신청자명}님, 제주도 숙소 예약 신청이 승인되었습니다.
-
-- 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
-- 숙박: #{숙박일수}박
-- 입실인원: #{입실인원}명
-
-예약금 안내 등 상세내용은 GBIT Portal에서 확인해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    JEJU_REJECTED: {
-      subject: "제주 숙소 예약 반려",
-      body:
-`[GBIT Portal]
-#{신청자명}님, 제주도 숙소 예약 신청이 반려되었습니다.
-
-- 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
-- 사유: #{반려사유}
-
-GBIT Portal에서 상세내역을 확인해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    JEJU_CANCEL_REQUESTED: {
-      subject: "제주 숙소 예약 취소 요청",
-      body:
-`[GBIT Portal]
-#{결재자명}님, 제주도 숙소 예약 취소 요청이 도착했습니다.
-
-- 신청자: #{신청자명}
-- 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
-- 사유: #{취소사유}
-
-GBIT Portal에서 확인 후 처리 부탁드립니다.
-본 메시지는 발신 전용입니다.`,
-    },
-    JEJU_CANCELLED: {
-      subject: "제주 숙소 예약 취소 처리",
-      body:
-`[GBIT Portal]
-#{신청자명}님, 제주도 숙소 예약 취소가 처리되었습니다.
-
-- 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
-
-GBIT Portal에서 상세내역을 확인해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    /** 신청자: 1차 승인 후 입금 안내 (알리고에 동일 코드·변수로 등록) */
-    JEJU_APPLICANT_STEP1_OK: {
-      subject: "제주 숙소 1차 승인",
-      body:
-`[GBIT Portal]
-#{신청자명}님, 제주도 숙소 예약이 1차 승인되었습니다.
-
-- 투숙객: #{투숙객명}
-- 이용기간: #{입실일}(#{입실요일}) ~ #{퇴실일}(#{퇴실요일})
-
-예약금 입금 후 PM 입금확인이 진행됩니다. 포털에서 계좌 안내를 확인해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    /** 담당자(복지): 1차 승인 요청 */
-    JEJU_STAFF_STEP1: {
-      subject: "제주 숙소 1차 승인 요청",
-      body:
-`[GBIT Portal]
-제주 숙소 1차 승인 요청이 접수되었습니다.
-
-- 신청(투숙): #{신청자명}
-- 기간: #{이용기간}
-- 입금자명: #{입금자명}
-
-포털에서 결재해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    /** 담당자(PM): 입금확인 요청 */
-    JEJU_STAFF_STEP2: {
-      subject: "제주 숙소 입금확인 요청",
-      body:
-`[GBIT Portal]
-복지부 1차 승인이 완료되어 입금확인이 필요합니다.
-
-- 신청(투숙): #{신청자명}
-- 기간: #{이용기간}
-- 입금자명: #{입금자명}
-
-포털에서 처리해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    /** 담당자(복지): 취소 1차 승인 요청 */
-    JEJU_STAFF_CANCEL1: {
-      subject: "제주 숙소 취소 승인 요청",
-      body:
-`[GBIT Portal]
-제주 숙소 취소 요청이 접수되었습니다. 1차 취소 승인이 필요합니다.
-
-- 신청(투숙): #{신청자명}
-- 기간: #{이용기간}
-
-포털에서 처리해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    /** 담당자(PM): 입금취소 처리 요청 */
-    JEJU_STAFF_CANCEL2: {
-      subject: "제주 숙소 입금취소 처리",
-      body:
-`[GBIT Portal]
-취소 1차 승인이 완료되었습니다. 입금취소 처리가 필요합니다.
-
-- 신청(투숙): #{신청자명}
-- 기간: #{이용기간}
-- 입금자명: #{입금자명}
-
-포털에서 처리해 주세요.
-본 메시지는 발신 전용입니다.`,
-    },
-    INVITE_REGISTER: {
-      subject: "GBIT Portal 가입 안내",
-      body:
-`[GBIT Portal]
-#{수신자명}님, GBIT Portal 회원가입 초대입니다.
-
-아래 링크에서 가입을 완료해 주세요.
-#{가입링크}
-
-본 메시지는 발신 전용입니다.`,
-    },
-  };
-
-  const tpl = templates[templateCode];
-  const subject = tpl?.subject || templateCode;
-  let message = tpl?.body || `[GBIT Portal]\n알림이 도착했습니다.\n\n템플릿: ${templateCode}`;
-
-  // #{변수명} 치환
-  for (const [k, v] of Object.entries(params)) {
-    message = message.split(`#{${k}}`).join(String(v ?? ""));
-  }
 
   if (!receiver) {
     status = "FAILED";
     errorMsg = "수신 번호가 비어 있습니다.";
-  } else if (!isMocked && allowed && receiver !== allowed) {
+  } else if (credsOk && allowed && receiver !== allowed) {
     status = "SKIPPED";
     errorMsg = `테스트 안전장치로 발송 스킵 (허용 수신번호: ${allowedReceiver})`;
-  }
-
-  if (!isMocked && receiver && status === "SENT") {
-    try {
-      const form = new FormData();
-      form.set("apikey", apikey!);
-      form.set("userid", userid!);
-      form.set("token", token!);
-      form.set("senderkey", senderkey!);
-      form.set("tpl_code", templateCode); // 알리고에 등록한 템플릿 코드와 동일해야 함
-      form.set("sender", sender!);
-      form.set("receiver_1", receiver);
-      form.set("subject_1", subject);
-      form.set("message_1", message);
-      form.set("recvname", params["신청자명"] || params["결재자명"] || params["수신자명"] || "GBIT");
-      form.set("failover", "N");
-
-      const res = await fetch("https://kakaoapi.aligo.in/akv10/alimtalk/send/", {
-        method: "POST",
-        body: form as any,
-      });
-      const data = await res.json().catch(() => ({}));
-
-      // 알리고 응답: result_code가 1이면 성공(관례)
-      const ok = String((data as any).result_code ?? "") === "1";
-      if (!ok) {
-        status = "FAILED";
-        errorMsg = (data as any).message || (data as any).result_message || JSON.stringify(data);
-      }
-    } catch (e: any) {
-      status = "FAILED";
-      errorMsg = e?.message ?? "알림톡 발송 실패";
+  } else if (!credsOk) {
+    if (!username || !apiKey || !plusId) {
+      errorMsg = "다이렉트센드 DIRECTSEND_USERNAME / DIRECTSEND_API_KEY / DIRECTSEND_KAKAO_PLUS_ID 미설정";
+    } else if (!userTemplateNo) {
+      errorMsg = `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 "${templateCode}" 번호 없음`;
     }
-  } else if (isMocked) {
     if (process.env.NODE_ENV !== "production") {
       console.log(`[AlimTalk Mock] to=${receiver} template=${templateCode}`, params);
     }
   }
 
+  if (status === "SENT" && receiver) {
+    const [n1, n2, n3, n4, n5] = directsendNotesForPortalTemplate(templateCode, params);
+    try {
+      const result = await directsendKakaoAlimtalk({
+        credentials: { username: username!, key: apiKey! },
+        kakaoPlusId: plusId!,
+        userTemplateNo,
+        receiver: [
+          {
+            name: receiverDisplayName(params),
+            mobile: receiver,
+            note1: n1,
+            note2: n2,
+            note3: n3,
+            note4: n4,
+            note5: n5,
+          },
+        ],
+      });
+      if (!result.ok) {
+        status = "FAILED";
+        const j = result.json as { status?: number; message?: string } | null;
+        errorMsg =
+          j?.message ||
+          (typeof result.raw === "string" ? result.raw.slice(0, 500) : "알림톡 발송 실패");
+      }
+    } catch (e: unknown) {
+      status = "FAILED";
+      errorMsg = e instanceof Error ? e.message : "알림톡 발송 실패";
+    }
+  }
+
   await prisma.notificationLog.create({
     data: {
-      targetId, phone: receiver || phone, type: "ALIMTALK",
-      templateCode, params: JSON.stringify(params),
-      status, sentAt,
+      targetId,
+      phone: receiver || phone,
+      type: "ALIMTALK",
+      templateCode,
+      params: JSON.stringify(params),
+      status,
+      sentAt,
       errorMsg,
     },
   });
 }
 
-export async function sendInviteAlimtalk(
-  prisma: DB, employeeId: string, phone: string, name: string, url: string
-) {
-  // 현재 회원가입 초대는 이메일로만 운영(알림톡 템플릿 미사용) — 필요 시 다시 연결
-  await sendAlimtalk(prisma, employeeId, phone, "INVITE_REGISTER", { 수신자명: name, 가입링크: url });
-}
-
 export async function sendLeaveRequestAlimtalk(
-  prisma: DB, approverId: string, phone: string,
-  approverName: string, applicantName: string,
-  leaveTypeName: string, startDate: string, endDate: string
+  prisma: DB,
+  approverId: string,
+  phone: string,
+  approverName: string,
+  applicantName: string,
+  leaveTypeName: string,
+  startDate: string,
+  endDate: string,
 ) {
   await sendAlimtalk(prisma, approverId, phone, "LEAVE_REQUEST", {
     결재자명: approverName,
@@ -313,7 +191,6 @@ export async function sendLeaveRequestAlimtalk(
   });
 }
 
-/** 승인 전 신청자 철회 시 결재자에게 (알리고 템플릿 LEAVE_WITHDRAWN 별도 등록) */
 export async function sendLeaveWithdrawAlimtalk(
   prisma: DB,
   approverId: string,
@@ -330,8 +207,12 @@ export async function sendLeaveWithdrawAlimtalk(
 }
 
 export async function sendLeaveResultAlimtalk(
-  prisma: DB, employeeId: string, phone: string,
-  name: string, result: string, comment: string
+  prisma: DB,
+  employeeId: string,
+  phone: string,
+  name: string,
+  result: string,
+  comment: string,
 ) {
   await sendAlimtalk(prisma, employeeId, phone, "LEAVE_RESULT", {
     신청자명: name,
@@ -340,7 +221,6 @@ export async function sendLeaveResultAlimtalk(
   });
 }
 
-/** 제주 담당자(복지/PM) — 직원 ID 없이 번호만 있는 수신 */
 export async function sendJejuStaffAlimtalk(
   prisma: DB,
   phone: string,
@@ -350,7 +230,6 @@ export async function sendJejuStaffAlimtalk(
   await sendAlimtalk(prisma, "jeju-staff-notify", phone, templateCode, params);
 }
 
-/** 제주 숙소 신청자 알림톡 */
 export async function sendJejuApplicantAlimtalk(
   prisma: DB,
   employeeId: string,

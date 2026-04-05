@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
   schedule:
     # KST(Asia/Seoul) 기준으로 맞추려면, UTC로 변환해서 넣어야 합니다.
-    # - 00:15 KST = 15:15 UTC (전날)
-    # - 00:10 KST = 15:10 UTC (전날)
-    # 아래는 매일 15:15 UTC에 실행(= KST 00:15)
+    # GitHub cron은 UTC만 지원. KST 00:15 ≈ 전날 UTC 15:15.
+    # tenure-check·생일반차 등에 넘기는 date는 TZ=Asia/Seoul 기준 오늘 날짜를 쓰는 것이 맞음(UTC date와 하루 어긋날 수 있음).
     - cron: "15 15 * * *"
 
 concurrency:
@@ -50,13 +49,11 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          # 서버에서 오늘 날짜를 계산하는 로직이 있으므로 body 없이도 동작하지만,
-          # 기존 API가 date 파라미터를 허용하는 경우를 위해 today를 함께 전달합니다.
-          TODAY="$(date -u +%F)"
+          TODAY_KST="$(TZ=Asia/Seoul date +%F)"
           curl -fsS -X POST "${APP_URL}/api/cron/tenure-check" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            -d "{\"date\":\"${TODAY}\",\"window\":0}" | head -c 4000
+            -d "{\"date\":\"${TODAY_KST}\",\"window\":0}" | head -c 4000
 
       - name: Call /api/cron/birthday-half
         env:
@@ -64,7 +61,19 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
+          TODAY_KST="$(TZ=Asia/Seoul date +%F)"
           curl -fsS -X POST "${APP_URL}/api/cron/birthday-half" \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -d "{\"date\":\"${TODAY_KST}\"}" | head -c 4000
+
+      - name: Call /api/cron/jeju-deposit-deadline
+        env:
+          APP_URL: ${{ secrets.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "${APP_URL}/api/cron/jeju-deposit-deadline" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${CRON_SECRET}" \
             -d '{}' | head -c 4000

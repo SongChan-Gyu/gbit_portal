@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { v4 as uuid } from "uuid";
 
@@ -29,16 +29,6 @@ export async function POST(req: Request) {
 
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
   const url = `${baseUrl}/register/${token}`;
-
-  // 카카오톡 알림톡은 선택적 (설정 없으면 스킵)
-  try {
-    const { sendInviteAlimtalk } = await import("@/lib/kakao");
-    if (emp.phone && emp.alimtalkEnabled !== false) {
-      await sendInviteAlimtalk(prisma, employeeId, emp.phone, emp.name, url);
-    }
-  } catch {
-    // 알림톡 미설정 시 무시 — URL은 화면에 표시됨
-  }
 
   return NextResponse.json({ ok: true, url, expiresAt: expiresAt.toISOString() });
 }

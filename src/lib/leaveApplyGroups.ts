@@ -59,7 +59,7 @@ export const APPLY_GROUP_META: Record<
   sick: { label: "병가", meta: "입원·통원 등", color: "#dc2626", borderClass: "border-red-500" },
   stamp: { label: "스탬프", meta: "오후인정·힐링데이", color: "#d97706", borderClass: "border-amber-500" },
   award: { label: "포상휴가", meta: "별도 부여", color: "#7c3aed", borderClass: "border-violet-500" },
-  holidayExt: { label: "연휴연장휴가", meta: "앞·뒤·징검다리 영업일(귀속 1일)", color: "#0ea5e9", borderClass: "border-sky-500" },
+  holidayExt: { label: "연휴연장", meta: "휴무 3일+ 앞·뒤·징검다리 영업일", color: "#0ea5e9", borderClass: "border-sky-500" },
   birthday: { label: "생일반차", meta: "생일 월 자동 부여 0.5일", color: "#ec4899", borderClass: "border-pink-500" },
   tenure: { label: "근속휴가", meta: "입사 기념일 부여", color: "#10b981", borderClass: "border-emerald-600" },
   _etc: { label: "기타", meta: "기타 유형", color: "#6b7280", borderClass: "border-gray-400" },

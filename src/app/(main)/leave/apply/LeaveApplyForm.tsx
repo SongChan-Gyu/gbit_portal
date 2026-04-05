@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
 import { calcHolidayExtFullDays } from "@/lib/holidayExt";
 import { calendarUtcDowFromYMD, eachYmdInInclusiveRange, formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
-import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
+import { leaveItemDeductDays, leaveItemFormDisplayDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
@@ -123,8 +123,8 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
   },
   {
     key: "holidayExt",
-    label: "연휴연장휴가",
-    meta: "휴무 3일 이상 이어질 때 앞·뒤·징검다리 영업일만(귀속 1일)",
+    label: "연휴연장",
+    meta: "휴무 3일+ 연속 시 앞·뒤·징검다리 영업일(귀속 1일)",
     color: "#0ea5e9",
     borderClass: "border-sky-500",
     subs: [
@@ -626,7 +626,7 @@ export default function LeaveApplyForm({
   const totalDays = effectiveSubmitItems.reduce((s, it) => {
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
     if (!lt) return s;
-    return s + leaveItemDeductDays({ days: it.days, timeSlot: it.timeSlot }, lt);
+    return s + leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, lt, holidaySet);
   }, 0);
   const approvalStepVals = effectiveSubmitItems.map((it) => {
     const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
@@ -643,7 +643,9 @@ export default function LeaveApplyForm({
       if (!needsLeaveRowValidation(it)) continue;
       if (!it.leaveTypeId?.trim()) { setError("작성 중인 항목에 휴가 유형을 선택해 주세요."); return; }
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-      const actualDays = lt?.isHalf ? 0.5 : it.days;
+      const actualDays = lt
+        ? leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, lt, holidaySet)
+        : 0;
       if (actualDays <= 0) {
         setError(
           lt?.code === "HOLIDAY_EXT"
@@ -671,7 +673,7 @@ export default function LeaveApplyForm({
       if (!needsLeaveRowValidation(it)) continue;
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       if (!lt?.deductFromBalance || lt.allocationSourceCode) continue;
-      annualNeed += leaveItemDeductDays(it, lt);
+      annualNeed += leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, lt, holidaySet);
     }
     if (annualNeed > annualPoolRemaining + 1e-6) {
       setError(
@@ -685,7 +687,7 @@ export default function LeaveApplyForm({
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       const src = lt?.allocationSourceCode?.trim();
       if (!lt || !src) continue;
-      const d = leaveItemDeductDays(it, lt);
+      const d = leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, lt, holidaySet);
       dedicatedTotals[src] = (dedicatedTotals[src] ?? 0) + d;
     }
     for (const [src, need] of Object.entries(dedicatedTotals)) {
@@ -746,7 +748,13 @@ export default function LeaveApplyForm({
       {items.map((item, idx) => {
         const lt        = leaveTypes.find((t) => t.id === item.leaveTypeId);
         const grp       = dynamicLeaveGroups.find((g) => g.key === item._groupKey);
-        const actualDays = lt ? leaveItemDeductDays({ days: item.days, timeSlot: item.timeSlot }, lt) : 0;
+        const actualDays = lt
+          ? leaveItemFormDisplayDays(
+              { days: item.days, timeSlot: item.timeSlot, startDate: item.startDate },
+              lt,
+              holidaySet,
+            )
+          : 0;
         const polUi     = lt ? leaveTypeWithPolicy(lt) : null;
         const isAnnualDeduct = lt?.deductFromBalance ?? false;
 
@@ -1039,11 +1047,18 @@ export default function LeaveApplyForm({
                         : "bg-gray-50 border border-gray-200 text-gray-400"
                     }`}>
                       {lt && (resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "AM" || resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "PM") ? (
+                        actualDays <= 0 ? (
+                          <span>
+                            선택한 날은 <strong>영업일이 아닙니다</strong>. 반차는 영업일에만 신청할 수 있습니다.
+                            <span className="ml-2 text-xs opacity-80">(연휴연장은 규정된 징검다리·전후일만 가능)</span>
+                          </span>
+                        ) : (
                         <span>
                           {resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "AM" ? "오전" : "오후"}{" "}
                           <strong>0.5일</strong>
                           <span className="ml-2 text-xs opacity-70">(반일 근무)</span>
                         </span>
+                        )
                       ) : item.startDate?.trim() && (item.endDate || item.startDate)?.trim() ? (
                         <span>
                           영업일 기준 <strong>{actualDays}일</strong>
@@ -1207,7 +1222,7 @@ export default function LeaveApplyForm({
               const g = dynamicLeaveGroups.find((g) => g.key === it._groupKey);
               const slot = resolveItemTimeSlot({ timeSlot: it.timeSlot }, leaveTypeWithPolicy(t));
               const slotLabel = slot === "FULL" ? "종일" : slot === "AM" ? "오전" : "오후";
-              const d = leaveItemDeductDays({ days: it.days, timeSlot: it.timeSlot }, t);
+              const d = leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, t, holidaySet);
               return (
                 <div key={i} className="px-4 py-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">

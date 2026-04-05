@@ -469,10 +469,23 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                 <div className="p-3 md:p-0">
                   <div className="flex justify-between items-start gap-3 mb-2">
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="font-medium text-gray-900 leading-snug">
-                        {req.items.length === 1
-                          ? mergedLeaveTypeLabel(req.items[0]!.leaveType as any, { timeSlot: req.items[0]!.timeSlot ?? null }).mergedName
-                          : `복합 신청 (${req.items.length}건)`}
+                      <p className="font-medium leading-snug">
+                        {req.items.length === 1 ? (
+                          (() => {
+                            const it0 = req.items[0]!;
+                            const { mergedName, mergedColor } = mergedLeaveTypeLabel(it0.leaveType as any, {
+                              timeSlot: it0.timeSlot ?? null,
+                            });
+                            const c = mergedColor ?? it0.leaveType.color ?? "#111827";
+                            return (
+                              <span className="font-semibold" style={{ color: c }}>
+                                {mergedName}
+                              </span>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-gray-900">{`복합 신청 (${req.items.length}건)`}</span>
+                        )}
                       </p>
                       <p className="text-sm text-gray-600">
                         {formatMDWithDay(req.startDate)}
@@ -485,77 +498,108 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                       return <span className={`badge shrink-0 whitespace-nowrap ${st.badge}`}>{st.label}</span>;
                     })()}
                   </div>
-                  {req.items.length > 1 && (
-                    <ul className="mt-3 space-y-2 text-sm border-t border-gray-100 pt-3">
-                      {req.items.map((it) => (
-                        <li key={it.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                          {(() => {
-                            const { mergedName, mergedColor } = mergedLeaveTypeLabel(it.leaveType as any, { timeSlot: it.timeSlot ?? null });
-                            return (
-                              <span className="font-medium text-gray-800 shrink-0" style={{ color: mergedColor ?? it.leaveType.color }}>
-                                {mergedName}
-                              </span>
-                            );
-                          })()}
-                          <span className="text-gray-500 text-xs">
-                            {formatMDWithDay(it.startDate)}
-                            {it.startDate.toDateString() !== it.endDate.toDateString() &&
-                              ` ~ ${formatMDWithDay(it.endDate)}`}
-                          </span>
-                          <span className="text-slate-600 tabular-nums text-xs font-semibold">{it.days}일</span>
-                          {it.reason?.trim() && it.reason.trim().length >= 2 && (
-                            <span className="text-gray-400 text-xs w-full">사유: {it.reason.trim()}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
                 </div>
                 {(() => {
+                  const isCompound = req.items.length > 1;
                   const hasItemReason = req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2);
-                  const hasMeta = req.approvals.length > 0 || hasItemReason;
-                  const detailBlock = hasMeta ? (
-                    <div className="space-y-1 text-xs text-gray-600 leading-relaxed">
+                  const showDetail =
+                    isCompound || req.approvals.length > 0 || hasItemReason;
+                  const detailBlock = (
+                    <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+                      {isCompound && (
+                        <div>
+                          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                            포함 휴가 ({req.items.length}건)
+                          </p>
+                          <ul className="space-y-2 rounded-lg border border-gray-100 bg-slate-50/60 p-2.5">
+                            {req.items.map((it) => (
+                              <li key={it.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs sm:text-sm">
+                                {(() => {
+                                  const { mergedName, mergedColor } = mergedLeaveTypeLabel(it.leaveType as any, {
+                                    timeSlot: it.timeSlot ?? null,
+                                  });
+                                  return (
+                                    <span
+                                      className="font-semibold shrink-0"
+                                      style={{ color: mergedColor ?? it.leaveType.color }}
+                                    >
+                                      {mergedName}
+                                    </span>
+                                  );
+                                })()}
+                                <span className="text-gray-500">
+                                  {formatMDWithDay(it.startDate)}
+                                  {it.startDate.toDateString() !== it.endDate.toDateString() &&
+                                    ` ~ ${formatMDWithDay(it.endDate)}`}
+                                </span>
+                                <span className="text-slate-700 tabular-nums font-semibold">{it.days}일</span>
+                                {it.reason?.trim() && it.reason.trim().length >= 2 && (
+                                  <span className="text-gray-400 w-full text-[11px]">사유: {it.reason.trim()}</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
                       {req.approvals.length > 0 && (
-                        <p className="truncate">
-                          {req.approvals.map((a) => `${a.approver.name}${a.status==="APPROVED"?" ✓":a.status==="REJECTED"?" ✗":""}`).join(" → ")}
+                        <div>
+                          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                            결재
+                          </p>
+                          <p className="text-xs text-gray-600 break-words">
+                            {req.approvals
+                              .map((a) => `${a.approver.name}${a.status === "APPROVED" ? " ✓" : a.status === "REJECTED" ? " ✗" : ""}`)
+                              .join(" → ")}
+                          </p>
+                        </div>
+                      )}
+                      {!isCompound && hasItemReason && (
+                        <p className="text-xs">
+                          <span className="text-gray-400">사유</span> {req.items[0]?.reason?.trim()}
                         </p>
                       )}
-                      {hasItemReason && (
-                        <p>
-                          <span className="text-gray-400">사유</span>{" "}
-                          {req.items.filter((it) => it.reason?.trim() && it.reason.trim().length >= 2).map((it) => it.reason!.trim()).join(" / ")}
-                        </p>
+                      {isCompound && hasItemReason && (
+                        <p className="text-[11px] text-gray-400">사유는 위 각 휴가 줄에 표시되어 있습니다.</p>
                       )}
                     </div>
-                  ) : null;
+                  );
                   return (
-                <div className="grid grid-cols-2 border-t border-gray-100 divide-x divide-gray-100 bg-gray-50/90 md:bg-gray-50/30">
-                  <div className="flex min-h-[48px] items-stretch">
-                    {req.status === "PENDING" && (
-                      <CancelButton requestId={req.id} className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 bg-transparent hover:bg-red-50 text-sm font-medium" />
-                    )}
-                    {req.status === "APPROVED" && (
-                      <CancelRequestButton requestId={req.id} className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 border-transparent bg-transparent hover:bg-orange-50 text-sm font-medium" />
-                    )}
-                    {req.status === "CANCEL_REQUESTED" && (
-                      <span className="flex flex-1 items-center justify-center text-xs text-orange-800 bg-orange-50/90">취소심사 중</span>
-                    )}
-                    {!["PENDING", "APPROVED", "CANCEL_REQUESTED"].includes(req.status) && (
-                      <span className="flex flex-1 items-center justify-center text-xs text-gray-400">—</span>
-                    )}
-                  </div>
-                  {detailBlock ? (
-                    <details className="group min-h-[48px] flex flex-col justify-center bg-white/80 open:bg-white">
-                      <summary className="list-none cursor-pointer select-none min-h-[48px] flex items-center justify-center text-sm font-medium text-slate-700 hover:bg-slate-50 px-2">
-                        상세보기
-                      </summary>
-                      <div className="px-3 pb-3 border-t border-gray-100 bg-white text-left">{detailBlock}</div>
-                    </details>
-                  ) : (
-                    <div className="flex min-h-[48px] items-center justify-center text-xs text-gray-300">—</div>
-                  )}
-                </div>
+                    <div className="grid grid-cols-2 border-t border-gray-100 divide-x divide-gray-100 bg-gray-50/90 md:bg-gray-50/30">
+                      <div className="flex min-h-[48px] items-stretch">
+                        {req.status === "PENDING" && (
+                          <CancelButton
+                            requestId={req.id}
+                            className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 bg-transparent hover:bg-red-50 text-sm font-medium"
+                          />
+                        )}
+                        {req.status === "APPROVED" && (
+                          <CancelRequestButton
+                            requestId={req.id}
+                            className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 border-transparent bg-transparent hover:bg-orange-50 text-sm font-medium"
+                          />
+                        )}
+                        {req.status === "CANCEL_REQUESTED" && (
+                          <span className="flex flex-1 items-center justify-center text-xs text-orange-800 bg-orange-50/90">
+                            취소심사 중
+                          </span>
+                        )}
+                        {!["PENDING", "APPROVED", "CANCEL_REQUESTED"].includes(req.status) && (
+                          <span className="flex flex-1 items-center justify-center text-xs text-gray-400">—</span>
+                        )}
+                      </div>
+                      {showDetail ? (
+                        <details className="group min-h-[48px] flex flex-col justify-center bg-white/80 open:bg-white">
+                          <summary className="list-none cursor-pointer select-none min-h-[48px] flex items-center justify-center text-sm font-medium text-slate-700 hover:bg-slate-50 px-2 text-center">
+                            {isCompound ? "신청·결재 상세" : "상세보기"}
+                          </summary>
+                          <div className="px-3 py-3 border-t border-gray-100 bg-white text-left max-h-[min(70vh,28rem)] overflow-y-auto">
+                            {detailBlock}
+                          </div>
+                        </details>
+                      ) : (
+                        <div className="flex min-h-[48px] items-center justify-center text-xs text-gray-300">—</div>
+                      )}
+                    </div>
                   );
                 })()}
               </li>

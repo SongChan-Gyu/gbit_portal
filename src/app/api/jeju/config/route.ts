@@ -46,6 +46,11 @@ export async function GET() {
     // ignore
   }
 
+  const depositDeadlineDays = Math.max(
+    1,
+    parseInt(process.env.JEJU_DEPOSIT_DEADLINE_DAYS ?? "5", 10) || 5,
+  );
+
   return NextResponse.json({
     maxNights,
     checkIn: "15:00",
@@ -54,5 +59,7 @@ export async function GET() {
     depositAmount: JEJU_DEPOSIT_AMOUNT,
     depositAccount,
     blockedDates,
+    /** 1차 승인 후 PM 입금 확인까지 허용 일수(초과 시 스케줄러가 자동 취소, 알림톡 없음) */
+    depositDeadlineDays,
   });
 }

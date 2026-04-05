@@ -44,13 +44,31 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ employeeId, count: n }),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        alert(data.error ?? "부여에 실패했습니다.");
+      const ct = res.headers.get("content-type") ?? "";
+      let data: { ok?: boolean; error?: string } = {};
+      if (ct.includes("application/json")) {
+        try {
+          data = (await res.json()) as { ok?: boolean; error?: string };
+        } catch {
+          data = {};
+        }
+      }
+      /** 로그인 페이지 HTML 등 JSON이 아니면 ok 없음 → 실패 처리 */
+      if (!res.ok || data.ok !== true) {
+        const msg =
+          typeof data.error === "string"
+            ? data.error
+            : !res.ok
+              ? "부여에 실패했습니다. 로그인·권한을 확인해 주세요."
+              : "응답을 확인할 수 없습니다. 새로고침 후 다시 시도해 주세요.";
+        alert(msg);
         return;
       }
       setCounts((prev) => ({ ...prev, [employeeId]: "1" }));
-      router.refresh();
+      await router.refresh();
+    } catch (e) {
+      console.error("[stamp-grant]", e);
+      alert("네트워크 오류로 결과를 확인하지 못했습니다.");
     } finally {
       setLoadingId(null);
     }

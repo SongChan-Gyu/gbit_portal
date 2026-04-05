@@ -53,32 +53,33 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "활성 직원을 찾을 수 없습니다." }, { status: 404 });
   }
 
-  const createdIds: string[] = [];
-  await prisma.$transaction(async (tx) => {
+  /** 스탬프 적립과 감사 로그를 한 트랜잭션으로 — 로그 실패 시 부여만 되고 클라이언트는 실패로 보이는 불일치 방지 */
+  const createdIds = await prisma.$transaction(async (tx) => {
+    const ids: string[] = [];
     for (let i = 0; i < count; i++) {
       const { stampId } = await appendStampCouponToCard(tx, employeeId, stampDate);
-      createdIds.push(stampId);
+      ids.push(stampId);
     }
+    await tx.auditLog.create({
+      data: {
+        entityType: "StampCoupon",
+        entityId: ids[0] ?? employeeId,
+        action: "GRANTED",
+        actorId: u?.employeeId ?? null,
+        after: JSON.stringify({
+          employeeId,
+          employeeName: emp.name,
+          granted: count,
+          stampIds: ids,
+          stampDateYmd: grantYmdStr,
+        }),
+        note: `관리자 스탬프 칸 수동 부여 ${count}칸`,
+      },
+    });
+    return ids;
   });
 
   const totalAfter = await prisma.stampCoupon.count({ where: { employeeId } });
-
-  await prisma.auditLog.create({
-    data: {
-      entityType: "StampCoupon",
-      entityId: createdIds[0] ?? employeeId,
-      action: "GRANTED",
-      actorId: u?.employeeId ?? null,
-      after: JSON.stringify({
-        employeeId,
-        employeeName: emp.name,
-        granted: count,
-        stampIds: createdIds,
-        stampDateYmd: grantYmdStr,
-      }),
-      note: `관리자 스탬프 칸 수동 부여 ${count}칸`,
-    },
-  });
 
   return NextResponse.json({
     ok: true,

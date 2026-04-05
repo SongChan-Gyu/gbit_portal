@@ -556,7 +556,7 @@ async function seedLeaveTypes() {
     ["TENURE_5Y",      "5년근속휴가",       5,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 18],
     ["TENURE_10Y",     "10년근속휴가",      10,  false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 19],
     ["AWARD",          "포상휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  12,    "#f59e0b", 20],
-    ["HOLIDAY_EXT",       "연휴연장휴가",        1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 21],
+    ["HOLIDAY_EXT",       "연휴연장",            1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 21],
     ["BIRTHDAY_HALF",     "생일반차",            0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 3,   "#ec4899", 25],
   ] as const;
 
@@ -581,10 +581,10 @@ async function seedLeaveTypes() {
     return null;
   }
   function displayHintForCode(code: string): string | null {
-    if (code === "ANNUAL") return "귀속연도 자산형, 1일 단위 (관리자 수동 이월 대상)";
+    if (code === "ANNUAL") return "기본연차·근속·이월 합산";
     if (code === "SICK") return "입원·통원 등";
     if (code === "CARE") return "연 2일 한도";
-    if (code === "HOLIDAY_EXT") return "휴무 3일 이상 이어질 때 앞·뒤·징검다리 영업일(귀속 1일)";
+    if (code === "HOLIDAY_EXT") return "휴무 3일+ 연속 시 앞·뒤·징검다리 영업일(귀속 1일)";
     if (code === "PM_HALF_MONTH") return "수요일 오후";
     if (code === "BIRTHDAY_HALF") return "생일이 있는 달에 자동 부여 0.5일(부여 후 3개월 유효)";
     if (code === "AWARD") return "별도 부여";
