@@ -9,7 +9,9 @@ import CancelRequestButton from "./CancelRequestButton";
 import MyLeaveMonthlyTable from "./MyLeaveMonthlyTable";
 import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { summarizeLeaveApprovals } from "@/lib/leaveApprovalDisplay";
 import { leaveRequestStatusMeta } from "@/lib/statusMeta";
+import MyLeaveRequestFooter from "./MyLeaveRequestFooter";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 
 export default async function MyLeavePage({ searchParams }: { searchParams: Promise<{ fy?: string; tab?:string }> }) {
@@ -546,10 +548,8 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                           <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
                             결재
                           </p>
-                          <p className="text-xs text-gray-600 break-words">
-                            {req.approvals
-                              .map((a) => `${a.approver.name}${a.status === "APPROVED" ? " ✓" : a.status === "REJECTED" ? " ✗" : ""}`)
-                              .join(" → ")}
+                          <p className="text-xs text-gray-700 leading-snug">
+                            {summarizeLeaveApprovals(req.approvals)}
                           </p>
                         </div>
                       )}
@@ -564,42 +564,14 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                     </div>
                   );
                   return (
-                    <div className="grid grid-cols-2 border-t border-gray-100 divide-x divide-gray-100 bg-gray-50/90 md:bg-gray-50/30">
-                      <div className="flex min-h-[48px] items-stretch">
-                        {req.status === "PENDING" && (
-                          <CancelButton
-                            requestId={req.id}
-                            className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 bg-transparent hover:bg-red-50 text-sm font-medium"
-                          />
-                        )}
-                        {req.status === "APPROVED" && (
-                          <CancelRequestButton
-                            requestId={req.id}
-                            className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 border-transparent bg-transparent hover:bg-orange-50 text-sm font-medium"
-                          />
-                        )}
-                        {req.status === "CANCEL_REQUESTED" && (
-                          <span className="flex flex-1 items-center justify-center text-xs text-orange-800 bg-orange-50/90">
-                            취소심사 중
-                          </span>
-                        )}
-                        {!["PENDING", "APPROVED", "CANCEL_REQUESTED"].includes(req.status) && (
-                          <span className="flex flex-1 items-center justify-center text-xs text-gray-400">—</span>
-                        )}
-                      </div>
-                      {showDetail ? (
-                        <details className="group min-h-[48px] flex flex-col justify-center bg-white/80 open:bg-white">
-                          <summary className="list-none cursor-pointer select-none min-h-[48px] flex items-center justify-center text-sm font-medium text-slate-700 hover:bg-slate-50 px-2 text-center">
-                            {isCompound ? "신청·결재 상세" : "상세보기"}
-                          </summary>
-                          <div className="px-3 py-3 border-t border-gray-100 bg-white text-left max-h-[min(70vh,28rem)] overflow-y-auto">
-                            {detailBlock}
-                          </div>
-                        </details>
-                      ) : (
-                        <div className="flex min-h-[48px] items-center justify-center text-xs text-gray-300">—</div>
-                      )}
-                    </div>
+                    <MyLeaveRequestFooter
+                      requestId={req.id}
+                      status={req.status}
+                      showDetail={showDetail}
+                      detailSummaryLabel={isCompound ? "신청·결재 상세" : "상세보기"}
+                    >
+                      {detailBlock}
+                    </MyLeaveRequestFooter>
                   );
                 })()}
               </li>

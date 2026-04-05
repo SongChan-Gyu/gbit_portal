@@ -67,16 +67,16 @@ async function seedLeaveTypes() {
   }
   // includeInFiscalInit 로 초기화 시 자동 부여 여부를 구분 (포상 등 수동 전용은 false).
   function displayHintForCode(code: string): string | null {
-    if (code === "ANNUAL") return "기본연차·근속·이월 합산";
+    if (code === "ANNUAL") return "기본·근속가산·이월 합산";
     if (code === "SICK") return "입원·통원 등";
     if (code === "CARE") return "연 2일 한도";
-    if (code === "HOLIDAY_EXT") return "휴무 3일+ 연속 시 앞·뒤·징검다리 영업일(귀속 1일)";
+    if (code === "HOLIDAY_EXT") return "휴무 3일+ 연속 시 전후·징검다리 영업일 1일";
     if (code === "PM_HALF_MONTH") return "수요일 오후";
     if (code === "BIRTHDAY_HALF") return "생일이 있는 달에 자동 부여 0.5일(부여 후 3개월 유효)";
     if (code === "AWARD") return "별도 부여";
-    if (code === "TENURE_1Y") return "입사 1주년 3일 (휴가규정)";
-    if (code === "TENURE_5Y") return "입사 5주년 5일 (휴가규정)";
-    if (code === "TENURE_10Y") return "입사 10주년 10일 (휴가규정)";
+    if (code === "TENURE_1Y") return "입사 1주년 부여";
+    if (code === "TENURE_5Y") return "입사 5주년 부여";
+    if (code === "TENURE_10Y") return "입사 10주년 부여";
     return null;
   }
   /** 관리자 수동 이월(FY 할당 탭) 허용. 근속 마일스톤 풀은 false. */

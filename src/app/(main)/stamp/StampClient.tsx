@@ -68,10 +68,10 @@ export default function StampClient({
 }) {
   const router = useRouter();
   const visibleCards = stampCards.filter(cardVisible);
-  const [deskCardIdx, setDeskCardIdx] = useState(0);
+  const [cardIdx, setCardIdx] = useState(0);
 
   useEffect(() => {
-    setDeskCardIdx((i) => {
+    setCardIdx((i) => {
       const max = Math.max(0, visibleCards.length - 1);
       return Math.min(Math.max(0, i), max);
     });
@@ -185,24 +185,30 @@ export default function StampClient({
               </p>
             </div>
           ) : (
-            <>
-              {/* 모바일: 가로 스와이프 (스냅) */}
-              <div className="md:hidden flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1 -mx-1 px-1 scroll-smooth">
-                {visibleCards.map((card, idx) => {
-                  const n = card.stamps.length;
-                  const healingOk = card.filledCount >= 5 && !card.healingUsed;
-                  const afternoonOk = card.filledCount >= 10 && !card.afternoonUsed;
-                  return (
-                    <div
-                      key={card.id}
-                      className="min-w-[calc(100%-0.75rem)] shrink-0 snap-center rounded-xl border border-amber-200/80 bg-amber-50/40 p-3"
-                    >
-                      <div className="flex items-center justify-between mb-2 gap-2">
-                        <span className="text-xs font-bold text-amber-900">
-                          스탬프 장 {idx + 1}
-                          <span className="font-normal text-amber-700/90"> ({card.filledCount}/10칸)</span>
-                        </span>
-                        <span className="text-[10px] text-gray-500 text-right shrink-0">
+            <div className="space-y-2">
+              {(() => {
+                const card = visibleCards[cardIdx]!;
+                const n = card.stamps.length;
+                const healingOk = card.filledCount >= 5 && !card.healingUsed;
+                const afternoonOk = card.filledCount >= 10 && !card.afternoonUsed;
+                return (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        aria-label="이전 장"
+                        className="shrink-0 rounded-lg border border-amber-200 bg-white p-2.5 text-amber-800 hover:bg-amber-50 disabled:opacity-30 disabled:pointer-events-none"
+                        disabled={cardIdx <= 0}
+                        onClick={() => setCardIdx((i) => Math.max(0, i - 1))}
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                      <div className="flex-1 min-w-0 text-center">
+                        <p className="text-xs font-bold text-amber-900 tabular-nums">
+                          장 {cardIdx + 1} / {visibleCards.length}
+                          <span className="font-semibold text-amber-800/90"> · {card.filledCount}/10칸</span>
+                        </p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">
                           힐링{" "}
                           {card.healingUsed ? (
                             <span className="text-gray-600">사용함</span>
@@ -223,95 +229,40 @@ export default function StampClient({
                               {10 - card.filledCount > 0 ? `${10 - card.filledCount}칸` : "—"}
                             </span>
                           )}
-                        </span>
+                        </p>
                       </div>
+                      <button
+                        type="button"
+                        aria-label="다음 장"
+                        className="shrink-0 rounded-lg border border-amber-200 bg-white p-2.5 text-amber-800 hover:bg-amber-50 disabled:opacity-30 disabled:pointer-events-none"
+                        disabled={cardIdx >= visibleCards.length - 1}
+                        onClick={() => setCardIdx((i) => Math.min(visibleCards.length - 1, i + 1))}
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    </div>
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3">
                       <StampSlotGrid filledCount={n} stamps={card.stamps} size="md" />
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* 데스크톱: 한 장씩 + 화살표·점 */}
-              <div className="hidden md:block space-y-2">
-                {visibleCards.length > 0 && (() => {
-                  const card = visibleCards[deskCardIdx]!;
-                  const idx = deskCardIdx;
-                  const n = card.stamps.length;
-                  const healingOk = card.filledCount >= 5 && !card.healingUsed;
-                  const afternoonOk = card.filledCount >= 10 && !card.afternoonUsed;
-                  return (
-                    <>
-                      <div className="flex items-stretch gap-2">
-                        <button
-                          type="button"
-                          aria-label="이전 장"
-                          className="shrink-0 self-center rounded-lg border border-amber-200 bg-white p-2 text-amber-800 hover:bg-amber-50 disabled:opacity-30 disabled:pointer-events-none"
-                          disabled={deskCardIdx <= 0}
-                          onClick={() => setDeskCardIdx((i) => Math.max(0, i - 1))}
-                        >
-                          <ChevronLeft size={20} />
-                        </button>
-                        <div className="flex-1 rounded-xl border border-amber-200/80 bg-amber-50/40 p-3 min-w-0">
-                          <div className="flex items-center justify-between mb-2 gap-2">
-                            <span className="text-xs font-bold text-amber-900">
-                              스탬프 장 {idx + 1}
-                              <span className="font-normal text-amber-700/90"> ({card.filledCount}/10칸)</span>
-                            </span>
-                            <span className="text-[10px] text-gray-500 text-right shrink-0">
-                              힐링{" "}
-                              {card.healingUsed ? (
-                                <span className="text-gray-600">사용함</span>
-                              ) : healingOk ? (
-                                <span className="text-emerald-600 font-medium">가능</span>
-                              ) : (
-                                <span className="text-gray-400">
-                                  {card.filledCount < 5 ? `${5 - card.filledCount}칸` : "—"}
-                                </span>
-                              )}
-                              {" · "}오후{" "}
-                              {card.afternoonUsed ? (
-                                <span className="text-gray-600">사용함</span>
-                              ) : afternoonOk ? (
-                                <span className="text-purple-700 font-medium">가능</span>
-                              ) : (
-                                <span className="text-gray-400">
-                                  {10 - card.filledCount > 0 ? `${10 - card.filledCount}칸` : "—"}
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                          <StampSlotGrid filledCount={n} stamps={card.stamps} size="md" />
-                        </div>
-                        <button
-                          type="button"
-                          aria-label="다음 장"
-                          className="shrink-0 self-center rounded-lg border border-amber-200 bg-white p-2 text-amber-800 hover:bg-amber-50 disabled:opacity-30 disabled:pointer-events-none"
-                          disabled={deskCardIdx >= visibleCards.length - 1}
-                          onClick={() => setDeskCardIdx((i) => Math.min(visibleCards.length - 1, i + 1))}
-                        >
-                          <ChevronRight size={20} />
-                        </button>
+                    {visibleCards.length > 1 && (
+                      <div className="flex justify-center gap-1.5 pt-0.5">
+                        {visibleCards.map((c, i) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            aria-label={`${i + 1}번째 장`}
+                            className={`h-2 rounded-full transition-all ${
+                              i === cardIdx ? "w-6 bg-amber-600" : "w-2 bg-amber-200 hover:bg-amber-300"
+                            }`}
+                            onClick={() => setCardIdx(i)}
+                          />
+                        ))}
                       </div>
-                      {visibleCards.length > 1 && (
-                        <div className="flex justify-center gap-1.5 pt-1">
-                          {visibleCards.map((c, i) => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              aria-label={`${i + 1}번째 장 보기`}
-                              className={`h-2 rounded-full transition-all ${
-                                i === deskCardIdx ? "w-6 bg-amber-600" : "w-2 bg-amber-200 hover:bg-amber-300"
-                              }`}
-                              onClick={() => setDeskCardIdx(i)}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-              </div>
-            </>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           )}
         </div>
       </div>

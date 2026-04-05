@@ -82,35 +82,32 @@ export default async function LeaveApplyPage() {
       {/* 사용 가능 자산 요약 (공가·병가 미포함) */}
       <div className="panel mb-3">
         <div className="panel-body py-2.5 px-3">
-          <div className="flex items-stretch gap-0 sm:gap-0 overflow-x-auto sm:overflow-visible -mx-1 px-1 sm:mx-0 sm:px-0 pb-0.5 sm:pb-0">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-max sm:min-w-0 sm:flex-1 sm:w-full">
-            <div className="text-center min-w-[6.5rem] sm:min-w-[7rem] shrink-0">
-              <p className="text-[22px] font-black text-blue-600 tabular-nums leading-none">{totalAssetRemain.toFixed(1)}</p>
-              <p className="text-xs text-gray-500 mt-1">사용 가능 휴가</p>
-              <p className="text-[10px] text-gray-400 mt-0.5 leading-tight">연차·돌봄·이벤트 등</p>
-            </div>
-            <div className="w-px h-7 bg-gray-200 shrink-0 self-center" />
-            <div className="text-center min-w-[5.5rem] shrink-0">
-              <p className="text-[22px] font-black text-amber-500 tabular-nums leading-none whitespace-nowrap">{totalStamps}</p>
-              <p className="text-xs text-gray-500 mt-1 whitespace-nowrap">누적 스탬프 칸</p>
-            </div>
-            <div className="w-px h-7 bg-gray-200 shrink-0 self-center" />
-            <div className="text-center min-w-[5.75rem] sm:min-w-[6.5rem] shrink-0 pr-1 sm:pr-0">
-              <p className="text-[20px] font-black text-gray-600 leading-none whitespace-nowrap">
-                {halfDayUsed > 0 ? "사용완료" : "미사용"}
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:gap-6 sm:justify-between">
+            <div className="text-center min-w-0 px-0.5">
+              <p className="text-[clamp(1.1rem,4.5vw,1.375rem)] font-black text-blue-600 tabular-nums leading-none">
+                {totalAssetRemain.toFixed(1)}
               </p>
-              <p className="text-xs text-gray-500 mt-1 leading-tight px-0.5">
-                이달<br className="sm:hidden" />
-                하프데이
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-tight">사용 가능 휴가</p>
+              <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5 leading-snug hidden sm:block">
+                연차·돌봄 등
               </p>
             </div>
-            <div className="flex-1 min-w-[1rem] hidden sm:block" />
-            <div className="text-right text-xs text-gray-400 hidden sm:block shrink-0">
-              <p>참고 귀속연도 {fy}년도</p>
-              <p>상단 숫자: {formatYMD(new Date())} 유효 부여 합산</p>
+            <div className="text-center min-w-0 px-0.5 border-x border-gray-200/90 sm:border-x-0 sm:border-l sm:border-gray-200 sm:pl-6">
+              <p className="text-[clamp(1.1rem,4.5vw,1.375rem)] font-black text-amber-500 tabular-nums leading-none">
+                {totalStamps}
+              </p>
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-tight">누적 스탬프</p>
             </div>
+            <div className="text-center min-w-0 px-0.5">
+              <p className="text-[clamp(1rem,4vw,1.25rem)] font-black text-gray-600 leading-none tabular-nums">
+                {halfDayUsed > 0 ? "완료" : "미사용"}
+              </p>
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-tight">이달 하프데이</p>
             </div>
           </div>
+          <p className="text-right text-[10px] text-gray-400 mt-2 hidden sm:block">
+            참고 귀속 {fy}년도 · {formatYMD(new Date())} 유효 부여 합산
+          </p>
         </div>
       </div>
 

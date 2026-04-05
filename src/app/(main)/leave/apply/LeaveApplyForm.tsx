@@ -346,7 +346,7 @@ export default function LeaveApplyForm({
   const isSelectableCode = (code: string) => {
     const lt = ltByCode[code];
     if (!lt) return false;
-    // 근속휴가 그룹: 실제 보유(할당 잔여)가 있는 경우만 신청 노출
+    // 근속 마일스톤: 해당 휴가코드 풀 잔여가 있을 때만 선택지 노출
     if ((lt.applyGroupKey ?? "").trim().toLowerCase() === "tenure") {
       return (poolRemainingBySource[code] ?? 0) > 0;
     }
