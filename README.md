@@ -117,7 +117,7 @@ npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 - `TZ` — 선택 (`Asia/Seoul`). 날짜 비즈니스 로직은 코드에서 KST 처리.
 - `NEXT_PUBLIC_KAKAO_MAP_JAVASCRIPT_KEY` — 제주 숙소 지도 (선택, Kakao Developers에서 JavaScript 키 + Web 도메인 등록)
 
-**운영(클라우드) 이메일:** Railway 등 Variables에 `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` 입력. 회사 메일 서버(smtp.gmail.com / smtp.office365.com / smtp.naver.com 등)와 발신용 계정·비밀번호만 맞추면 됨. 시스템 메일(아이디 찾기/비밀번호 재설정/초대/관리자 초기화)은 등록 이메일 기준으로 발송됨. 자세한 예시는 `.env.example` 주석 참고.
+**운영(클라우드) 이메일:** Railway 등 Variables에 **`RESEND_API_KEY`**, **`MAIL_FROM`**(예: `gbit@gbitportal.co.kr`) 권장. Resend에서 도메인 DNS(SPF/DKIM 등) 검증 후 발송. SMTP 포트가 열린 환경에서만 `SMTP_*` 단독 사용 가능(`src/lib/email.ts` 참고). 시스템 메일(아이디 찾기/비밀번호 재설정/초대/관리자 초기화)은 등록 이메일 기준. 자세한 예시는 `.env.example` 주석 참고.
 
 **카카오 알림톡:** 다이렉트센드(DirectSend) `api_v2/kakao_notice` 연동 (`src/lib/kakao.ts`). `DIRECTSEND_USERNAME`, `DIRECTSEND_API_KEY`, `DIRECTSEND_KAKAO_PLUS_ID`, `DIRECTSEND_ALIMTALK_TEMPLATE_NOS`(내부 코드→템플릿 번호 JSON). **템플릿·note1~5 매핑:** `docs/alimtalk-templates.md`. 미설정 시 MOCKED로 로그만 남김.
 

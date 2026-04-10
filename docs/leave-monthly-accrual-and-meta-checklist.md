@@ -10,6 +10,7 @@
 - **유효기간(의도)**: N월에 부여되면 **N월 1일 ~ 해당 귀속연도 말(4/30)**까지 쓸 수 있는 구조. (코드는 `src/lib/scheduler.ts` 등에서 확인·유지)
 - **귀속연도 일괄 초기화(`fiscal-year/init`)**: 입사 1년 미만 월별 적립은 **스케줄러와 동일 규칙**으로 `syncMonthlyAccrualPoolForFiscalInit`가 한 번에 맞춘다. `asOf`는 `asOfKstTodayForMonthlyAccrual()`(= KST 오늘, `todayStr`)로 스케줄러 당월과 동일 기준 → 적립 상한은 **당월 말**까지(`monthlyAccrualCapDate`).
 - **월별 적립 스케줄러(`runMonthlyAccrual`)**: 인자 없으면 **KST 당월** 1일분을 적립(예: 3월 실행 → `2026-03`). 관리자 UI 월 선택 기본값도 동일.
+- **귀속 초기화·스케줄러 시점**: 생일·입사주년은 `LeaveType.fiscalInitOnlyAfterGrantDate`(기본 true) 및 `AllocationSourceConfig`(근속 마일스톤 전용 경로) 동명 필드로 “부여일 도래 후만 초기화 보강”을 끄고 FY 전체 선부여(레거시)로 바꿀 수 있음.
 - **"이월"**: 연 단일 이월 객체가 아니라, **월별로 쌓이는 할당 + 각자 유효기간**에 가깝다. 현황 표에서는 위 묶음 열로 합쳐 보여 준다.
 
 ---

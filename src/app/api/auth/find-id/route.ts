@@ -56,7 +56,10 @@ export async function POST(req: Request) {
     });
   } catch (e: any) {
     return NextResponse.json({
-      error: process.env.NODE_ENV === "development" ? e?.message : "이메일 발송에 실패했습니다. SMTP 설정을 확인해 주세요.",
+      error:
+        process.env.NODE_ENV === "development"
+          ? e?.message
+          : "이메일 발송에 실패했습니다. RESEND_API_KEY·MAIL_FROM 또는 SMTP 설정을 확인해 주세요.",
     }, { status: 500 });
   }
 

@@ -1,10 +1,16 @@
 /**
- * 이메일 발송 (SMTP)
- * - 발송만 하므로 SMTP만 사용. POP3는 수신용이라 미사용.
- * - 환경변수: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM(선택)
- * - 465: SSL(secure: true). 587: STARTTLS(requireTLS) 자동 적용.
- * - 네이버: smtp.naver.com, 포트 465(SSL), 비밀번호는 애플리케이션 비밀번호.
+ * 이메일 발송
  *
+ * 우선순위
+ * 1) RESEND_API_KEY가 있으면 Resend HTTP API(443) 사용
+ * 2) 없으면 SMTP 사용
+ *
+ * 공통 권장
+ * - MAIL_FROM 또는 SMTP_FROM: 발신 주소 (예: gbit@gbitportal.co.kr)
+ *
+ * SMTP 환경변수
+ * - SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM(선택)
+ * - 465: SSL(secure: true). 587: STARTTLS(requireTLS) 자동 적용.
  */
 
 export interface SendMailOptions {
@@ -15,6 +21,35 @@ export interface SendMailOptions {
 }
 
 export async function sendMail(options: SendMailOptions): Promise<void> {
+  const resendKey = process.env.RESEND_API_KEY?.trim();
+  const fromAddress = process.env.MAIL_FROM?.trim() || process.env.SMTP_FROM?.trim() || "";
+
+  if (resendKey) {
+    if (!fromAddress) {
+      throw new Error("메일 발신 주소가 없습니다. (MAIL_FROM 또는 SMTP_FROM 설정 필요)");
+    }
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromAddress.includes("<") ? fromAddress : `"GBIT Portal" <${fromAddress}>`,
+        to: [options.to],
+        subject: options.subject,
+        text: options.text,
+        html: options.html ?? options.text.replace(/\n/g, "<br/>"),
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (!res.ok) {
+      const raw = await res.text().catch(() => "");
+      throw new Error(`Resend API 실패 (${res.status}): ${raw.slice(0, 500)}`);
+    }
+    return;
+  }
+
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
@@ -24,7 +59,7 @@ export async function sendMail(options: SendMailOptions): Promise<void> {
   }
 
   const to = options.to;
-  const from = process.env.SMTP_FROM || user;
+  const from = fromAddress || user;
 
   const nodemailer = await import("nodemailer");
   const port = parseInt(process.env.SMTP_PORT ?? "587", 10);
