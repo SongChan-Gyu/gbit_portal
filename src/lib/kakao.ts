@@ -10,18 +10,34 @@ import { directsendKakaoAlimtalk } from "@/lib/directsendKakao";
  * - DIRECTSEND_API_KEY: 다이렉트센드 API key (문자/메일용)
  * - DIRECTSEND_KAKAO_PLUS_ID: 발신프로필 @검색용아이디
  * - DIRECTSEND_ALIMTALK_TEMPLATE_NOS: JSON. 포털 내부 템플릿 코드 → 다이렉트센드 user_template_no
- *   예: {"LEAVE_REQUEST":"12345","LEAVE_RESULT":"12346", ...}
+ *   한 줄이어도 되고, 붙여넣기로 줄바꿈·공백이 섞여 있어도 파싱 전에 공백을 제거해 처리함.
+ *   (.env 파일에서는 `KEY=` 다음 줄에 `{`만 두면 안 되고, 한 줄로 쓰거나 작은따옴표로 값 전체를 감쌀 것)
  *   코드별 note1~note5 매핑은 docs/alimtalk-templates.md 참고 (카카오 템플릿 변수와 맞출 것)
  *
  * 선택
- * - ALIMTALK_ALLOWED_RECEIVER: 설정 시 해당 번호로만 발송, 그 외 SKIPPED
+ * - ALIMTALK_ALLOWED_RECEIVER: 설정 시 나열된 번호로만 발송, 그 외 SKIPPED.
+ *   쉼표·공백·세미콜론으로 여러 개 (예: 01011112222,01033334444)
  *
  * 위 설정이 없거나 해당 템플릿 번호가 JSON에 없으면 MOCKED(미발송), NotificationLog 기록.
  */
 
+/** ALIMTALK_ALLOWED_RECEIVER — 숫자만 비교. 구분자: 쉼표·공백·세미콜론 */
+function allowedAlimtalkReceiverSet(): Set<string> {
+  const raw = process.env.ALIMTALK_ALLOWED_RECEIVER?.trim();
+  if (!raw) return new Set();
+  const set = new Set<string>();
+  for (const part of raw.split(/[,;\s]+/).filter(Boolean)) {
+    const d = part.replace(/[^\d]/g, "");
+    if (d) set.add(d);
+  }
+  return set;
+}
+
 function loadDirectsendTemplateNos(): Record<string, string> {
-  const raw = process.env.DIRECTSEND_ALIMTALK_TEMPLATE_NOS?.trim();
+  let raw = process.env.DIRECTSEND_ALIMTALK_TEMPLATE_NOS?.trim();
   if (!raw) return {};
+  // 포맷된 JSON 붙여넣기(줄바꿈·들여쓰기)도 동작하도록 공백 제거 후 파싱
+  raw = raw.replace(/\s+/g, "");
   try {
     const o = JSON.parse(raw) as Record<string, unknown>;
     const out: Record<string, string> = {};
@@ -94,8 +110,8 @@ async function sendAlimtalk(
   const sentAt = new Date();
   const normalizePhone = (s: string) => s.replace(/[^\d]/g, "");
   const receiver = normalizePhone(phone || "");
-  const allowedReceiver = process.env.ALIMTALK_ALLOWED_RECEIVER?.trim();
-  const allowed = allowedReceiver ? normalizePhone(allowedReceiver) : "";
+  const allowedReceivers = allowedAlimtalkReceiverSet();
+  const allowedListLabel = process.env.ALIMTALK_ALLOWED_RECEIVER?.trim() ?? "";
 
   const username = process.env.DIRECTSEND_USERNAME?.trim();
   const apiKey = process.env.DIRECTSEND_API_KEY?.trim();
@@ -110,9 +126,9 @@ async function sendAlimtalk(
   if (!receiver) {
     status = "FAILED";
     errorMsg = "수신 번호가 비어 있습니다.";
-  } else if (credsOk && allowed && receiver !== allowed) {
+  } else if (credsOk && allowedReceivers.size > 0 && !allowedReceivers.has(receiver)) {
     status = "SKIPPED";
-    errorMsg = `테스트 안전장치로 발송 스킵 (허용 수신번호: ${allowedReceiver})`;
+    errorMsg = `테스트 안전장치로 발송 스킵 (허용 수신번호: ${allowedListLabel})`;
   } else if (!credsOk) {
     if (!username || !apiKey || !plusId) {
       errorMsg = "다이렉트센드 DIRECTSEND_USERNAME / DIRECTSEND_API_KEY / DIRECTSEND_KAKAO_PLUS_ID 미설정";
