@@ -7,12 +7,18 @@ import { getTenureScheduleForFiscalYears } from "@/lib/scheduler";
 import CancelButton from "./CancelButton";
 import CancelRequestButton from "./CancelRequestButton";
 import MyLeaveMonthlyTable from "./MyLeaveMonthlyTable";
+import MyLeaveByTypeTable from "./MyLeaveByTypeTable";
 import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
-import { summarizeLeaveApprovals } from "@/lib/leaveApprovalDisplay";
 import { leaveRequestStatusMeta } from "@/lib/statusMeta";
 import MyLeaveRequestFooter from "./MyLeaveRequestFooter";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+
+const REQUEST_TAB_OPTIONS = [
+  { key: "list", label: "목록" },
+  { key: "monthly", label: "월별" },
+  { key: "type", label: "휴가별" },
+] as const;
 
 export default async function MyLeavePage({ searchParams }: { searchParams: Promise<{ fy?: string; tab?:string }> }) {
   const session = await auth();
@@ -24,7 +30,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
   if (self?.employeeType === "EXTERNAL") redirect("/dashboard");
   const { fy: fyRaw, tab } = await searchParams;
   const fy       = fyRaw ? parseInt(fyRaw) : getFiscalYear();
-  const activeTab = tab ?? "list"; // list | monthly
+  const activeTab = REQUEST_TAB_OPTIONS.some((t) => t.key === tab) ? (tab as (typeof REQUEST_TAB_OPTIONS)[number]["key"]) : "list";
 
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
   const fyRangeLabel = `${formatYMD(fyStart)} ~ ${formatYMD(fyEnd)}`;
@@ -172,7 +178,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
           신청 내역은 <strong>선택한 귀속연도</strong>와 휴가 일정이 겹치는 건만 보입니다. 지금 탭 범위:{" "}
           <span className="text-gray-600 font-medium">{fyRangeLabel}</span>.
           안 보이면 상단에서 이전·다음 귀속연도를 눌러 보세요.
-          「월별」은 <strong>승인 완료</strong>된 휴만 집계합니다. 결재 중이면 「목록」을 보세요.
+          「월별/휴가별」은 <strong>승인 완료</strong>된 휴가를 집계합니다.
         </p>
       </div>
 
@@ -419,14 +425,15 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
         <div className="panel-header flex-wrap gap-2">
           <span className="panel-title">신청 내역</span>
           <div className="flex rounded-md border border-gray-200 overflow-hidden text-xs">
-            <a href={`?fy=${fy}&tab=list`}
-              className={`px-3 py-2 ${activeTab==="list"?"bg-slate-600 text-white":"bg-white text-gray-600 hover:bg-gray-50"}`}>
-              목록
-            </a>
-            <a href={`?fy=${fy}&tab=monthly`}
-              className={`px-3 py-2 ${activeTab==="monthly"?"bg-slate-600 text-white":"bg-white text-gray-600 hover:bg-gray-50"}`}>
-              월별
-            </a>
+            {REQUEST_TAB_OPTIONS.map((opt) => (
+              <a
+                key={opt.key}
+                href={`?fy=${fy}&tab=${opt.key}`}
+                className={`px-3 py-2 ${activeTab===opt.key?"bg-slate-600 text-white":"bg-white text-gray-600 hover:bg-gray-50"}`}
+              >
+                {opt.label}
+              </a>
+            ))}
           </div>
         </div>
 
@@ -456,6 +463,30 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
               })),
             }))}
             fy={fy}
+          />
+        ) : activeTab === "type" ? (
+          <MyLeaveByTypeTable
+            requests={approvedInFy.map((r) => ({
+              id: r.id,
+              items: r.items.map((it) => ({
+                id: it.id,
+                days: it.days,
+                startDate: it.startDate.toISOString(),
+                endDate: it.endDate.toISOString(),
+                leaveType: {
+                  name: it.leaveType.name,
+                  color: it.leaveType.color,
+                  applyGroupKey: it.leaveType.applyGroupKey ?? null,
+                  isHalf: it.leaveType.isHalf,
+                  isAmOnly: it.leaveType.isAmOnly,
+                  isPmOnly: it.leaveType.isPmOnly,
+                  allowsFullDay: (it.leaveType as any).allowsFullDay ?? null,
+                  allowsHalfDay: (it.leaveType as any).allowsHalfDay ?? null,
+                  halfDayAmPm: (it.leaveType as any).halfDayAmPm ?? null,
+                },
+                timeSlot: it.timeSlot ?? null,
+              })),
+            }))}
           />
         ) : requests.length === 0 ? (
           <div className="panel-body text-center py-10 text-gray-400 space-y-2">
@@ -504,8 +535,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                 {(() => {
                   const isCompound = req.items.length > 1;
                   const hasItemReason = req.items.some((it) => it.reason?.trim() && it.reason.trim().length >= 2);
-                  const showDetail =
-                    isCompound || req.approvals.length > 0 || hasItemReason;
+                  const showDetail = isCompound || hasItemReason;
                   const detailBlock = (
                     <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
                       {isCompound && (
@@ -543,16 +573,6 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                           </ul>
                         </div>
                       )}
-                      {req.approvals.length > 0 && (
-                        <div>
-                          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">
-                            결재
-                          </p>
-                          <p className="text-xs text-gray-700 leading-snug">
-                            {summarizeLeaveApprovals(req.approvals)}
-                          </p>
-                        </div>
-                      )}
                       {!isCompound && hasItemReason && (
                         <p className="text-xs">
                           <span className="text-gray-400">사유</span> {req.items[0]?.reason?.trim()}
@@ -568,7 +588,7 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                       requestId={req.id}
                       status={req.status}
                       showDetail={showDetail}
-                      detailSummaryLabel={isCompound ? "신청·결재 상세" : "상세보기"}
+                      detailSummaryLabel={isCompound ? "신청 상세" : "상세보기"}
                     >
                       {detailBlock}
                     </MyLeaveRequestFooter>

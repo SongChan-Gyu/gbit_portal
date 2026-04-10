@@ -89,7 +89,7 @@ export const ALL_MENU_KEYS = collectAllKeys();
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   STAFF: [
     "dashboard", "me", "notices",
-    "leave_apply", "leave_my", "leave_policy",
+    "leave_apply", "leave_my", "leave_approve", "leave_policy",
     "attendance", "stamp",
     "jeju", "jeju_my", "jeju_info",
   ],

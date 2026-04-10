@@ -31,6 +31,22 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
     return () => mq.removeEventListener("change", sync);
   }, []);
 
+  // 모바일 드로어 열림 동안 배경 스크롤/드래그 잠금
+  useEffect(() => {
+    if (!open) return;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyTouchAction = document.body.style.touchAction;
+    const prevHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
+    document.documentElement.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.touchAction = prevBodyTouchAction;
+      document.documentElement.style.overscrollBehavior = prevHtmlOverscroll;
+    };
+  }, [open]);
+
   async function handleSignOut() {
     try {
       await signOut({ callbackUrl: "/login", redirect: false });

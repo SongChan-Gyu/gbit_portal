@@ -7,14 +7,21 @@ import StampApproveClient from "@/app/(main)/stamp/approve/StampApproveClient";
 import { serializeDates } from "@/lib/serialize";
 import { formatMDWithDay } from "@/lib/dateUtils";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { summarizeLeaveApprovals } from "@/lib/leaveApprovalDisplay";
 import { leaveApprovalStatusMeta, leaveApproveEntryKindMeta, leaveCancelApprovalStatusMeta, leaveRequestStatusMeta } from "@/lib/statusMeta";
+
+const APPROVER_ROLES = ["TEAM_LEAD", "PM", "ADMIN"] as const;
+const APPROVE_MAIN_TABS = [
+  { key: "leave", label: "휴가" },
+  { key: "stamp", label: "스탬프" },
+] as const;
 
 export default async function ApprovePage({
   searchParams,
 }: { searchParams: Promise<{ view?: string; tab?: string }> }) {
   const session = await auth();
   const user = session!.user as any;
-  if (!["TEAM_LEAD","PM","ADMIN"].includes(user.role)) redirect("/dashboard");
+  const canApprove = APPROVER_ROLES.includes(user.role);
 
   const self = await prisma.employee.findUnique({
     where: { id: user.employeeId },
@@ -26,56 +33,81 @@ export default async function ApprovePage({
   const viewRaw = params.view;
   const tabRaw = params.tab;
   const pageRaw = (params as Record<string, string | undefined>).page;
-  const tab  = tabRaw  ?? "leave";
-  const view = viewRaw ?? "pending";
+  const tab = APPROVE_MAIN_TABS.some((t) => t.key === tabRaw) ? (tabRaw as (typeof APPROVE_MAIN_TABS)[number]["key"]) : "leave";
+  const viewOptions = canApprove
+    ? [
+        { key: "pending", label: `처리 대기 (${tab === "stamp" ? "STAMP_PENDING" : "LEAVE_PENDING"})` },
+        { key: "all", label: "처리 이력" },
+      ]
+    : [{ key: "mine", label: "내 요청" }];
+  const view = viewOptions.some((v) => v.key === viewRaw) ? viewRaw! : viewOptions[0].key;
   const page = Math.max(1, parseInt(String(pageRaw ?? "1"), 10));
   const PAGE_SIZE = 30;
 
   // ── 휴가 결재 데이터 (관리자는 본인 결재 건만; 전체 내역은 별도 조회) ──────────────────────────────────
-  const approvals = await prisma.leaveApproval.findMany({
-    where: {
-      approverId: user.employeeId,
-      ...(view === "pending" ? { status: "PENDING" } : {}),
-    },
-    include: {
-      leaveRequest: {
-        include: {
-          employee: { include: { team: true } },
-          items: { include: { leaveType: true } },
-          approvals: { include: { approver: true }, orderBy: { step: "asc" } },
+  const approvals = canApprove
+    ? await prisma.leaveApproval.findMany({
+        where: {
+          approverId: user.employeeId,
+          ...(view === "pending" ? { status: "PENDING" } : {}),
         },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+        include: {
+          leaveRequest: {
+            include: {
+              employee: { include: { team: true } },
+              items: { include: { leaveType: true } },
+              approvals: { include: { approver: true }, orderBy: { step: "asc" } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
-  const cancelApprovals = await prisma.leaveApproval.findMany({
-    where: {
-      approverId: user.employeeId,
-      ...(view === "pending"
-        ? { status: "CANCEL_PENDING" }
-        : { status: { in: ["CANCEL_PENDING","CANCEL_APPROVED","CANCEL_REJECTED"] } }),
-    },
-    include: {
-      leaveRequest: {
-        include: {
-          employee: { include: { team: true } },
-          items: { include: { leaveType: true } },
-          approvals: { include: { approver: true }, orderBy: { step: "asc" } },
+  const cancelApprovals = canApprove
+    ? await prisma.leaveApproval.findMany({
+        where: {
+          approverId: user.employeeId,
+          ...(view === "pending"
+            ? { status: "CANCEL_PENDING" }
+            : { status: { in: ["CANCEL_PENDING", "CANCEL_APPROVED", "CANCEL_REJECTED"] } }),
         },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+        include: {
+          leaveRequest: {
+            include: {
+              employee: { include: { team: true } },
+              items: { include: { leaveType: true } },
+              approvals: { include: { approver: true }, orderBy: { step: "asc" } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
 
   // ── 스탬프 결재 데이터 ────────────────────────────────
-  const stampRequests = await prisma.stampRequest.findMany({
+  const stampRequests = canApprove
+    ? await prisma.stampRequest.findMany({
+        where: {
+          approverId: user.employeeId,
+          ...(view === "pending" ? { status: "PENDING" } : {}),
+        },
+        include: { employee: { include: { team: true } } },
+        orderBy: { stampDate: "desc" },
+      })
+    : [];
+
+  const myLeaveRequests = await prisma.leaveRequest.findMany({
     where: {
-      approverId: user.employeeId,
-      ...(view === "pending" ? { status: "PENDING" } : {}),
+      employeeId: user.employeeId,
+      status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED", "WITHDRAWN", "CANCELLED", "REJECTED"] },
     },
-    include: { employee: { include: { team: true } } },
-    orderBy: { stampDate: "desc" },
+    include: {
+      items: { include: { leaveType: true } },
+      approvals: { include: { approver: true }, orderBy: { step: "asc" } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 60,
   });
 
   const actionable       = approvals.filter(ap => ap.status === "PENDING" && ap.leaveRequest.currentStep === ap.step);
@@ -91,13 +123,13 @@ export default async function ApprovePage({
 
   // 관리자: 전체 휴가 내역 (모든 직원, 승인/대기/취소신청) — 조회 및 직권 취소용 (페이지네이션)
   const adminTotal =
-    user.role === "ADMIN"
+    canApprove && user.role === "ADMIN"
       ? await prisma.leaveRequest.count({
           where: { status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED", "WITHDRAWN", "CANCELLED", "REJECTED"] } },
         })
       : 0;
   const adminAllRequests =
-    user.role === "ADMIN"
+    canApprove && user.role === "ADMIN"
       ? await prisma.leaveRequest.findMany({
           where: { status: { in: ["PENDING", "APPROVED", "CANCEL_REQUESTED", "WITHDRAWN", "CANCELLED", "REJECTED"] } },
           include: {
@@ -118,9 +150,9 @@ export default async function ApprovePage({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="page-title">결재함</h1>
-          <p className="page-subtitle">휴가 신청, 취소 신청, 스탬프 요청을 처리합니다.</p>
+          <p className="page-subtitle">{canApprove ? "휴가 신청, 취소 신청, 스탬프 요청을 처리합니다." : "내 요청의 진행 상태를 확인합니다."}</p>
         </div>
-        {totalPending > 0 && (
+        {canApprove && totalPending > 0 && (
           <span className="badge badge-warning text-sm px-2 py-1">미처리 {totalPending}건</span>
         )}
       </div>
@@ -133,39 +165,39 @@ export default async function ApprovePage({
               ? "border-slate-600 text-slate-700"
               : "border-transparent text-gray-500 hover:text-gray-700"
           }`}>
-          휴가 결재
+          휴가
           {leavePending > 0 && (
             <span className="ml-1.5 text-xs bg-slate-100 text-slate-600 rounded-full px-1.5 py-0.5 font-semibold">
               {leavePending}
             </span>
           )}
         </a>
-        <a href={`?tab=stamp&view=${view}`}
-          className={`px-4 py-3 md:py-2.5 font-medium border-b-2 -mb-px transition-colors touch-manipulation min-h-[44px] flex items-center active:bg-gray-100 rounded-t-lg ${
-            tab === "stamp"
-              ? "border-slate-600 text-slate-700"
-              : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}>
-          스탬프 승인
-          {stampPending > 0 && (
-            <span className="ml-1.5 text-xs bg-amber-100 text-amber-600 rounded-full px-1.5 py-0.5 font-semibold">
-              {stampPending}
-            </span>
-          )}
-        </a>
+        {canApprove && (
+          <a href={`?tab=stamp&view=${view}`}
+            className={`px-4 py-3 md:py-2.5 font-medium border-b-2 -mb-px transition-colors touch-manipulation min-h-[44px] flex items-center active:bg-gray-100 rounded-t-lg ${
+              tab === "stamp"
+                ? "border-slate-600 text-slate-700"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}>
+            스탬프
+            {stampPending > 0 && (
+              <span className="ml-1.5 text-xs bg-amber-100 text-amber-600 rounded-full px-1.5 py-0.5 font-semibold">
+                {stampPending}
+              </span>
+            )}
+          </a>
+        )}
       </div>
 
-      {/* 대기/전체/관리자전체 서브탭 */}
+      {/* 보기 서브탭 */}
       <div className="flex flex-wrap gap-2 mb-5">
-        {["pending","all"].map((v) => (
-          <a key={v} href={`?tab=${tab}&view=${v}`}
-            className={`btn-sm ${view === v ? "btn-primary" : "btn-secondary"}`}>
-            {v === "pending"
-              ? `대기 (${tab === "stamp" ? stampPending : leavePending})`
-              : "전체 내역"}
+        {viewOptions.map((v) => (
+          <a key={v.key} href={`?tab=${tab}&view=${v.key}`}
+            className={`btn-sm ${view === v.key ? "btn-primary" : "btn-secondary"}`}>
+            {v.label.replace("STAMP_PENDING", String(stampPending)).replace("LEAVE_PENDING", String(leavePending))}
           </a>
         ))}
-        {user.role === "ADMIN" && tab === "leave" && (
+        {canApprove && user.role === "ADMIN" && tab === "leave" && (
           <a href="?tab=leave&view=admin"
             className={`btn-sm ${view === "admin" ? "btn-primary" : "btn-secondary"}`}>
             전체 휴가 내역(관리자)
@@ -173,8 +205,69 @@ export default async function ApprovePage({
         )}
       </div>
 
+      {tab === "leave" && view === "mine" && (
+        <div className="panel">
+          <div className="md:hidden divide-y divide-gray-100">
+            {myLeaveRequests.map((req) => (
+              <div key={req.id} className="px-4 py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm text-gray-700">
+                    {req.items.map((i) => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")}
+                  </p>
+                  {(() => {
+                    const st = leaveRequestStatusMeta(req.status);
+                    return <span className={`badge ${st.badge}`}>{st.label}</span>;
+                  })()}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {formatMDWithDay(req.startDate)}
+                  {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
+                  <span className="ml-1 font-semibold text-slate-700">{req.totalDays}일</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-1 leading-snug">{summarizeLeaveApprovals(req.approvals as any)}</p>
+              </div>
+            ))}
+            {myLeaveRequests.length === 0 && <div className="px-4 py-8 text-center text-gray-400 text-sm">내 요청 내역이 없습니다.</div>}
+          </div>
+          <div className="hidden md:block table-scroll">
+            <table className="data-table request-list-table">
+              <thead>
+                <tr>
+                  <th className="request-list-th type">유형</th>
+                  <th className="request-list-th period">기간(일수)</th>
+                  <th className="request-list-th status">상태</th>
+                  <th className="request-list-th approval">결재 진행</th>
+                </tr>
+              </thead>
+              <tbody>
+                {myLeaveRequests.map((req) => (
+                  <tr key={req.id}>
+                    <td className="request-list-td type text-[15px] md:text-xs">
+                      {req.items.map((i) => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")}
+                    </td>
+                    <td className="request-list-td period whitespace-nowrap text-[15px] md:text-xs">
+                      {formatMDWithDay(req.startDate)}
+                      {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
+                      <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
+                    </td>
+                    <td className="request-list-td status">
+                      {(() => {
+                        const st = leaveRequestStatusMeta(req.status);
+                        return <span className={`badge ${st.badge}`}>{st.label}</span>;
+                      })()}
+                    </td>
+                    <td className="request-list-td approval text-xs text-gray-600">{summarizeLeaveApprovals(req.approvals as any)}</td>
+                  </tr>
+                ))}
+                {myLeaveRequests.length === 0 && <tr><td colSpan={4} className="text-center py-8 text-gray-400">내 요청 내역이 없습니다.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── 휴가 결재 탭 ─────────────────────────────── */}
-      {tab === "leave" && (
+      {tab === "leave" && canApprove && (
         <>
           {view === "pending" && (
             <div className="space-y-3">
@@ -417,7 +510,7 @@ export default async function ApprovePage({
       )}
 
       {/* ── 스탬프 승인 탭 ────────────────────────────── */}
-      {tab === "stamp" && (
+      {tab === "stamp" && canApprove && (
         <StampApproveClient requests={serializeDates(stampRequests) as any} />
       )}
     </div>

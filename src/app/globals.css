@@ -9,6 +9,7 @@
     -webkit-font-smoothing: antialiased;
     /* 모바일 터치 시 노란 하이라이트 제거 후 커스텀 feedback */
     -webkit-tap-highlight-color: rgba(59, 130, 246, 0.15);
+    overscroll-behavior-x: none;
   }
   * { @apply box-border; }
   body { @apply bg-slate-50 text-gray-900 text-[13px] leading-relaxed; }
