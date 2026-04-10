@@ -1,7 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+
+/** 숫자만 (최대 11자리, 휴대폰) */
+function phoneDigits(s: string): string {
+  return s.replace(/[^\d]/g, "").slice(0, 11);
+}
+
+/** 휴대폰 표시용 하이픈 (숫자만 쳐도 자동) */
+function formatKrMobileDisplay(raw: string): string {
+  const d = phoneDigits(raw);
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+}
 
 type Emp = {
   id: string;
@@ -17,10 +30,19 @@ type Emp = {
 export default function MeClient({ initial, forcePasswordChange = false }: { initial: Emp; forcePasswordChange?: boolean }) {
   const router = useRouter();
   const [form, setForm] = useState({
-    phone: initial.phone ?? "",
+    phone: formatKrMobileDisplay(initial.phone ?? ""),
     email: initial.email ?? "",
     alimtalkEnabled: !!initial.alimtalkEnabled,
   });
+
+  useEffect(() => {
+    setForm({
+      phone: formatKrMobileDisplay(initial.phone ?? ""),
+      email: initial.email ?? "",
+      alimtalkEnabled: !!initial.alimtalkEnabled,
+    });
+  }, [initial.phone, initial.email, initial.alimtalkEnabled]);
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [okMsg, setOkMsg] = useState("");
@@ -37,7 +59,7 @@ export default function MeClient({ initial, forcePasswordChange = false }: { ini
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        phone: form.phone,
+        phone: phoneDigits(form.phone),
         email: form.email,
         alimtalkEnabled: form.alimtalkEnabled,
       }),
@@ -112,11 +134,15 @@ export default function MeClient({ initial, forcePasswordChange = false }: { ini
         <div>
           <label className="label">연락처</label>
           <input
+            type="tel"
+            inputMode="numeric"
+            autoComplete="tel"
             className="input w-full"
             value={form.phone}
-            onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-            placeholder="010-0000-0000"
+            onChange={(e) => setForm((p) => ({ ...p, phone: formatKrMobileDisplay(e.target.value) }))}
+            placeholder="01012345678 (숫자만 입력)"
           />
+          <p className="text-xs text-gray-500 mt-1">하이픈 없이 숫자만 입력해도 자동으로 구분됩니다.</p>
         </div>
         <div className="sm:col-span-2">
           <div className="flex items-baseline gap-2 flex-wrap">
@@ -136,6 +162,11 @@ export default function MeClient({ initial, forcePasswordChange = false }: { ini
             로그인·비밀번호 찾기·초대 등 안내는 이 주소로만 발송되며, 이메일 미수신 설정은 없습니다.
           </p>
         </div>
+        <p className="sm:col-span-2 text-xs text-gray-500 leading-relaxed border-t border-gray-100 pt-3 mt-1">
+          휴대폰 번호와 이메일은 서버 DB에{" "}
+          <span className="font-medium text-gray-700">암호화(AES-256-GCM)되어 저장</span>되며, 화면에 보일 때만
+          복호화됩니다.
+        </p>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
