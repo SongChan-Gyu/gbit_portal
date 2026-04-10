@@ -8,20 +8,22 @@ const metadataBaseUrl =
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
-  title: "GBIT Portal",
+  title: "지비아이티 임직원 전용 사이트",
   description: "지비아이티 포털 — 휴가·결재·제주 숙소·근태를 한 곳에서 관리합니다.",
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
   openGraph: {
-    title: "GBIT Portal",
+    title: "지비아이티 임직원 전용 사이트",
     description: "지비아이티 포털 — 휴가·결재·제주 숙소·근태를 한 곳에서 관리합니다.",
     siteName: "GBIT Portal",
     locale: "ko_KR",
     type: "website",
+    images: [{ url: "/kakao-profile-gbit.png", width: 1200, height: 630, alt: "GBIT Portal" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "GBIT Portal",
+    title: "지비아이티 임직원 전용 사이트",
     description: "지비아이티 포털 — 휴가·결재·제주 숙소·근태",
+    images: ["/kakao-profile-gbit.png"],
   },
 };
 
