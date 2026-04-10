@@ -4,7 +4,7 @@ import "./globals.css";
 const metadataBaseUrl =
   typeof process.env.NEXTAUTH_URL === "string" && process.env.NEXTAUTH_URL.startsWith("http")
     ? process.env.NEXTAUTH_URL
-    : "http://localhost:3000";
+    : "https://gbitportal.co.kr";
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataBaseUrl),
