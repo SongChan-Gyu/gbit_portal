@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import type { ParsedEmployeeRow } from "@/lib/employeeExcel";
+import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -35,6 +36,8 @@ export async function POST(req: Request) {
 
     const teamId = row.team ? teamByName.get(row.team.trim()) ?? null : null;
 
+    const emailTrim = (row.email || "").trim();
+    const emailNorm = emailTrim || null;
     try {
       const emp = await prisma.employee.create({
         data: {
@@ -48,7 +51,8 @@ export async function POST(req: Request) {
           hireDate: new Date(row.hireDate),
           birthDate: row.birthDate ? new Date(row.birthDate) : null,
           phone: row.phone || "",
-          email: row.email || null,
+          email: emailNorm,
+          emailEnabled: emailEnabledSyncedToAddress(emailNorm),
         },
       });
       created.push(emp.id);

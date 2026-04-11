@@ -4,6 +4,7 @@ import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { getNextEmpNo } from "@/lib/empNo";
 import { writeAudit, getIp } from "@/lib/audit";
+import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -23,7 +24,6 @@ export async function POST(req: Request) {
     birthDate,
     phone,
     email,
-    emailEnabled,
     alimtalkEnabled,
   } = body;
   const missing: string[] = [];
@@ -41,6 +41,7 @@ export async function POST(req: Request) {
   const exists = await prisma.employee.findUnique({ where:{empNo} });
   if (exists) return NextResponse.json({ error:"이미 존재하는 사번입니다." }, { status:400 });
 
+  const emailNorm = String(email ?? "").trim() || null;
   const emp = await prisma.employee.create({
     data:{
       empNo, name, teamId:teamId||null, position, dutyDept:dutyDept||null, role:role||"STAFF",
@@ -48,8 +49,8 @@ export async function POST(req: Request) {
       hireDate:new Date(hireDateVal),
       birthDate:birthDate ? new Date(birthDate) : null,
       phone:phone||"",
-      email:email||null,
-      emailEnabled: !!emailEnabled,
+      email: emailNorm,
+      emailEnabled: emailEnabledSyncedToAddress(emailNorm),
       alimtalkEnabled: !!alimtalkEnabled,
     },
   });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 
 export async function GET() {
   const session = await auth();
@@ -52,15 +53,13 @@ export async function PATCH(req: Request) {
   }
 
   const nextEmail = email !== undefined ? email : existing.email;
-  // 본인 변경: 이메일 주소가 있으면 시스템·찾기·초대 등 필수 발송을 위해 수신 허용으로 고정(미수신 끄기 불가)
-  const emailEnabled = !!nextEmail;
 
   await prisma.employee.update({
     where: { id: u.employeeId },
     data: {
       ...(phone !== undefined ? { phone } : {}),
       ...(email !== undefined ? { email } : {}),
-      emailEnabled,
+      emailEnabled: emailEnabledSyncedToAddress(nextEmail),
       ...(alimtalkEnabled !== undefined ? { alimtalkEnabled } : {}),
     },
   });

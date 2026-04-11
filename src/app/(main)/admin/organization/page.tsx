@@ -60,7 +60,6 @@ export default async function OrganizationPage({
     birthDate: e.birthDate ? e.birthDate.toISOString() : null,
     phone: e.phone ?? "",
     email: e.email ?? null,
-    emailEnabled: (e as any).emailEnabled ?? false,
   }));
 
   return (

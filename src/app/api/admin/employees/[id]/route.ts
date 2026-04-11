@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit, getIp } from "@/lib/audit";
+import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id:string }> }) {
   const { id } = await params;
@@ -23,11 +24,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     phone,
     email,
     status,
-    emailEnabled,
     alimtalkEnabled,
   } = body;
 
-  const before = await prisma.employee.findUnique({ where: { id }, select: { name: true, status: true } });
+  const existing = await prisma.employee.findUnique({ where: { id } });
+  if (!existing) return NextResponse.json({ error: "사원을 찾을 수 없습니다." }, { status: 404 });
+
+  const nextEmail = email !== undefined ? (String(email ?? "").trim() || null) : existing.email;
+  const before = { name: existing.name, status: existing.status };
   await prisma.employee.update({
     where:{ id },
     data:{
@@ -36,9 +40,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
       hireDate:new Date(hireDate),
       birthDate:birthDate ? new Date(birthDate) : null,
       phone:phone||"",
-      email:email||null,
+      email: nextEmail,
       status,
-      ...(emailEnabled != null ? { emailEnabled: !!emailEnabled } : {}),
+      emailEnabled: emailEnabledSyncedToAddress(nextEmail),
       ...(alimtalkEnabled != null ? { alimtalkEnabled: !!alimtalkEnabled } : {}),
     },
   });

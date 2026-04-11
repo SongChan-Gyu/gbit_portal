@@ -57,7 +57,7 @@ export const DATA_EDITOR_FIELD_DESCRIPTIONS: Record<string, Record<string, strin
     birthDate: "생년월일",
     phone: "휴대폰번호 (AES-256 암호화 저장)",
     email: "이메일 주소 (AES-256 암호화 저장)",
-    emailEnabled: "이메일 알림 수신 여부",
+    emailEnabled: "이메일 주소 유무와 동기(시스템 메일 차단 아님). 사원 저장 API가 주소 기준으로 맞춤",
     alimtalkEnabled: "카카오 알림톡 수신 여부",
     status: "재직 상태 (ACTIVE=재직, INVITED=초대됨, INACTIVE=퇴직)",
     role: "시스템 권한 (STAFF=일반, PM=팀장급, ADMIN=관리자)",

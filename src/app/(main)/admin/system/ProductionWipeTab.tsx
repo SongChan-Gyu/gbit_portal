@@ -13,7 +13,7 @@ const COUNT_LABELS: { key: keyof ProductionWipeCounts; label: string }[] = [
   { key: "stampRequests", label: "스탬프 요청" },
   { key: "notifications", label: "알림" },
   { key: "auditLogs", label: "감사 로그(초기화 후 비어 있음)" },
-  { key: "teamsNeedNullLeader", label: "팀장 해제될 팀 수" },
+  { key: "teamsNeedNullLeader", label: "팀장 연결만 끊길 팀 수 (팀 유지)" },
   { key: "noticesReassignAuthor", label: "공지 작성자 이관 건수" },
 ];
 
@@ -98,6 +98,12 @@ export default function ProductionWipeTab() {
           지정한 로그인 계정(및 연결된 사원)만 남기고, 나머지 사원·휴가·제주·스탬프·알림·로그 등 운영 데이터를
           삭제합니다. 휴가 유형·팀·시스템 설정 등 마스터는 유지됩니다. 공지는 삭제하지 않으며 작성자만 유지
           사원으로 바뀝니다.
+        </p>
+        <p className="mt-2 text-xs text-rose-900/90">
+          <strong>「팀장 연결만 끊길 팀 수」</strong>는 팀 행을 지우는 게 아니라, 삭제될 사원이{" "}
+          <code className="text-[11px] bg-white/70 px-1 rounded">Team.leaderId</code>로 묶여 있으면 DB 제약을
+          피하려고 그 참조만 <code className="text-[11px] bg-white/70 px-1 rounded">null</code>로 비운다는 뜻입니다.
+          팀 이름·순서는 그대로이며, 초기화 후 <strong>조직 관리</strong>에서 팀장만 다시 지정하면 됩니다.
         </p>
       </div>
 

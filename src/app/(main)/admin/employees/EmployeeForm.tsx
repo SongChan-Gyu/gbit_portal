@@ -9,7 +9,6 @@ interface Employee {
   id:string; empNo:string; name:string; teamId:string|null; position:string;
   dutyDept:string|null; role:string; employeeType:string; hireDate:string; birthDate:string|null;
   phone:string; email:string|null; status:string;
-  emailEnabled: boolean;
   alimtalkEnabled: boolean;
 }
 
@@ -25,27 +24,70 @@ const DUTY_DEPT_OPTIONS = [
   ["NONE", "해당사항없음"],
 ];
 
-export default function EmployeeForm({ teams, employee }: { teams:Team[]; employee?:Employee }) {
+function stripEmployeeForForm(raw: Record<string, unknown>): Partial<Employee> {
+  const {
+    emailEnabled: _e,
+    user: _u,
+    team: _t,
+    id: rid,
+    empNo,
+    name,
+    teamId,
+    position,
+    dutyDept,
+    role,
+    employeeType,
+    hireDate,
+    birthDate,
+    phone,
+    email,
+    status,
+    alimtalkEnabled,
+  } = raw;
+  return {
+    id: rid as string,
+    empNo: empNo as string,
+    name: name as string,
+    teamId: (teamId as string | null) ?? null,
+    position: position as string,
+    dutyDept: (dutyDept as string | null) ?? null,
+    role: role as string,
+    employeeType: employeeType as string,
+    hireDate: hireDate instanceof Date ? hireDate.toISOString().slice(0, 10) : String(hireDate ?? "").slice(0, 10),
+    birthDate: birthDate
+      ? birthDate instanceof Date
+        ? birthDate.toISOString().slice(0, 10)
+        : String(birthDate).slice(0, 10)
+      : null,
+    phone: (phone as string) ?? "",
+    email: (email as string | null) ?? null,
+    status: status as string,
+    alimtalkEnabled: !!(alimtalkEnabled as boolean),
+  };
+}
+
+export default function EmployeeForm({ teams, employee }: { teams:Team[]; employee?:Record<string, unknown> }) {
   const router = useRouter();
   const today = todayKstYmd();
-  const [form, setForm] = useState<Partial<Employee>>(employee
-    ? {
-      ...employee,
-      hireDate: String(employee.hireDate).slice(0,10),
-      dutyDept: employee.dutyDept ?? "",
-      birthDate: employee.birthDate ? String(employee.birthDate).slice(0,10) : "",
+  const [form, setForm] = useState<Partial<Employee>>(() => {
+    if (employee) {
+      const s = stripEmployeeForForm(employee);
+      return {
+        ...s,
+        dutyDept: s.dutyDept ?? "",
+        birthDate: s.birthDate ?? "",
+      };
     }
-    : {
+    return {
       position: "사원",
       role:"STAFF",
       employeeType:"FULL",
       status:"PENDING",
       hireDate: today,
       dutyDept:"",
-      emailEnabled: false,
       alimtalkEnabled: false,
-    }
-  );
+    };
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -54,19 +96,17 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
   function set(k: keyof Employee, v: string) {
     setForm((p) => ({ ...p, [k]:v }));
   }
-  function setBool(k: "emailEnabled" | "alimtalkEnabled", v: boolean) {
-    setForm((p) => ({ ...p, [k]: v }));
+  function setAlimtalk(v: boolean) {
+    setForm((p) => ({ ...p, alimtalkEnabled: v }));
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError("");
-    const res = await fetch(isEdit ? `/api/admin/employees/${employee!.id}` : "/api/admin/employees", {
+    const res = await fetch(isEdit ? `/api/admin/employees/${(form as Employee).id}` : "/api/admin/employees", {
       method: isEdit ? "PATCH" : "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({
-        ...form,
-      }),
+      body: JSON.stringify(form),
     });
     const data = await res.json();
     setLoading(false);
@@ -156,24 +196,20 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
         <div>
           <label className="label">이메일</label>
           <input type="email" className="input" value={form.email??""} onChange={(e)=>set("email",e.target.value)} />
+          <p className="text-xs text-gray-500 mt-1 leading-snug">
+            주소가 있으면 <strong>초대·비밀번호 찾기·아이디 찾기</strong> 등 시스템 메일을 이 주소로 보냅니다. 별도
+            &quot;허용&quot; 스위치는 없으며, 저장 시 주소 유무에 맞춰 내부 플래그만 맞춰 둡니다.
+          </p>
         </div>
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
-        <p className="text-sm font-semibold text-gray-900">초기 알림 설정</p>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={!!form.emailEnabled}
-            onChange={(e) => setBool("emailEnabled", e.target.checked)}
-          />
-          <span className="text-sm text-gray-800">이메일 수신(초대·시스템 메일)</span>
-        </label>
+        <p className="text-sm font-semibold text-gray-900">알림톡</p>
         <label className="flex items-center gap-2">
           <input
             type="checkbox"
             checked={!!form.alimtalkEnabled}
-            onChange={(e) => setBool("alimtalkEnabled", e.target.checked)}
+            onChange={(e) => setAlimtalk(e.target.checked)}
           />
           <span className="text-sm text-gray-800">카카오 알림톡(휴가·초대 등)</span>
         </label>

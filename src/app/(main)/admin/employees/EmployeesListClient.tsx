@@ -22,7 +22,6 @@ type Emp = {
   birthDate: string | null;
   phone: string;
   email: string | null;
-  emailEnabled: boolean;
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -221,7 +220,13 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
                   <td className="px-4 py-3 text-gray-500 text-sm">{emp.username ?? "-"}</td>
                   <td className="px-4 py-3 text-sm text-gray-500">{formatYMD(emp.hireDate)}</td>
                   <td className="px-4 py-3 text-xs">
-                    <span className={emp.emailEnabled ? "text-green-700 font-medium" : "text-gray-400"}>{emp.emailEnabled ? "사용" : "미사용"}</span>
+                    {emp.email?.trim() ? (
+                      <span className="text-green-700 font-medium" title={emp.email}>
+                        등록됨
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">없음</span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2 flex-wrap">
@@ -264,8 +269,12 @@ export default function EmployeesListClient({ employees }: { employees: Emp[] })
                       const st = employeeStatusMeta(emp.status);
                       return <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.badge}`}>{st.label}</span>;
                     })()}
-                    <span className={emp.emailEnabled ? "text-xs text-green-700 font-medium" : "text-xs text-gray-400"}>
-                      이메일 {emp.emailEnabled ? "사용" : "미사용"}
+                    <span
+                      className={
+                        emp.email?.trim() ? "text-xs text-green-700 font-medium" : "text-xs text-gray-400"
+                      }
+                    >
+                      이메일 {emp.email?.trim() ? "등록" : "없음"}
                     </span>
                     <span className="text-xs text-gray-500">{ROLE_LABEL[emp.role] ?? emp.role}</span>
                     <span className="text-xs text-gray-500">{dutyDeptDisplay(emp.dutyDept)}</span>
