@@ -280,6 +280,9 @@ export const DATA_EDITOR_FIELD_DESCRIPTIONS: Record<string, Record<string, strin
 /** SystemConfig 키별 설명 (키 값에 대한 설명) */
 export const SYSTEM_CONFIG_KEY_DESCRIPTIONS: Record<string, string> = {
   menuPermissions: "역할별 메뉴 접근 권한 JSON. { STAFF: [메뉴ID...], PM: [...], ADMIN: [...] }",
+  /** 휴가 결재 시 PM 역할자 중 누구를 쓸지 고정할 때: Employee.id(cuid) 문자열 하나. 비우면 DB의 PM 역할 직원 중 findFirst */
+  leaveApprovalPMId:
+    "휴가 1단 결재에서 쓸 PM 지정: 값은 사원 Employee.id(cuid). 팀장 신청→이 사람이 결재, 팀원 신청 시 팀장 없으면 이 사람. 미설정 시 role=PM인 직원 중 임의 1명",
   jejuDepositAccount: "제주 숙소 예약금 입금 계좌 정보 JSON. { bankName, accountNumber, holderName }",
   jejuBlockedDates: "제주 숙소 예약 불가일 JSON. [\"YYYY-MM-DD\", ...]",
 };

@@ -35,7 +35,7 @@ export default async function LeaveManagementPage({
 
   // ── 탭별 데이터: fiscalYear=선택 FY 이거나, 선택 귀속 구간(KST 5/1~익년 4/30)과 validFrom~validUntil 이 겹치는 할당 → 2025·2026 탭 모두에서 유효기간이 걸치면 동시에 보임 ──
   const employees = await prisma.employee.findMany({
-    where: { status: "ACTIVE" },
+    where: { status: { in: [...ADMIN_LEAVE_EMPLOYEE_STATUSES] } },
     include: {
       team: true,
       leaveAllocations:
