@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import AuditLogClient from "@/app/(main)/admin/audit-log/AuditLogClient";
 import MenuPermEditor from "@/app/(main)/admin/menu-permissions/MenuPermEditor";
 import DataEditorTab from "@/app/(main)/admin/system/DataEditorTab";
+import ProductionWipeTab from "@/app/(main)/admin/system/ProductionWipeTab";
 import { ALL_MENUS, DEFAULT_PERMISSIONS } from "@/lib/menuConfig";
 
 export const metadata = { title: "시스템 설정 | GBIT Portal" };
@@ -21,7 +22,9 @@ export default async function SystemPage({
   const tab = tabRaw ?? "audit";
 
   // 메뉴 권한 / DB 데이터 탭은 ADMIN만 접근 가능
-  if ((tab === "permissions" || tab === "data") && user.role !== "ADMIN") redirect("/admin/system?tab=audit");
+  if ((tab === "permissions" || tab === "data" || tab === "wipe") && user.role !== "ADMIN") {
+    redirect("/admin/system?tab=audit");
+  }
 
   const perms = await (async () => {
     if (tab !== "permissions") return null;
@@ -34,9 +37,10 @@ export default async function SystemPage({
   })();
 
   const TABS = [
-    { id:"audit",       label:"감사 로그",    adminOnly: false },
-    { id:"permissions", label:"메뉴 권한",    adminOnly: true  },
-    { id:"data",        label:"DB 데이터",    adminOnly: true  },
+    { id: "audit", label: "감사 로그", adminOnly: false },
+    { id: "permissions", label: "메뉴 권한", adminOnly: true },
+    { id: "data", label: "DB 데이터", adminOnly: true },
+    { id: "wipe", label: "운영 초기화", adminOnly: true },
   ];
 
   return (
@@ -84,6 +88,16 @@ export default async function SystemPage({
       {tab === "data" && (
         <div>
           <DataEditorTab />
+        </div>
+      )}
+
+      {tab === "wipe" && (
+        <div>
+          <p className="text-sm text-gray-500 mb-4">
+            스크립트 <code className="text-xs bg-gray-100 px-1 rounded">scripts/production-wipe.ts</code> 와 동일한 범위로
+            데이터를 정리합니다. 반드시 미리보기 후 실행하세요.
+          </p>
+          <ProductionWipeTab />
         </div>
       )}
     </div>

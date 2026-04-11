@@ -140,7 +140,7 @@ npm run test:e2e       # E2E 테스트 (Playwright, 서버 실행 중 또는 CI)
 
 1. **운영 기초데이터 시드** (휴가유형·공휴일만 갱신)  
    `npm run db:seed` 또는 `npm run db:seed:base`
-2. **테스트 데이터 정리** (`scripts/production-wipe.ts`) — 아래 표 참고  
+2. **테스트 데이터 정리** — 아래 표 참고. **관리자 → 시스템 설정 → 운영 초기화** 탭에서 미리보기·실행 가능하거나, `scripts/production-wipe.ts` 로 동일 작업 가능  
 3. 이사님이 **사원 엑셀 일괄 등록** → **귀속연도 초기화** → **초대 이메일 일괄 발송**
 
 ### 9.1 `production-wipe` — 무엇이 지워지고 무엇이 남는지
