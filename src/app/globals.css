@@ -10,9 +10,17 @@
     /* 모바일 터치 시 노란 하이라이트 제거 후 커스텀 feedback */
     -webkit-tap-highlight-color: rgba(59, 130, 246, 0.15);
     overscroll-behavior-x: none;
+    max-width: 100vw;
   }
   * { @apply box-border; }
   body { @apply bg-slate-50 text-gray-900 text-[13px] leading-relaxed; }
+  /* 모바일: 본문·사이드가 가로로 '밀려' 보이는 뷰포트 가로 스크롤 방지 */
+  @media (max-width: 768px) {
+    html, body {
+      overflow-x: hidden;
+      max-width: 100vw;
+    }
+  }
   /* 데스크톱: 브라우저 기본(16px) 기준 — 예전처럼 더 크게 보이게 하려면 브라우저 확대(Ctrl +) 사용 */
   @media (min-width: 769px) {
     html { font-size: 100%; }

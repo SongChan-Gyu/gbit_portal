@@ -31,19 +31,20 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
     return () => mq.removeEventListener("change", sync);
   }, []);
 
-  // 모바일 드로어 열림 동안 배경 스크롤/드래그 잠금
+  // 모바일 드로어 열림: 본문(main)·body 스크롤 잠금 — 뒤 콘텐츠가 밀리거나 같이 스크롤되는 현상 완화
   useEffect(() => {
     if (!open) return;
     const prevBodyOverflow = document.body.style.overflow;
-    const prevBodyTouchAction = document.body.style.touchAction;
     const prevHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+    const main = document.querySelector("main");
+    const prevMainOverflow = main?.style.overflow ?? "";
     document.body.style.overflow = "hidden";
-    document.body.style.touchAction = "none";
     document.documentElement.style.overscrollBehavior = "none";
+    if (main) main.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prevBodyOverflow;
-      document.body.style.touchAction = prevBodyTouchAction;
       document.documentElement.style.overscrollBehavior = prevHtmlOverscroll;
+      if (main) main.style.overflow = prevMainOverflow;
     };
   }, [open]);
 
@@ -98,10 +99,19 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
       {portalReady &&
         open &&
         createPortal(
-          <div className="fixed inset-0 z-[100] md:hidden" role="dialog" aria-modal="true" aria-label="모바일 메뉴">
-            <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-            <div className="absolute left-0 top-0 h-full w-[min(18rem,85vw)] max-w-[85vw] bg-white shadow-2xl flex flex-col pointer-events-auto">
-              <div className="flex items-center justify-between px-4 h-12 border-b border-gray-200 shrink-0">
+          <div
+            className="fixed inset-0 z-[100] md:hidden max-w-[100vw] overflow-hidden overscroll-none"
+            role="dialog"
+            aria-modal="true"
+            aria-label="모바일 메뉴"
+          >
+            <div
+              className="absolute inset-0 bg-black/40 touch-none"
+              onClick={() => setOpen(false)}
+              aria-hidden
+            />
+            <div className="absolute left-0 top-0 h-full w-[min(18rem,85vw)] max-w-[85vw] bg-white shadow-2xl flex flex-col pointer-events-auto touch-pan-y overscroll-y-contain [overscroll-behavior-x:contain]">
+              <div className="flex items-center justify-between px-4 h-12 border-b border-gray-200 shrink-0 touch-none">
                 <span className="font-semibold text-gray-800 text-[13px]">메뉴</span>
                 <button
                   type="button"
@@ -112,7 +122,7 @@ export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[]
                   <X size={20} className="text-gray-600" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-y-contain [-webkit-overflow-scrolling:touch]">
                 <Sidebar allowedMenuKeys={allowedMenuKeys} onClose={() => setOpen(false)} />
               </div>
             </div>
