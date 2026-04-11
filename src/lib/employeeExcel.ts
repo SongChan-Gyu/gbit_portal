@@ -102,12 +102,29 @@ function excelDateToStr(n: number): string {
   return kstYmd(d);
 }
 
+/**
+ * 숫자 셀이 엑셀 날짜 시리얼인 경우에만 YYYY-MM-DD로 변환.
+ * 생년월일 등 3만 미만 시리얼도 포함하고, 연도만 넣은 값(예: 1995)은 엑셀 시리얼로 해석 시 1905년대가 되어 제외.
+ */
+function tryExcelSerialToYmd(val: number): string | null {
+  if (!Number.isFinite(val)) return null;
+  const whole = Math.round(val);
+  if (Math.abs(val - whole) > 1e-9) return null;
+  const d = new Date((whole - 25569) * 86400 * 1000);
+  if (Number.isNaN(d.getTime())) return null;
+  const ymd = kstYmd(d);
+  const y = parseInt(ymd.slice(0, 4), 10);
+  if (Number.isNaN(y) || y < 1940 || y > 2050) return null;
+  return ymd;
+}
+
 /** 셀 값을 문자열로 (날짜는 YYYY-MM-DD) */
 function cellStr(val: unknown): string {
   if (val == null) return "";
   if (typeof val === "string") return val.trim();
   if (typeof val === "number") {
-    if (val > 30000) return excelDateToStr(val);
+    const fromSerial = tryExcelSerialToYmd(val);
+    if (fromSerial) return fromSerial;
     return String(val);
   }
   if (val instanceof Date) return kstYmd(val);

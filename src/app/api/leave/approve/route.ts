@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { sendLeaveResultAlimtalk } from "@/lib/kakao";
 import { writeAudit } from "@/lib/audit";
-import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
+import { findHealingStampCard, releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 
 export async function POST(req: Request) {
@@ -102,6 +102,17 @@ export async function POST(req: Request) {
       }
     }
 
+    for (const item of request.items) {
+      if (item.leaveType.code !== "HEALING_DAY") continue;
+      const healCard = await findHealingStampCard(tx, request.employeeId);
+      if (!healCard) throw new Error("HEALING_SLOT_GONE");
+      const consumed = await tx.stampCard.updateMany({
+        where: { id: healCard.id, healingUsed: false },
+        data: { healingUsed: true, healingLeaveRequestId: request.id },
+      });
+      if (consumed.count === 0) throw new Error("HEALING_SLOT_GONE");
+    }
+
     await tx.leaveHistory.create({
       data:{ leaveRequestId:request.id, action:"APPROVED", actorId,
         snapshot:JSON.stringify({ step:approval.step }) },
@@ -117,6 +128,15 @@ export async function POST(req: Request) {
   return NextResponse.json({ ok:true });
   } catch (e) {
     console.error("[leave/approve POST]", e);
+    if (e instanceof Error && e.message === "HEALING_SLOT_GONE") {
+      return NextResponse.json(
+        {
+          error:
+            "힐링데이 승인 처리 중 스탬프 힐링 권한을 찾을 수 없습니다. 신청자의 스탬프 장 상태를 확인한 뒤 다시 시도해 주세요.",
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       { error: "결재 처리 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요." },
       { status: 500 }

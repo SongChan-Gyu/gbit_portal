@@ -116,13 +116,24 @@ export default function StampClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ date: hdDate }),
     });
-    const data = await res.json();
+    const data = (await res.json()) as {
+      ok?: boolean;
+      error?: string;
+      status?: "APPROVED" | "PENDING";
+      warning?: string;
+    };
     setHdLoading(false);
     if (!res.ok) {
       setHdMsg(data.error ?? "신청 실패");
       return;
     }
-    setHdMsg("✓ 힐링데이 이력이 등록되었습니다.");
+    if (data.status === "PENDING") {
+      setHdMsg(
+        `✓ 힐링데이가 접수되었습니다. 팀장(또는 PM) 결재 후 반영됩니다.${data.warning ? ` (${data.warning})` : ""}`,
+      );
+    } else {
+      setHdMsg("✓ 힐링데이 이력이 등록되었습니다.");
+    }
     router.refresh();
   }
 

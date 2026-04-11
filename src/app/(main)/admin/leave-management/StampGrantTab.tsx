@@ -13,11 +13,27 @@ export type StampGrantRow = {
   afternoonEligibleCards: number;
 };
 
+type StampCardApi = {
+  id: string;
+  displayIndex: number;
+  sortOrder: number;
+  filledCount: number;
+  stampCount: number;
+  healingUsed: boolean;
+  afternoonUsed: boolean;
+};
+
 export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [counts, setCounts] = useState<Record<string, string>>({});
+
+  const [healModalEmp, setHealModalEmp] = useState<{ id: string; label: string } | null>(null);
+  const [healCards, setHealCards] = useState<StampCardApi[]>([]);
+  const [healLoad, setHealLoad] = useState(false);
+  const [healErr, setHealErr] = useState<string | null>(null);
+  const [healMarkingId, setHealMarkingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -54,7 +70,6 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
           data = {};
         }
       }
-      /** 로그인 페이지 HTML 등 JSON이 아니면 ok 없음 → 실패 처리 */
       if (!res.ok || data.ok !== true) {
         const msg =
           typeof data.error === "string"
@@ -75,16 +90,72 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
     }
   }
 
+  function closeHealModal() {
+    setHealModalEmp(null);
+    setHealCards([]);
+    setHealErr(null);
+    setHealLoad(false);
+    setHealMarkingId(null);
+  }
+
+  async function openHealModal(empId: string, label: string) {
+    setHealModalEmp({ id: empId, label });
+    setHealErr(null);
+    setHealCards([]);
+    setHealLoad(true);
+    try {
+      const res = await fetch(`/api/admin/employee-stamp-cards?employeeId=${encodeURIComponent(empId)}`, {
+        credentials: "include",
+      });
+      const data = (await res.json().catch(() => ({}))) as { cards?: StampCardApi[]; error?: string };
+      if (!res.ok) {
+        setHealErr(typeof data.error === "string" ? data.error : "장 목록을 불러오지 못했습니다.");
+        return;
+      }
+      setHealCards(Array.isArray(data.cards) ? data.cards : []);
+    } catch {
+      setHealErr("네트워크 오류로 장 목록을 불러오지 못했습니다.");
+    } finally {
+      setHealLoad(false);
+    }
+  }
+
+  async function markHealingUsed(stampCardId: string) {
+    if (!confirm("이 장의 힐링 권한만 소모 처리합니다. (휴가 신청 없음) 계속할까요?")) return;
+    setHealMarkingId(stampCardId);
+    setHealErr(null);
+    try {
+      const res = await fetch("/api/admin/stamp-card/mark-healing-used", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stampCardId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || data.ok !== true) {
+        setHealErr(typeof data.error === "string" ? data.error : "처리에 실패했습니다.");
+        return;
+      }
+      closeHealModal();
+      await router.refresh();
+    } catch {
+      setHealErr("네트워크 오류로 처리하지 못했습니다.");
+    } finally {
+      setHealMarkingId(null);
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-amber-100 bg-amber-50/80 px-4 py-3 text-sm text-amber-950 space-y-1.5 max-w-3xl">
         <p>
-          스탬프는 <strong>휴가 할당(유효기간)</strong>과 별도로 관리됩니다. 팀장 승인 없이 칸을 채워야 할 때
-          관리자·PM이 여기서 수동으로 부여합니다.
+          스탬프는 <strong>휴가 할당(유효기간)</strong>과 별도로 관리됩니다. 이전 시스템에서 이관·초기 세팅 시 칸 수를
+          모를 때는 여기서 칸을 맞추고, <strong>실제로는 힐링을 썼는데 DB에만 안 남은 경우</strong>는 「힐링 소모」로
+          장별 힐링 권한만 맞출 수 있습니다.
         </p>
         <p className="text-xs text-amber-900/85">
-          부여한 칸은 기존과 동일하게 장(10칸)에 쌓이며, 5칸·10칸 단위로 힐링데이·오후 인정 권한이 열립니다.
-          한 번에 최대 30칸까지 부여할 수 있습니다.
+          부여한 칸은 장(10칸)에 쌓이며, 5칸·10칸 단위로 힐링데이·오후 인정 권한이 열립니다. 한 번에 최대 30칸까지
+          부여할 수 있습니다. 「힐링 가능 장」은 해당 장에서 힐링을 <strong>아직 쓰지 않은</strong> 경우만 셉니다.
         </p>
       </div>
 
@@ -116,6 +187,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                 오후인정 가능 장
               </th>
               <th className="whitespace-nowrap">수동 부여</th>
+              <th className="whitespace-nowrap text-xs">힐링 소모</th>
             </tr>
           </thead>
           <tbody>
@@ -151,11 +223,102 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                     </button>
                   </div>
                 </td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn-outline btn-sm px-2.5 text-xs whitespace-nowrap"
+                    disabled={loadingId === r.id}
+                    onClick={() => openHealModal(r.id, `${r.name} (${r.empNo})`)}
+                  >
+                    장 선택…
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {healModalEmp && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="heal-modal-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closeHealModal();
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 flex items-start justify-between gap-2">
+              <div>
+                <h2 id="heal-modal-title" className="text-sm font-semibold text-gray-900">
+                  힐링 권한 수동 소모
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">{healModalEmp.label}</p>
+              </div>
+              <button
+                type="button"
+                className="text-gray-400 hover:text-gray-700 text-lg leading-none px-1"
+                onClick={closeHealModal}
+                aria-label="닫기"
+              >
+                ×
+              </button>
+            </div>
+            <div className="px-4 py-3 overflow-y-auto text-sm space-y-2">
+              {healLoad && <p className="text-gray-500">불러오는 중…</p>}
+              {healErr && <p className="text-red-600 text-xs">{healErr}</p>}
+              {!healLoad && !healErr && healCards.length === 0 && (
+                <p className="text-gray-500 text-xs">등록된 스탬프 장이 없습니다.</p>
+              )}
+              {!healLoad &&
+                healCards.map((c) => {
+                  const canMark = c.stampCount >= 5 && !c.healingUsed;
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50/80 px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-800">
+                          장 {c.displayIndex}
+                          <span className="text-gray-500 font-normal text-xs ml-1.5">
+                            실제 칸 {c.stampCount} · 표시 {c.filledCount}/10
+                          </span>
+                        </p>
+                        <p className="text-[11px] text-gray-500">
+                          힐링 {c.healingUsed ? "소모됨" : "미소모"}
+                          {" · "}오후인정 {c.afternoonUsed ? "소모됨" : "미소모"}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-sm px-2.5 shrink-0 bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-40"
+                        disabled={!canMark || healMarkingId !== null}
+                        onClick={() => markHealingUsed(c.id)}
+                        title={
+                          c.stampCount < 5
+                            ? "5칸 이상인 장만 가능"
+                            : c.healingUsed
+                              ? "이미 소모됨"
+                              : "힐링만 소모"
+                        }
+                      >
+                        {healMarkingId === c.id ? "처리 중…" : "힐링만 소모"}
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+            <div className="px-4 py-2 border-t border-gray-100 bg-gray-50">
+              <p className="text-[11px] text-gray-500 leading-snug">
+                오후 인정은 여기서 다루지 않습니다. 휴가 신청·결재 흐름 또는 별도 정합이 필요하면 말씀 주세요.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
