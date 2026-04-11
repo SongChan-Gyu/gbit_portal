@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
+import { employeeEligibleForAdminLeaveSetup } from "@/lib/adminEmployeeScope";
 
 /**
  * PM·관리자: 실제로는 힐링을 썼는데 시스템에만 미반영된 경우 등,
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
       _count: { select: { stamps: true } },
     },
   });
-  if (!card || card.employee.status !== "ACTIVE") {
+  if (!card || !employeeEligibleForAdminLeaveSetup(card.employee.status)) {
     return NextResponse.json({ error: "스탬프 장을 찾을 수 없습니다." }, { status: 404 });
   }
 

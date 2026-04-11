@@ -16,6 +16,8 @@ import {
   formatOverviewCell,
 } from "@/lib/leaveOverviewTable";
 import StampGrantTab, { type StampGrantRow } from "@/app/(main)/admin/leave-management/StampGrantTab";
+import { ADMIN_LEAVE_EMPLOYEE_STATUSES } from "@/lib/adminEmployeeScope";
+import { employeeStatusMeta } from "@/lib/statusMeta";
 
 export const metadata = { title: "휴가 부여·현황 | GBIT Portal" };
 
@@ -120,11 +122,12 @@ export default async function LeaveManagementPage({
   let stampGrantRows: StampGrantRow[] = [];
   if (tab === "stamps") {
     const stampEmployees = await prisma.employee.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: { in: [...ADMIN_LEAVE_EMPLOYEE_STATUSES] } },
       select: {
         id: true,
         name: true,
         empNo: true,
+        status: true,
         team: { select: { name: true } },
         _count: { select: { stampCoupons: true } },
       },
@@ -161,6 +164,7 @@ export default async function LeaveManagementPage({
       name: e.name,
       empNo: e.empNo,
       teamName: e.team?.name ?? null,
+      status: e.status,
       stampCouponCount: e._count.stampCoupons,
       healingEligibleCards: healingMap.get(e.id) ?? 0,
       afternoonEligibleCards: afternoonMap.get(e.id) ?? 0,
@@ -219,7 +223,10 @@ export default async function LeaveManagementPage({
         <div>
           <div className="mb-4 space-y-3">
             <div className="text-sm text-gray-500 space-y-1 max-w-3xl">
-              <p>귀속연도별 직원별 현황입니다.</p>
+              <p>
+                귀속연도별 직원별 현황입니다. <strong className="text-gray-600">미초대·초대 발송</strong> 직원도
+                포함되며, 초대 전에 휴가 부여를 맞출 수 있습니다.
+              </p>
               <ul className="list-disc list-inside text-xs text-gray-500 space-y-0.5">
                 <li>
                   <strong className="text-gray-600">자산형</strong>: 위 귀속 구간에 <code className="text-[11px]">fiscalYear</code>가 맞거나, <strong>유효기간이 그 구간과 겹치는</strong> 할당을 합산합니다. 소스별 열은 <strong>AllocationSourceConfig</strong> 순서를 따릅니다.
@@ -274,7 +281,16 @@ export default async function LeaveManagementPage({
                   const byKey = overviewPerEmployeeMaps[idx];
                   return (
                     <tr key={emp.id}>
-                      <td className="font-medium whitespace-nowrap">{emp.name}</td>
+                      <td className="font-medium whitespace-nowrap">
+                        {emp.name}
+                        {emp.status !== "ACTIVE" ? (
+                          <span
+                            className={`ml-1.5 align-middle text-[10px] px-1.5 py-0.5 rounded ${employeeStatusMeta(emp.status).badge}`}
+                          >
+                            {employeeStatusMeta(emp.status).label}
+                          </span>
+                        ) : null}
+                      </td>
                       <td className="whitespace-nowrap">{emp.team?.name ?? "-"}</td>
                       <td className="font-semibold text-slate-700">{formatLeaveDayDisplay(total)}</td>
                       <td className="text-slate-600">{formatLeaveDayDisplay(used)}</td>
@@ -327,7 +343,11 @@ export default async function LeaveManagementPage({
         <div>
           <div className="mb-4 space-y-3">
             <p className="text-sm text-gray-500 max-w-3xl">
-              귀속연도형 휴가는 초기화로 자동 생성·<strong className="text-gray-600">부여일·입사일형은 해당 구간에 없을 때만</strong> 보강 생성합니다. <strong className="text-gray-600">근속 마일스톤은 초기화가 아니라 근속 스케줄러에서만</strong> 부여합니다. 목록은 구간과 유효기간이 겹치는 할당을 모두 표시합니다. 이월은 귀속연도형만 수동 가능합니다.
+              <strong className="text-gray-600">미초대·초대 발송</strong> 직원도 목록에 나오며 할당·일괄 초기화 대상에
+              포함됩니다. 귀속연도형 휴가는 초기화로 자동 생성·
+              <strong className="text-gray-600">부여일·입사일형은 해당 구간에 없을 때만</strong> 보강 생성합니다.{" "}
+              <strong className="text-gray-600">근속 마일스톤은 초기화가 아니라 근속 스케줄러에서만</strong> 부여합니다.
+              목록은 구간과 유효기간이 겹치는 할당을 모두 표시합니다. 이월은 귀속연도형만 수동 가능합니다.
             </p>
             <div className="flex flex-wrap gap-1.5">
               {[fy - 1, fy, fy + 1].map((y) => (

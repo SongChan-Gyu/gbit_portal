@@ -19,6 +19,7 @@ import {
   loadTenureMilestoneConfigs,
 } from "@/lib/tenureMilestoneFromDb";
 import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
+import { ADMIN_LEAVE_EMPLOYEE_STATUSES } from "@/lib/adminEmployeeScope";
 
 const MONTHLY_POOL_PREVIEW_KEY = "MONTHLY_ACCRUAL_POOL";
 /** 미리보기 표: 생일·근속 주년은 열 폭증 방지를 위해 한 열에 합쳐 표시 */
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
   const { start: fyStart, end: fyEnd } = fiscalPeriod(fy);
   const employees = await prisma.employee.findMany({
     where: {
-      status: { in: ["ACTIVE", "INVITED"] },
+      status: { in: [...ADMIN_LEAVE_EMPLOYEE_STATUSES] },
       employeeType: { not: "EXTERNAL" },
     },
     include: { team: true },

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
+import { ADMIN_LEAVE_EMPLOYEE_STATUSES } from "@/lib/adminEmployeeScope";
 
 /** PM·관리자: 사원별 스탬프 장 목록(힐링 수동 소모 UI용) */
 export async function GET(req: Request) {
@@ -16,11 +17,11 @@ export async function GET(req: Request) {
   }
 
   const emp = await prisma.employee.findFirst({
-    where: { id: employeeId, status: "ACTIVE" },
+    where: { id: employeeId, status: { in: [...ADMIN_LEAVE_EMPLOYEE_STATUSES] } },
     select: { id: true, name: true, empNo: true },
   });
   if (!emp) {
-    return NextResponse.json({ error: "활성 직원을 찾을 수 없습니다." }, { status: 404 });
+    return NextResponse.json({ error: "대상 직원을 찾을 수 없습니다. (퇴직 등 제외)" }, { status: 404 });
   }
 
   const cards = await prisma.stampCard.findMany({

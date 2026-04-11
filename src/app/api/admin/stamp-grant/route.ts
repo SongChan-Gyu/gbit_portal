@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { appendStampCouponToCard } from "@/lib/stampCard";
+import { ADMIN_LEAVE_EMPLOYEE_STATUSES } from "@/lib/adminEmployeeScope";
 import { kstMidnightFromYmd, todayStr } from "@/lib/workdays";
 
 const MAX_GRANT = 30;
@@ -46,11 +47,11 @@ export async function POST(req: Request) {
   }
 
   const emp = await prisma.employee.findFirst({
-    where: { id: employeeId, status: "ACTIVE" },
+    where: { id: employeeId, status: { in: [...ADMIN_LEAVE_EMPLOYEE_STATUSES] } },
     select: { id: true, name: true },
   });
   if (!emp) {
-    return NextResponse.json({ error: "활성 직원을 찾을 수 없습니다." }, { status: 404 });
+    return NextResponse.json({ error: "대상 직원을 찾을 수 없습니다. (퇴직 등 제외)" }, { status: 404 });
   }
 
   /** 스탬프 적립과 감사 로그를 한 트랜잭션으로 — 로그 실패 시 부여만 되고 클라이언트는 실패로 보이는 불일치 방지 */

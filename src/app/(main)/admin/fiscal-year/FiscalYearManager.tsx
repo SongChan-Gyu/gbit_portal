@@ -11,12 +11,22 @@ import { fiscalPeriod } from "@/lib/leaveCalc";
 import { todayStr } from "@/lib/workdays";
 import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
 import { buildHolidayDisplaySet, isRedCalendarDay, CALENDAR_HOLIDAY_COLOR } from "@/lib/calendarHolidayDisplay";
+import { employeeStatusMeta } from "@/lib/statusMeta";
 
 interface Alloc {
   id:string; sourceCode:string; label:string; totalDays:number; usedDays:number;
   validFrom:string; validUntil:string; note:string|null; isActive?:boolean; fiscalYear?:number|null;
 }
-interface Emp { id:string; name:string; empNo:string; position:string; team:{ name:string }|null; leaveAllocations:Alloc[]; }
+interface Emp {
+  id: string;
+  name: string;
+  empNo: string;
+  position: string;
+  team: { name: string } | null;
+  leaveAllocations: Alloc[];
+  /** PENDING/INVITED/ACTIVE — 휴가 관리 목록에 미초대·초대 발송 포함 시 전달 */
+  status?: string;
+}
 interface SourceOption {
   value: string;
   label: string;
@@ -326,7 +336,9 @@ export default function FiscalYearManager({
     <div className="space-y-4">
       {/* 상단 정보 + 미리보기 / 저장 버튼 */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
-        <span>귀속연도 <strong>{fiscalYear}년도</strong> ({fyD.from} ~ {fyD.until}) — 재직자 {employees.length}명</span>
+        <span title="미초대·초대 발송 직원 포함, 퇴직 제외">
+          귀속연도 <strong>{fiscalYear}년도</strong> ({fyD.from} ~ {fyD.until}) — 대상 직원 {employees.length}명
+        </span>
         <div className="flex items-center gap-2">
           <button onClick={loadInitPreview} disabled={loadingPreview}
             className="flex items-center gap-1.5 bg-white border border-blue-300 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-blue-50 disabled:opacity-60 transition">
@@ -458,7 +470,16 @@ export default function FiscalYearManager({
           <div key={emp.id} className="card">
             <div className="flex items-center justify-between mb-3">
               <div>
-                <span className="font-semibold text-gray-800">{emp.name}</span>
+                <span className="font-semibold text-gray-800">
+                  {emp.name}
+                  {emp.status && emp.status !== "ACTIVE" ? (
+                    <span
+                      className={`ml-1.5 align-middle text-[10px] px-1.5 py-0.5 rounded ${employeeStatusMeta(emp.status).badge}`}
+                    >
+                      {employeeStatusMeta(emp.status).label}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="ml-2 text-xs text-gray-500">{emp.team?.name} · {emp.position}</span>
               </div>
               <div className="flex items-center gap-3">

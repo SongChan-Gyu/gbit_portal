@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { employeeStatusMeta } from "@/lib/statusMeta";
 
 export type StampGrantRow = {
   id: string;
   name: string;
   empNo: string;
   teamName: string | null;
+  status?: string;
   stampCouponCount: number;
   healingEligibleCards: number;
   afternoonEligibleCards: number;
@@ -220,6 +222,13 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
               <tr key={r.id}>
                 <td className="font-medium whitespace-nowrap">
                   {r.name}
+                  {r.status && r.status !== "ACTIVE" ? (
+                    <span
+                      className={`ml-1 align-middle text-[10px] px-1.5 py-0.5 rounded ${employeeStatusMeta(r.status).badge}`}
+                    >
+                      {employeeStatusMeta(r.status).label}
+                    </span>
+                  ) : null}
                   <span className="text-gray-400 font-normal text-xs ml-1.5">{r.empNo}</span>
                 </td>
                 <td className="whitespace-nowrap text-gray-600">{r.teamName ?? "—"}</td>
