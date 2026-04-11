@@ -33,7 +33,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
   const [healCards, setHealCards] = useState<StampCardApi[]>([]);
   const [healLoad, setHealLoad] = useState(false);
   const [healErr, setHealErr] = useState<string | null>(null);
-  const [healMarkingId, setHealMarkingId] = useState<string | null>(null);
+  const [marking, setMarking] = useState<{ cardId: string; kind: "heal" | "afternoon" } | null>(null);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -95,7 +95,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
     setHealCards([]);
     setHealErr(null);
     setHealLoad(false);
-    setHealMarkingId(null);
+    setMarking(null);
   }
 
   async function openHealModal(empId: string, label: string) {
@@ -122,7 +122,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
 
   async function markHealingUsed(stampCardId: string) {
     if (!confirm("이 장의 힐링 권한만 소모 처리합니다. (휴가 신청 없음) 계속할까요?")) return;
-    setHealMarkingId(stampCardId);
+    setMarking({ cardId: stampCardId, kind: "heal" });
     setHealErr(null);
     try {
       const res = await fetch("/api/admin/stamp-card/mark-healing-used", {
@@ -141,7 +141,32 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
     } catch {
       setHealErr("네트워크 오류로 처리하지 못했습니다.");
     } finally {
-      setHealMarkingId(null);
+      setMarking(null);
+    }
+  }
+
+  async function markAfternoonUsed(stampCardId: string) {
+    if (!confirm("이 장의 오후 인정(스탬프) 권한만 소모 처리합니다. (휴가 신청 없음) 계속할까요?")) return;
+    setMarking({ cardId: stampCardId, kind: "afternoon" });
+    setHealErr(null);
+    try {
+      const res = await fetch("/api/admin/stamp-card/mark-afternoon-used", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stampCardId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || data.ok !== true) {
+        setHealErr(typeof data.error === "string" ? data.error : "처리에 실패했습니다.");
+        return;
+      }
+      closeHealModal();
+      await router.refresh();
+    } catch {
+      setHealErr("네트워크 오류로 처리하지 못했습니다.");
+    } finally {
+      setMarking(null);
     }
   }
 
@@ -150,8 +175,8 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
       <div className="rounded-lg border border-amber-100 bg-amber-50/80 px-4 py-3 text-sm text-amber-950 space-y-1.5 max-w-3xl">
         <p>
           스탬프는 <strong>휴가 할당(유효기간)</strong>과 별도로 관리됩니다. 이전 시스템에서 이관·초기 세팅 시 칸 수를
-          모를 때는 여기서 칸을 맞추고, <strong>실제로는 힐링을 썼는데 DB에만 안 남은 경우</strong>는 「힐링 소모」로
-          장별 힐링 권한만 맞출 수 있습니다.
+          모를 때는 여기서 칸을 맞추고, <strong>실제로는 힐링·오후 인정을 썼는데 DB에만 안 남은 경우</strong>는 「힐링·오후
+          소모」에서 장별로 힐링만 또는 오후 인정만 소모 처리할 수 있습니다.
         </p>
         <p className="text-xs text-amber-900/85">
           부여한 칸은 장(10칸)에 쌓이며, 5칸·10칸 단위로 힐링데이·오후 인정 권한이 열립니다. 한 번에 최대 30칸까지
@@ -187,7 +212,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                 오후인정 가능 장
               </th>
               <th className="whitespace-nowrap">수동 부여</th>
-              <th className="whitespace-nowrap text-xs">힐링 소모</th>
+              <th className="whitespace-nowrap text-xs">힐링·오후 소모</th>
             </tr>
           </thead>
           <tbody>
@@ -244,7 +269,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           role="dialog"
           aria-modal="true"
-          aria-labelledby="heal-modal-title"
+          aria-labelledby="stamp-consume-modal-title"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) closeHealModal();
           }}
@@ -252,8 +277,8 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[85vh] overflow-hidden flex flex-col">
             <div className="px-4 py-3 border-b border-gray-200 flex items-start justify-between gap-2">
               <div>
-                <h2 id="heal-modal-title" className="text-sm font-semibold text-gray-900">
-                  힐링 권한 수동 소모
+                <h2 id="stamp-consume-modal-title" className="text-sm font-semibold text-gray-900">
+                  힐링·오후 인정 권한 수동 소모
                 </h2>
                 <p className="text-xs text-gray-500 mt-0.5">{healModalEmp.label}</p>
               </div>
@@ -274,7 +299,11 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
               )}
               {!healLoad &&
                 healCards.map((c) => {
-                  const canMark = c.stampCount >= 5 && !c.healingUsed;
+                  const canMarkHeal = c.stampCount >= 5 && !c.healingUsed;
+                  const canMarkAfternoon = c.stampCount >= 10 && !c.afternoonUsed;
+                  const busy = marking !== null;
+                  const healBusy = marking?.cardId === c.id && marking?.kind === "heal";
+                  const afternoonBusy = marking?.cardId === c.id && marking?.kind === "afternoon";
                   return (
                     <div
                       key={c.id}
@@ -292,28 +321,45 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                           {" · "}오후인정 {c.afternoonUsed ? "소모됨" : "미소모"}
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        className="btn-sm px-2.5 shrink-0 bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-40"
-                        disabled={!canMark || healMarkingId !== null}
-                        onClick={() => markHealingUsed(c.id)}
-                        title={
-                          c.stampCount < 5
-                            ? "5칸 이상인 장만 가능"
-                            : c.healingUsed
-                              ? "이미 소모됨"
-                              : "힐링만 소모"
-                        }
-                      >
-                        {healMarkingId === c.id ? "처리 중…" : "힐링만 소모"}
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          className="btn-sm px-2.5 bg-amber-700 text-white hover:bg-amber-800 disabled:opacity-40"
+                          disabled={!canMarkHeal || busy}
+                          onClick={() => markHealingUsed(c.id)}
+                          title={
+                            c.stampCount < 5
+                              ? "5칸 이상인 장만 가능"
+                              : c.healingUsed
+                                ? "이미 소모됨"
+                                : "힐링만 소모"
+                          }
+                        >
+                          {healBusy ? "처리 중…" : "힐링만 소모"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-sm px-2.5 bg-slate-700 text-white hover:bg-slate-800 disabled:opacity-40"
+                          disabled={!canMarkAfternoon || busy}
+                          onClick={() => markAfternoonUsed(c.id)}
+                          title={
+                            c.stampCount < 10
+                              ? "10칸 완성 장만 가능"
+                              : c.afternoonUsed
+                                ? "이미 소모됨"
+                                : "오후 인정만 소모"
+                          }
+                        >
+                          {afternoonBusy ? "처리 중…" : "오후인정만 소모"}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
             </div>
             <div className="px-4 py-2 border-t border-gray-100 bg-gray-50">
               <p className="text-[11px] text-gray-500 leading-snug">
-                오후 인정은 여기서 다루지 않습니다. 휴가 신청·결재 흐름 또는 별도 정합이 필요하면 말씀 주세요.
+                휴가 신청·결재로 연결된 소모는 별도 흐름입니다. 여기서는 DB만 맞출 때 쓰는 수동 소모입니다.
               </p>
             </div>
           </div>
