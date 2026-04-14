@@ -19,12 +19,12 @@ type Props = {
  */
 export function StampSlotGrid({ filledCount, stamps, size = "md", className = "" }: Props) {
   const n = Math.min(8, Math.max(0, filledCount));
-  const box = size === "sm" ? "w-6 h-6 min-w-[1.5rem]" : "w-8 h-8 min-w-[2rem]";
-  const iconSize = size === "sm" ? 12 : 15;
+  const box = size === "sm" ? "w-5 h-5 min-w-[1.25rem]" : "w-7 h-7 min-w-[1.75rem]";
+  const iconSize = size === "sm" ? 11 : 14;
 
   return (
     <div
-      className={`grid grid-cols-4 gap-1.5 ${className}`}
+      className={`grid grid-cols-4 gap-y-1.5 gap-x-0.5 ${className}`}
       role="list"
       aria-label={`스탬프 ${n}칸`}
     >
