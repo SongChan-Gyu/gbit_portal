@@ -759,7 +759,7 @@ export default function LeaveApplyForm({
         const isAnnualDeduct = lt?.deductFromBalance ?? false;
 
         return (
-          <div key={idx} className="panel overflow-hidden">
+          <div key={idx} className="panel overflow-visible">
             {/* 항목 헤더 */}
             <div className={`border-l-4 ${grp ? grp.borderClass : "border-gray-200"}`}>
               <div className="panel-header bg-gray-50/80 border-b border-gray-100">

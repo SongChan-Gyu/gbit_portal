@@ -148,7 +148,7 @@ export default function StampClient({
         </div>
       </div>
 
-      <div className="panel">
+      <div className="panel overflow-visible">
         <div className="panel-header py-2 px-4">
           <span className="panel-title">스탬프 현황</span>
           <span className="text-sm font-bold text-amber-600">
@@ -278,39 +278,42 @@ export default function StampClient({
         </div>
       </div>
 
-      {healingAvail > 0 && (
-        <div className="panel">
-          <div className="panel-header py-2 px-4">
-            <span className="panel-title">힐링데이 신청</span>
-            <span className="badge badge-default">힐링 1회 소진 · 스탬프 칸 유지</span>
-          </div>
-          <div className="panel-body py-3 px-4 space-y-3">
-            <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-              <AlertCircle size={13} className="text-blue-500 shrink-0" />
-              힐링데이는 10:20 출근 또는 16:00 퇴근(1시간 40분)으로 처리되며 연차에 포함되지 않습니다.
-            </div>
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
-                <label className="label">적용 날짜</label>
-                <DatePickerButton value={hdDate} onChange={setHdDate} />
-              </div>
-              <button onClick={applyHealingDay} disabled={hdLoading} className="btn-primary whitespace-nowrap">
-                {hdLoading ? (
-                  <>
-                    <span className="spinner" />
-                    <span>처리중</span>
-                  </>
-                ) : (
-                  "힐링데이 등록"
-                )}
-              </button>
-            </div>
-            {hdMsg && (
-              <p className={`text-xs ${hdMsg.startsWith("✓") ? "text-green-600" : "text-red-500"}`}>{hdMsg}</p>
-            )}
-          </div>
+      <div className="panel overflow-visible">
+        <div className="panel-header py-2 px-4">
+          <span className="panel-title">힐링데이 신청</span>
+          <span className="badge badge-default">힐링 1회 소진 · 스탬프 칸 유지</span>
         </div>
-      )}
+        <div className="panel-body py-3 px-4 space-y-3">
+          <div className="flex items-center gap-2 text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+            <AlertCircle size={13} className="text-blue-500 shrink-0" />
+            힐링데이는 10:20 출근 또는 16:00 퇴근(1시간 40분)으로 처리되며 연차에 포함되지 않습니다.
+          </div>
+          {healingAvail <= 0 && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              현재 사용 가능한 힐링 권한이 없습니다. 날짜는 미리 선택할 수 있으며, 권한 확보 후 등록 가능합니다.
+            </p>
+          )}
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="label">적용 날짜</label>
+              <DatePickerButton value={hdDate} onChange={setHdDate} />
+            </div>
+            <button onClick={applyHealingDay} disabled={hdLoading} className="btn-primary whitespace-nowrap">
+              {hdLoading ? (
+                <>
+                  <span className="spinner" />
+                  <span>처리중</span>
+                </>
+              ) : (
+                "힐링데이 등록"
+              )}
+            </button>
+          </div>
+          {hdMsg && (
+            <p className={`text-xs ${hdMsg.startsWith("✓") ? "text-green-600" : "text-red-500"}`}>{hdMsg}</p>
+          )}
+        </div>
+      </div>
 
       {healingLogs.length > 0 && (
         <div className="panel">

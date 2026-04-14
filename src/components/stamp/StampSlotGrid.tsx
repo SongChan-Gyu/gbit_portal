@@ -24,7 +24,7 @@ export function StampSlotGrid({ filledCount, stamps, size = "md", className = ""
 
   return (
     <div
-      className={`flex flex-wrap gap-1.5 ${className}`}
+      className={`grid grid-cols-4 gap-1.5 ${className}`}
       role="list"
       aria-label={`스탬프 ${n}칸`}
     >
