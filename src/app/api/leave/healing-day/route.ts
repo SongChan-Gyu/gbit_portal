@@ -197,7 +197,7 @@ export async function POST(req: Request) {
   } catch (e) {
     if (e instanceof Error && e.message === "NO_HEALING_SLOT") {
       return NextResponse.json(
-        { error: "사용 가능한 힐링데이 권한이 없습니다. (같은 장에 스탬프 5칸 이상·힐링 미사용)" },
+        { error: "사용 가능한 힐링데이 권한이 없습니다. (같은 장에 스탬프 4칸 이상·힐링 미사용)" },
         { status: 400 },
       );
     }

@@ -655,7 +655,7 @@ export default function LeaveApplyForm({
         return;
       }
       if (lt?.code === "PM_RECOG_STAMP" && afternoonStampSlots < 1) {
-        setError(`${lt.name}: 10칸 완성·오후 미사용인 스탬프 장이 없습니다.`);
+        setError(`${lt.name}: 8칸 완성·오후 미사용인 스탬프 장이 없습니다.`);
         return;
       }
       if (lt?.requiresStamp && lt.stampCount && lt.code !== "PM_RECOG_STAMP") {
@@ -967,7 +967,7 @@ export default function LeaveApplyForm({
                   <section className="rounded-lg border border-amber-200 bg-amber-50 p-3">
                     <p className="text-sm font-semibold text-amber-800 mb-1">힐링데이 — 스탬프 쿠폰 메뉴에서 신청</p>
                     <p className="text-xs text-amber-700 mb-3 leading-relaxed">
-                      스탬프 5개 소진 시 10:20 출근 또는 16:00 퇴근(1시간 40분 단축)으로 처리됩니다.
+                      스탬프 4개 소진 시 10:20 출근 또는 16:00 퇴근(1시간 40분 단축)으로 처리됩니다.
                       결재 없이 자동 등록되며, 연차 일수에 포함되지 않습니다.
                     </p>
                     <a href="/stamp" target="_blank"
@@ -1122,7 +1122,7 @@ export default function LeaveApplyForm({
                         {afternoonStampSlots >= 1 ? (
                           <span className="ml-1">✓</span>
                         ) : (
-                          <span className="ml-1">(10칸 완성 장 필요)</span>
+                          <span className="ml-1">(8칸 완성 장 필요)</span>
                         )}
                       </span>
                     </div>

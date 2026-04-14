@@ -550,8 +550,8 @@ async function seedLeaveTypes() {
     ["RECOGNITION",    "인정휴가",          1,   false, 2, null, null, false, null, false,false,false,"귀속연도",    null,  "#64748b", 10],
     ["PM_HALF_MONTH",  "하프데이",          0.5, false, 1, 1,    null, false, null, true, false,true, "귀속연도",    null,  "#0ea5e9", 13],
     ["SICK",           "병가",              1,   false, 2, null, null, false, null, false,false,false,"귀속연도",    null,  "#ef4444", 14],
-    ["HEALING_DAY",    "힐링데이",          0,   false, 1, null, null, true,  5,    false,false,false,"부여일기준",  null,  "#f59e0b", 15],
-    ["PM_RECOG_STAMP", "오후인정(스탬프)",  0.5, false, 1, null, null, true,  10,   true, false,true, "부여일기준",  null,  "#a855f7", 16],
+    ["HEALING_DAY",    "힐링데이",          0,   false, 1, null, null, true,  4,    false,false,false,"부여일기준",  null,  "#f59e0b", 15],
+    ["PM_RECOG_STAMP", "오후인정(스탬프)",  0.5, false, 1, null, null, true,  8,    true, false,true, "부여일기준",  null,  "#a855f7", 16],
     ["TENURE_1Y",      "1년근속휴가",       3,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 17],
     ["TENURE_5Y",      "5년근속휴가",       5,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 18],
     ["TENURE_10Y",     "10년근속휴가",      10,  false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 19],
@@ -588,7 +588,7 @@ async function seedLeaveTypes() {
     if (code === "PM_HALF_MONTH") return "수요일 오후";
     if (code === "BIRTHDAY_HALF") return "생일이 있는 달에 자동 부여 0.5일(부여 후 3개월 유효)";
     if (code === "AWARD") return "별도 부여";
-    if (code === "PM_RECOG_STAMP") return "10칸 완성 장당 1회";
+    if (code === "PM_RECOG_STAMP") return "8칸 완성 장당 1회";
     if (code === "TENURE_1Y") return "입사 1주년 부여";
     if (code === "TENURE_5Y") return "입사 5주년 부여";
     if (code === "TENURE_10Y") return "입사 10주년 부여";

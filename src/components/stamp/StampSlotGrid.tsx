@@ -6,7 +6,7 @@ import { formatYMD } from "@/lib/dateUtils";
 export type StampSlotStamp = { stampDate: string };
 
 type Props = {
-  /** 현재 장 기준으로 채워진 칸 수 (0~10). 누적 쿠폰 수가 아니라 한 장의 진행도일 때 사용. */
+  /** 현재 장 기준으로 채워진 칸 수 (0~8). 누적 쿠폰 수가 아니라 한 장의 진행도일 때 사용. */
   filledCount: number;
   /** 채워진 칸에 마우스 올릴 때 날짜 툴팁 (길이는 filledCount 이하 권장) */
   stamps?: StampSlotStamp[];
@@ -15,10 +15,10 @@ type Props = {
 };
 
 /**
- * 스탬프 10칸 그리드. 별(★) 대신 스탬프 아이콘으로 표시.
+ * 스탬프 8칸 그리드. 별(★) 대신 스탬프 아이콘으로 표시.
  */
 export function StampSlotGrid({ filledCount, stamps, size = "md", className = "" }: Props) {
-  const n = Math.min(10, Math.max(0, filledCount));
+  const n = Math.min(8, Math.max(0, filledCount));
   const box = size === "sm" ? "w-6 h-6 min-w-[1.5rem]" : "w-8 h-8 min-w-[2rem]";
   const iconSize = size === "sm" ? 12 : 15;
 
@@ -28,7 +28,7 @@ export function StampSlotGrid({ filledCount, stamps, size = "md", className = ""
       role="list"
       aria-label={`스탬프 ${n}칸`}
     >
-      {Array.from({ length: 10 }).map((_, i) => {
+      {Array.from({ length: 8 }).map((_, i) => {
         const filled = i < n;
         const dateStr = filled && stamps?.[i]?.stampDate ? formatYMD(stamps[i]!.stampDate) : undefined;
         return (

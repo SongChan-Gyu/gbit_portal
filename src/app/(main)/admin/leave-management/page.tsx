@@ -142,7 +142,7 @@ export default async function LeaveManagementPage({
               by: ["employeeId"],
               where: {
                 employeeId: { in: empIds },
-                filledCount: { gte: 5 },
+                filledCount: { gte: 4 },
                 healingUsed: false,
               },
               _count: { _all: true },
@@ -151,7 +151,7 @@ export default async function LeaveManagementPage({
               by: ["employeeId"],
               where: {
                 employeeId: { in: empIds },
-                filledCount: { gte: 10 },
+                filledCount: { gte: 8 },
                 afternoonUsed: false,
               },
               _count: { _all: true },

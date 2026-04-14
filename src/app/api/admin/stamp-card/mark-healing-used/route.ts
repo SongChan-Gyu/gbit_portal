@@ -38,9 +38,9 @@ export async function POST(req: Request) {
   }
 
   const stampsOnCard = card._count.stamps;
-  if (stampsOnCard < 5) {
+  if (stampsOnCard < 4) {
     return NextResponse.json(
-      { error: "힐링은 스탬프 5칸 이상인 장에서만 소모할 수 있습니다. 칸 수를 확인해 주세요." },
+      { error: "힐링은 스탬프 4칸 이상인 장에서만 소모할 수 있습니다. 칸 수를 확인해 주세요." },
       { status: 400 },
     );
   }

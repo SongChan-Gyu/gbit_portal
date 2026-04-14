@@ -38,9 +38,9 @@ export async function POST(req: Request) {
   }
 
   const stampsOnCard = card._count.stamps;
-  if (stampsOnCard < 10) {
+  if (stampsOnCard < 8) {
     return NextResponse.json(
-      { error: "오후 인정(스탬프)은 10칸 완성 장에서만 소모할 수 있습니다. 칸 수를 확인해 주세요." },
+      { error: "오후 인정(스탬프)은 8칸 완성 장에서만 소모할 수 있습니다. 칸 수를 확인해 주세요." },
       { status: 400 },
     );
   }

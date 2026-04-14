@@ -179,7 +179,7 @@ export async function POST(req: Request) {
           const slots = await countAfternoonEligible(prisma, user.employeeId);
           if (slots < 1) {
             return NextResponse.json(
-              { error: `${lt.name}: 10칸이 모인 장에서 쓸 수 있는 오후인정 권한이 없습니다.` },
+              { error: `${lt.name}: 8칸이 모인 장에서 쓸 수 있는 오후인정 권한이 없습니다.` },
               { status: 400 },
             );
           }

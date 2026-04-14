@@ -1,5 +1,9 @@
 import type { DB, DBTx } from "@/lib/db";
 
+export const STAMP_CARD_TOTAL_SLOTS = 8;
+export const HEALING_STAMP_THRESHOLD = 4;
+export const AFTERNOON_STAMP_THRESHOLD = 8;
+
 /** 휴가 취소·반려·철회 시 장 권한 + 구버전 쿠폰 used 복원 */
 export async function releaseStampSlotsForLeaveRequest(
   tx: DBTx,
@@ -32,7 +36,7 @@ export async function appendStampCouponToCard(
     include: { _count: { select: { stamps: true } } },
   });
   const sortedDesc = [...cards].sort((a, b) => b.sortOrder - a.sortOrder);
-  const open = sortedDesc.find((c) => c._count.stamps < 10);
+  const open = sortedDesc.find((c) => c._count.stamps < STAMP_CARD_TOTAL_SLOTS);
 
   let cardId: string;
   let stampsOnCard: number;
@@ -53,8 +57,8 @@ export async function appendStampCouponToCard(
     stampsOnCard = 0;
   }
 
-  if (stampsOnCard >= 10) {
-    throw new Error("스탬프 장이 이미 10칸입니다.");
+  if (stampsOnCard >= STAMP_CARD_TOTAL_SLOTS) {
+    throw new Error(`스탬프 장이 이미 ${STAMP_CARD_TOTAL_SLOTS}칸입니다.`);
   }
 
   const stamp = await tx.stampCoupon.create({
@@ -74,7 +78,7 @@ export async function findHealingStampCard(
   return tx.stampCard.findFirst({
     where: {
       employeeId,
-      filledCount: { gte: 5 },
+      filledCount: { gte: HEALING_STAMP_THRESHOLD },
       healingUsed: false,
     },
     orderBy: { sortOrder: "asc" },
@@ -88,7 +92,7 @@ export async function findAfternoonStampCard(
   return tx.stampCard.findFirst({
     where: {
       employeeId,
-      filledCount: { gte: 10 },
+      filledCount: { gte: AFTERNOON_STAMP_THRESHOLD },
       afternoonUsed: false,
     },
     orderBy: { sortOrder: "asc" },
@@ -97,12 +101,12 @@ export async function findAfternoonStampCard(
 
 export function countHealingEligible(db: DB, employeeId: string) {
   return db.stampCard.count({
-    where: { employeeId, filledCount: { gte: 5 }, healingUsed: false },
+    where: { employeeId, filledCount: { gte: HEALING_STAMP_THRESHOLD }, healingUsed: false },
   });
 }
 
 export function countAfternoonEligible(db: DB, employeeId: string) {
   return db.stampCard.count({
-    where: { employeeId, filledCount: { gte: 10 }, afternoonUsed: false },
+    where: { employeeId, filledCount: { gte: AFTERNOON_STAMP_THRESHOLD }, afternoonUsed: false },
   });
 }

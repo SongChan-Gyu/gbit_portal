@@ -1,15 +1,20 @@
 "use client";
 import { useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, XCircle } from "lucide-react";
 
 export default function ApproveActions({
-  approvalId, impersonateId,
-}: { approvalId: string; impersonateId?: string }) {
-  const [comment, setComment]   = useState("");
+  approvalId, impersonateId, initialComment,
+}: { approvalId: string; impersonateId?: string; initialComment?: string }) {
+  const [comment, setComment]   = useState(initialComment ?? "");
   const [loading, setLoading]   = useState<"approve" | "reject" | null>(null);
   const [error, setError]       = useState("");
   const router = useRouter();
+
+  useEffect(() => {
+    setComment(initialComment ?? "");
+  }, [approvalId, initialComment]);
 
   async function handle(action: "APPROVE" | "REJECT") {
     if (action === "REJECT" && !comment.trim()) { setError("반려 사유를 입력하세요."); return; }
@@ -31,7 +36,7 @@ export default function ApproveActions({
     <div className="space-y-2">
       <label className="block text-xs font-medium text-gray-600">의견 입력</label>
       <textarea className="input resize-none text-[13px]" rows={3}
-        placeholder="반려 시 사유를 입력하세요."
+        placeholder="승인 코멘트 또는 반려 사유를 입력하세요."
         value={comment} onChange={(e) => setComment(e.target.value)} />
       {error && <p className="text-xs text-red-500">{error}</p>}
       <div className="flex gap-2">

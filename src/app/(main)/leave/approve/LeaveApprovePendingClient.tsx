@@ -13,6 +13,7 @@ type SerializedReq = {
     id: string;
     days: number;
     reason: string | null;
+    balanceComment?: string | null;
     timeSlot?: string | null;
     leaveType: { name: string; color: string; code?: string };
     startDate: string;
@@ -88,6 +89,7 @@ function ItemDetailLine({ it }: { it: SerializedReq["items"][0] }) {
         <span className="text-slate-700">{period}</span>{" "}
         <span className="font-bold text-slate-900 tabular-nums">{it.days}일</span>
       </p>
+      {it.balanceComment && <p className="text-xs text-slate-500 mt-1 pl-0.5">{it.balanceComment}</p>}
       {reason && <p className="text-xs text-gray-400 mt-1 pl-0.5">사유: {reason}</p>}
     </div>
   );
@@ -292,7 +294,11 @@ function PendingDetail({
       </div>
 
       <div className="border-t border-gray-100 pt-4">
-        {kind === "leave" ? <ApproveActions approvalId={ap.id} /> : <CancelApproveActions requestId={req.id} />}
+        {kind === "leave" ? (
+          <ApproveActions approvalId={ap.id} />
+        ) : (
+          <CancelApproveActions requestId={req.id} />
+        )}
       </div>
     </div>
   );

@@ -161,7 +161,7 @@ export default function StampClient({
               className={`border rounded-lg p-2.5 ${healingAvail > 0 ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"}`}
             >
               <p className="text-xs font-semibold text-gray-600 mb-0.5">힐링데이</p>
-              <p className="text-[11px] text-gray-500 leading-snug">장당 1회 · 5칸 이상 · 칸 소모 없음</p>
+              <p className="text-[11px] text-gray-500 leading-snug">장당 1회 · 4칸 이상 · 칸 소모 없음</p>
               <div className="mt-1.5">
                 {healingAvail > 0 ? (
                   <span className="badge badge-success">사용 가능 {healingAvail}회</span>
@@ -174,7 +174,7 @@ export default function StampClient({
               className={`border rounded-lg p-2.5 ${afternoonAvail > 0 ? "border-purple-300 bg-purple-50" : "border-gray-200 bg-gray-50"}`}
             >
               <p className="text-xs font-semibold text-gray-600 mb-0.5">오후 인정(스탬프)</p>
-              <p className="text-[11px] text-gray-500 leading-snug">10칸 완성 장 · 휴가 신청</p>
+              <p className="text-[11px] text-gray-500 leading-snug">8칸 완성 장 · 휴가 신청</p>
               <div className="mt-1.5">
                 {afternoonAvail > 0 ? (
                   <span className="badge badge-purple">사용 가능 {afternoonAvail}회</span>
@@ -188,7 +188,7 @@ export default function StampClient({
           {visibleCards.length === 0 ? (
             <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-3">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-amber-900">진행 중인 장 (0/10)</span>
+                <span className="text-xs font-bold text-amber-900">진행 중인 장 (0/8)</span>
               </div>
               <StampSlotGrid filledCount={0} size="md" />
               <p className="text-[11px] text-gray-500 mt-2.5 leading-snug">
@@ -200,8 +200,8 @@ export default function StampClient({
               {(() => {
                 const card = visibleCards[cardIdx]!;
                 const n = card.stamps.length;
-                const healingOk = card.filledCount >= 5 && !card.healingUsed;
-                const afternoonOk = card.filledCount >= 10 && !card.afternoonUsed;
+                const healingOk = card.filledCount >= 4 && !card.healingUsed;
+                const afternoonOk = card.filledCount >= 8 && !card.afternoonUsed;
                 return (
                   <>
                     <div className="flex items-center gap-2">
@@ -217,7 +217,7 @@ export default function StampClient({
                       <div className="flex-1 min-w-0 text-center">
                         <p className="text-xs font-bold text-amber-900 tabular-nums">
                           장 {cardIdx + 1} / {visibleCards.length}
-                          <span className="font-semibold text-amber-800/90"> · {card.filledCount}/10칸</span>
+                          <span className="font-semibold text-amber-800/90"> · {card.filledCount}/8칸</span>
                         </p>
                         <p className="text-[10px] text-gray-500 mt-0.5">
                           힐링{" "}
@@ -227,7 +227,7 @@ export default function StampClient({
                             <span className="text-emerald-600 font-medium">가능</span>
                           ) : (
                             <span className="text-gray-400">
-                              {card.filledCount < 5 ? `${5 - card.filledCount}칸` : "—"}
+                              {card.filledCount < 4 ? `${4 - card.filledCount}칸` : "—"}
                             </span>
                           )}
                           {" · "}오후{" "}
@@ -237,7 +237,7 @@ export default function StampClient({
                             <span className="text-purple-700 font-medium">가능</span>
                           ) : (
                             <span className="text-gray-400">
-                              {10 - card.filledCount > 0 ? `${10 - card.filledCount}칸` : "—"}
+                              {8 - card.filledCount > 0 ? `${8 - card.filledCount}칸` : "—"}
                             </span>
                           )}
                         </p>

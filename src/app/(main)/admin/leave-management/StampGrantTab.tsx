@@ -181,7 +181,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
           소모」에서 장별로 힐링만 또는 오후 인정만 소모 처리할 수 있습니다.
         </p>
         <p className="text-xs text-amber-900/85">
-          부여한 칸은 장(10칸)에 쌓이며, 5칸·10칸 단위로 힐링데이·오후 인정 권한이 열립니다. 한 번에 최대 30칸까지
+          부여한 칸은 장(8칸)에 쌓이며, 4칸·8칸 단위로 힐링데이·오후 인정 권한이 열립니다. 한 번에 최대 30칸까지
           부여할 수 있습니다. 「힐링 가능 장」은 해당 장에서 힐링을 <strong>아직 쓰지 않은</strong> 경우만 셉니다.
         </p>
       </div>
@@ -207,10 +207,10 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
               <th className="whitespace-nowrap tabular-nums" title="누적 StampCoupon 행 수">
                 누적 칸
               </th>
-              <th className="whitespace-nowrap tabular-nums text-xs" title="5칸 이상·힐링 미사용 장 수">
+              <th className="whitespace-nowrap tabular-nums text-xs" title="4칸 이상·힐링 미사용 장 수">
                 힐링 가능 장
               </th>
-              <th className="whitespace-nowrap tabular-nums text-xs" title="10칸·오후인정 미사용 장 수">
+              <th className="whitespace-nowrap tabular-nums text-xs" title="8칸·오후인정 미사용 장 수">
                 오후인정 가능 장
               </th>
               <th className="whitespace-nowrap">수동 부여</th>
@@ -308,8 +308,8 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
               )}
               {!healLoad &&
                 healCards.map((c) => {
-                  const canMarkHeal = c.stampCount >= 5 && !c.healingUsed;
-                  const canMarkAfternoon = c.stampCount >= 10 && !c.afternoonUsed;
+                  const canMarkHeal = c.stampCount >= 4 && !c.healingUsed;
+                  const canMarkAfternoon = c.stampCount >= 8 && !c.afternoonUsed;
                   const busy = marking !== null;
                   const healBusy = marking?.cardId === c.id && marking?.kind === "heal";
                   const afternoonBusy = marking?.cardId === c.id && marking?.kind === "afternoon";
@@ -322,7 +322,7 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                         <p className="font-medium text-gray-800">
                           장 {c.displayIndex}
                           <span className="text-gray-500 font-normal text-xs ml-1.5">
-                            실제 칸 {c.stampCount} · 표시 {c.filledCount}/10
+                            실제 칸 {c.stampCount} · 표시 {c.filledCount}/8
                           </span>
                         </p>
                         <p className="text-[11px] text-gray-500">
@@ -337,8 +337,8 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                           disabled={!canMarkHeal || busy}
                           onClick={() => markHealingUsed(c.id)}
                           title={
-                            c.stampCount < 5
-                              ? "5칸 이상인 장만 가능"
+                            c.stampCount < 4
+                              ? "4칸 이상인 장만 가능"
                               : c.healingUsed
                                 ? "이미 소모됨"
                                 : "힐링만 소모"
@@ -352,8 +352,8 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                           disabled={!canMarkAfternoon || busy}
                           onClick={() => markAfternoonUsed(c.id)}
                           title={
-                            c.stampCount < 10
-                              ? "10칸 완성 장만 가능"
+                            c.stampCount < 8
+                              ? "8칸 완성 장만 가능"
                               : c.afternoonUsed
                                 ? "이미 소모됨"
                                 : "오후 인정만 소모"

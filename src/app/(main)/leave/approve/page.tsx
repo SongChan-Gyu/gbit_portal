@@ -9,12 +9,21 @@ import { formatMDWithDay } from "@/lib/dateUtils";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 import { summarizeLeaveApprovals } from "@/lib/leaveApprovalDisplay";
 import { leaveApprovalStatusMeta, leaveApproveEntryKindMeta, leaveCancelApprovalStatusMeta, leaveRequestStatusMeta } from "@/lib/statusMeta";
+import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
+import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { AFTERNOON_STAMP_THRESHOLD, HEALING_STAMP_THRESHOLD } from "@/lib/stampCard";
 
 const APPROVER_ROLES = ["TEAM_LEAD", "PM", "ADMIN"] as const;
 const APPROVE_MAIN_TABS = [
   { key: "leave", label: "휴가" },
   { key: "stamp", label: "스탬프" },
 ] as const;
+
+type AllocationLite = {
+  sourceCode: string;
+  totalDays: number;
+  usedDays: number;
+};
 
 export default async function ApprovePage({
   searchParams,
@@ -110,7 +119,97 @@ export default async function ApprovePage({
     take: 60,
   });
 
-  const actionable       = approvals.filter(ap => ap.status === "PENDING" && ap.leaveRequest.currentStep === ap.step);
+  const actionableRaw = approvals.filter(ap => ap.status === "PENDING" && ap.leaveRequest.currentStep === ap.step);
+  const actionableEmpIds = [...new Set(actionableRaw.map((ap) => ap.leaveRequest.employeeId))];
+  const allocationsByEmployee = new Map<string, AllocationLite[]>();
+  if (actionableEmpIds.length > 0) {
+    const allAllocs = await prisma.leaveAllocation.findMany({
+      where: { employeeId: { in: actionableEmpIds }, isActive: true },
+      select: { employeeId: true, sourceCode: true, totalDays: true, usedDays: true },
+    });
+    for (const a of allAllocs) {
+      const arr = allocationsByEmployee.get(a.employeeId) ?? [];
+      arr.push({
+        sourceCode: a.sourceCode,
+        totalDays: Number(a.totalDays),
+        usedDays: Number(a.usedDays),
+      });
+      allocationsByEmployee.set(a.employeeId, arr);
+    }
+  }
+  const stampCouponRemainingByEmployee = new Map<string, number>();
+  const healingSlotByEmployee = new Map<string, number>();
+  const afternoonSlotByEmployee = new Map<string, number>();
+  if (actionableEmpIds.length > 0) {
+    const [stampCoupons, healingCards, afternoonCards] = await Promise.all([
+      prisma.stampCoupon.groupBy({
+        by: ["employeeId"],
+        where: { employeeId: { in: actionableEmpIds }, isUsed: false },
+        _count: { _all: true },
+      }),
+      prisma.stampCard.groupBy({
+        by: ["employeeId"],
+        where: { employeeId: { in: actionableEmpIds }, healingUsed: false, filledCount: { gte: HEALING_STAMP_THRESHOLD } },
+        _count: { _all: true },
+      }),
+      prisma.stampCard.groupBy({
+        by: ["employeeId"],
+        where: { employeeId: { in: actionableEmpIds }, afternoonUsed: false, filledCount: { gte: AFTERNOON_STAMP_THRESHOLD } },
+        _count: { _all: true },
+      }),
+    ]);
+    stampCoupons.forEach((g) => stampCouponRemainingByEmployee.set(g.employeeId, g._count._all));
+    healingCards.forEach((g) => healingSlotByEmployee.set(g.employeeId, g._count._all));
+    afternoonCards.forEach((g) => afternoonSlotByEmployee.set(g.employeeId, g._count._all));
+  }
+  const actionable = actionableRaw.map((ap) => {
+    const empAllocs = allocationsByEmployee.get(ap.leaveRequest.employeeId) ?? [];
+    const couponRemaining = stampCouponRemainingByEmployee.get(ap.leaveRequest.employeeId) ?? 0;
+    const healingSlots = healingSlotByEmployee.get(ap.leaveRequest.employeeId) ?? 0;
+    const afternoonSlots = afternoonSlotByEmployee.get(ap.leaveRequest.employeeId) ?? 0;
+    const itemsWithBalance = ap.leaveRequest.items.map((it) => {
+      const requested = Number(it.days);
+      if (it.leaveType.requiresStamp) {
+        if (it.leaveType.code === "HEALING_DAY") {
+          return {
+            ...it,
+            balanceComment: `${it.leaveType.name} 잔여 ${healingSlots}회 / 신청 1회`,
+          };
+        }
+        if (it.leaveType.code === "PM_RECOG_STAMP") {
+          return {
+            ...it,
+            balanceComment: `${it.leaveType.name} 잔여 ${afternoonSlots}회 / 신청 1회`,
+          };
+        }
+        const needStamp = Number(it.leaveType.stampCount ?? 0);
+        return {
+          ...it,
+          balanceComment: `${it.leaveType.name} 잔여 ${couponRemaining}개 / 신청 ${needStamp}개`,
+        };
+      }
+      const remaining = empAllocs
+        .filter((a) => {
+          const src = it.leaveType.allocationSourceCode?.trim();
+          if (src) return a.sourceCode === src;
+          if (!it.leaveType.deductFromBalance) return false;
+          return isAnnualPoolSourceCode(a.sourceCode);
+        })
+        .reduce((sum, a) => sum + (a.totalDays - a.usedDays), 0);
+      const hasSource = !!it.leaveType.allocationSourceCode?.trim();
+      if (!it.leaveType.deductFromBalance && !hasSource) {
+        return {
+          ...it,
+          balanceComment: `${it.leaveType.name} 잔여 제한없음 / 신청 ${formatLeaveDayDisplay(requested)}일`,
+        };
+      }
+      return {
+        ...it,
+        balanceComment: `${it.leaveType.name} 잔여 ${formatLeaveDayDisplay(remaining)}일 / 신청 ${formatLeaveDayDisplay(requested)}일`,
+      };
+    });
+    return { ...ap, leaveRequest: { ...ap.leaveRequest, items: itemsWithBalance } };
+  });
   const cancelActionable = cancelApprovals.filter(ap =>
     ap.status === "CANCEL_PENDING" && ap.leaveRequest.currentStep === ap.step && ap.leaveRequest.status === "CANCEL_REQUESTED"
   );
