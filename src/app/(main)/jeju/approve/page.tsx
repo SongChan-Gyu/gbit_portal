@@ -26,7 +26,7 @@ export default async function JejuApprovePage() {
       <div>
         <h1 className="page-title">제주도 숙소 승인</h1>
         <p className="page-subtitle">
-          제주도 숙소 신청 건을 승인하거나 반려합니다. 복지부·PM·관리자만 접근할 수 있습니다.
+          복지부는 1차 승인, PM·관리자는 입금확인(2차) 및 전체 내역을 처리할 수 있습니다.
         </p>
       </div>
       <JejuApproveClient />

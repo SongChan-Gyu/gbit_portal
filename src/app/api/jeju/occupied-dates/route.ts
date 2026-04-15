@@ -8,7 +8,7 @@ import { kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
 /**
  * GET ?from=YYYY-MM-DD&to=YYYY-MM-DD
  * - 복지부: 각 일자별로 누가 예약했는지 상세 반환
- * - 그 외: 해당 기간 중 "예약됨"인 날짜만 반환 (이름 없음)
+ * - 그 외: 해당 기간 중 점유 날짜 반환 (최종승인=예약됨, 그 외 진행상태=신청됨)
  */
 export async function GET(req: Request) {
   const session = await auth();
@@ -43,10 +43,10 @@ export async function GET(req: Request) {
   });
   const welfare = isWelfareDept(emp);
 
-  /* 승인된 예약 + 승인 대기 중인 신청도 해당 기간 차단 (중복 신청 방지) */
-  const approved = await prisma.jejuAccommodation.findMany({
+  /* 최종승인 + 진행중 신청 모두 해당 기간 차단 (중복 신청 방지) */
+  const activeRequests = await prisma.jejuAccommodation.findMany({
     where: {
-      status: { in: ["APPROVED", "PENDING"] },
+      status: { in: ["APPROVED", "STEP1_APPROVED", "PENDING"] },
       startDate: { lte: to },
       endDate: { gte: from },
     },
@@ -57,11 +57,14 @@ export async function GET(req: Request) {
   if (welfare) {
     const byDate: Record<string, { name: string; empNo: string; requestId: string }[]> = {};
     const welfareOccupiedSet = new Set<string>();
-    for (const r of approved) {
+    const statusByDate: Record<string, "예약됨" | "신청됨"> = {};
+    for (const r of activeRequests) {
       const startY = kstYmd(new Date(r.startDate));
       const endY = kstYmd(new Date(r.endDate));
       for (const key of eachYmdInHalfOpenRange(startY, endY)) {
         welfareOccupiedSet.add(key);
+        if (r.status === "APPROVED") statusByDate[key] = "예약됨";
+        else if (!statusByDate[key]) statusByDate[key] = "신청됨";
         /* 복지부 달력에는 승인된 건만 이름 표시 (PENDING은 '예약됨'으로만) */
         if (r.status !== "APPROVED") continue;
         if (!byDate[key]) byDate[key] = [];
@@ -74,10 +77,11 @@ export async function GET(req: Request) {
     }
     const occupiedDates = Array.from(welfareOccupiedSet).sort();
     const inRangeBlocked = blockedDates.filter((d) => d >= fromStr && d <= toStr);
-    return NextResponse.json({ welfare: true, byDate, occupiedDates, blockedDates: inRangeBlocked });
+    return NextResponse.json({ welfare: true, byDate, occupiedDates, statusByDate, blockedDates: inRangeBlocked });
   }
 
   const occupiedDates: string[] = [];
+  const statusByDate: Record<string, "예약됨" | "신청됨"> = {};
   const set = new Set<string>();
   for (const d of blockedDates) {
     if (d >= fromStr && d <= toStr) {
@@ -85,7 +89,7 @@ export async function GET(req: Request) {
       occupiedDates.push(d);
     }
   }
-  for (const r of approved) {
+  for (const r of activeRequests) {
     const startY = kstYmd(new Date(r.startDate));
     const endY = kstYmd(new Date(r.endDate));
     for (const key of eachYmdInHalfOpenRange(startY, endY)) {
@@ -93,9 +97,11 @@ export async function GET(req: Request) {
         set.add(key);
         occupiedDates.push(key);
       }
+      if (r.status === "APPROVED") statusByDate[key] = "예약됨";
+      else if (!statusByDate[key]) statusByDate[key] = "신청됨";
     }
   }
   occupiedDates.sort();
   const inRangeBlocked = blockedDates.filter((d) => d >= fromStr && d <= toStr);
-  return NextResponse.json({ welfare: false, occupiedDates, blockedDates: inRangeBlocked });
+  return NextResponse.json({ welfare: false, occupiedDates, statusByDate, blockedDates: inRangeBlocked });
 }

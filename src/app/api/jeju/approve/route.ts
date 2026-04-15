@@ -7,7 +7,7 @@ import { sendJejuNotification } from "@/lib/jejuNotify";
 
 /**
  * 1차 결재 (복지부) — PENDING → STEP1_APPROVED 또는 REJECTED
- * - 복지부(dutyDept=WELFARE) 또는 ADMIN만 처리 가능
+ * - 복지부(dutyDept=WELFARE)만 처리 가능
  * - 정정으로 depositStatus=CONFIRMED 인 경우 1차 승인 시 바로 APPROVED로 전환
  */
 export async function POST(req: Request) {
@@ -15,15 +15,13 @@ export async function POST(req: Request) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as any;
 
-  // 1차 결재권자: 복지부 or ADMIN
-  if (user.role !== "ADMIN") {
-    const emp = await prisma.employee.findUnique({
-      where: { id: user.employeeId },
-      select: { dutyDept: true },
-    });
-    if (!isWelfareDept(emp)) {
-      return NextResponse.json({ error: "복지부 또는 관리자만 1차 승인/반려할 수 있습니다." }, { status: 403 });
-    }
+  // 1차 결재권자: 복지부만
+  const emp = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { dutyDept: true },
+  });
+  if (!isWelfareDept(emp)) {
+    return NextResponse.json({ error: "복지부 인원만 1차 승인/반려할 수 있습니다." }, { status: 403 });
   }
 
   const body = await req.json();

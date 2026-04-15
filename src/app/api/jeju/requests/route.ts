@@ -11,15 +11,18 @@ export async function GET() {
   const user = session.user as any;
 
   const isPmAdmin = user.role === "PM" || user.role === "ADMIN";
-  if (!isPmAdmin) {
-    const emp = await prisma.employee.findUnique({
-      where: { id: user.employeeId },
-      include: { team: true },
-    });
-    if (!isWelfareDept(emp)) {
-      return NextResponse.json({ error: "복지부 또는 관리자만 조회할 수 있습니다." }, { status: 403 });
-    }
+  const emp = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { dutyDept: true },
+  });
+  const isWelfare = isWelfareDept(emp);
+  if (!isPmAdmin && !isWelfare) {
+    return NextResponse.json({ error: "복지부 또는 관리자만 조회할 수 있습니다." }, { status: 403 });
   }
+  const canStep1Approve = isWelfare;
+  const canStep2Approve = isPmAdmin;
+  const canCancelStep1Approve = isWelfare || user.role === "ADMIN";
+  const canCancelStep2Approve = isPmAdmin;
 
   const list = await prisma.jejuAccommodation.findMany({
     where: {},
@@ -67,8 +70,13 @@ export async function GET() {
       cancelReason: r.cancelReason,
       cancelRequestedAt: r.cancelRequestedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
-      // PM 전용: isPmAdmin
+      // 권한 플래그
       isPmAdmin,
+      isWelfare,
+      canStep1Approve,
+      canStep2Approve,
+      canCancelStep1Approve,
+      canCancelStep2Approve,
     }))
   );
 }

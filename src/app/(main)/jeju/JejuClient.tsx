@@ -192,12 +192,12 @@ export default function JejuClient({
     return blocked || occ || d > windowEndYmd;
   }
 
-  /** 사용불가일·예약가능기간(2달 후 말일) 초과 → "예약불가" / 그 외 불가(다른 사람 예약) → "예약됨" (과거일도 신청 가능) */
+  /** 사용불가일·예약가능기간(2달 후 말일) 초과 → "예약불가" / 그 외 불가일은 상태 기반 라벨 */
   function getUnavailableLabel(dateStr: string, detail: { name: string; empNo: string; requestId: string }[] | false | undefined) {
     const blockedOrPast = blockedSet.has(dateStr) || dateStr > windowEndYmd;
     if (blockedOrPast) return "예약불가";
     if (Array.isArray(detail) && detail.length > 0) return detail.length > 1 ? `${detail[0].name} 외` : detail[0].name;
-    return "예약됨";
+    return occupied.statusByDate?.[dateStr] ?? "신청됨";
   }
 
   async function submitApply(e: React.FormEvent) {

@@ -37,6 +37,11 @@ type ListRequest = {
   cancelReason: string | null;
   cancelRequestedAt: string | null;
   isPmAdmin: boolean;
+  isWelfare: boolean;
+  canStep1Approve: boolean;
+  canStep2Approve: boolean;
+  canCancelStep1Approve: boolean;
+  canCancelStep2Approve: boolean;
 };
 
 const STATUS_CLS: Record<string, string> = {
@@ -150,6 +155,10 @@ export default function JejuApproveClient() {
   const step2List = allList.filter((r) => r.status === "STEP1_APPROVED");
   const cancelRequestedList = allList.filter((r) => r.status === "CANCEL_REQUESTED");
   const cancelStep2List = allList.filter((r) => r.status === "CANCEL_STEP1_APPROVED");
+  const canStep1Approve = allList[0]?.canStep1Approve ?? false;
+  const canStep2Approve = allList[0]?.canStep2Approve ?? false;
+  const canCancelStep1Approve = allList[0]?.canCancelStep1Approve ?? false;
+  const canCancelStep2Approve = allList[0]?.canCancelStep2Approve ?? false;
 
   const now = new Date();
   const year = now.getFullYear();
@@ -222,71 +231,73 @@ export default function JejuApproveClient() {
   return (
     <div className="space-y-8">
       {/* 1차 승인 대기 (복지부) */}
-      <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
-        <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
-          <Check size={18} className="shrink-0 text-slate-600" /> 1차 승인 대기 (복지부)
-        </h2>
-        <p className="text-xs text-gray-500 mb-4">{pendingList.length}건</p>
-        {pendingList.length === 0 ? (
-          <p className="text-sm text-gray-500 py-6 text-center">대기 중인 신청이 없습니다.</p>
-        ) : (
-          <ul className="space-y-4">
-            {pendingList.map((r) => (
-              <RequestCard key={r.id} r={r}>
-                {rejectId === r.id ? (
-                  <div className="border-t border-gray-100 bg-gray-50/90 p-3 space-y-2">
-                    <label className="text-xs font-medium text-gray-600">반려 사유</label>
-                    <textarea
-                      rows={3}
-                      placeholder="반려 사유를 입력하세요"
-                      value={rejectComment}
-                      onChange={(e) => setRejectComment(e.target.value)}
-                      className="input w-full resize-none py-3 min-h-[80px] text-base"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
+      {canStep1Approve && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
+          <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
+            <Check size={18} className="shrink-0 text-slate-600" /> 1차 승인 대기 (복지부)
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">{pendingList.length}건</p>
+          {pendingList.length === 0 ? (
+            <p className="text-sm text-gray-500 py-6 text-center">대기 중인 신청이 없습니다.</p>
+          ) : (
+            <ul className="space-y-4">
+              {pendingList.map((r) => (
+                <RequestCard key={r.id} r={r}>
+                  {rejectId === r.id ? (
+                    <div className="border-t border-gray-100 bg-gray-50/90 p-3 space-y-2">
+                      <label className="text-xs font-medium text-gray-600">반려 사유</label>
+                      <textarea
+                        rows={3}
+                        placeholder="반려 사유를 입력하세요"
+                        value={rejectComment}
+                        onChange={(e) => setRejectComment(e.target.value)}
+                        className="input w-full resize-none py-3 min-h-[80px] text-base"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setRejectId(null); setRejectComment(""); }}
+                          className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 touch-manipulation"
+                        >
+                          닫기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => step1Reject(r.id)}
+                          disabled={!rejectComment.trim()}
+                          className="min-h-[48px] rounded-xl border border-rose-300 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 disabled:opacity-50 touch-manipulation"
+                        >
+                          반려 확정
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => { setRejectId(null); setRejectComment(""); }}
-                        className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 touch-manipulation"
+                        onClick={() => step1Approve(r.id)}
+                        className="min-h-[48px] rounded-xl border border-slate-800 bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 touch-manipulation"
                       >
-                        닫기
+                        1차 승인
                       </button>
                       <button
                         type="button"
-                        onClick={() => step1Reject(r.id)}
-                        disabled={!rejectComment.trim()}
-                        className="min-h-[48px] rounded-xl border border-rose-300 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 disabled:opacity-50 touch-manipulation"
+                        onClick={() => setRejectId(r.id)}
+                        className="min-h-[48px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 touch-manipulation"
                       >
-                        반려 확정
+                        반려
                       </button>
                     </div>
-                  </div>
-                ) : (
-                  <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => step1Approve(r.id)}
-                      className="min-h-[48px] rounded-xl border border-slate-800 bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 touch-manipulation"
-                    >
-                      1차 승인
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRejectId(r.id)}
-                      className="min-h-[48px] rounded-xl border border-rose-200 bg-white text-rose-700 text-sm font-semibold hover:bg-rose-50 touch-manipulation"
-                    >
-                      반려
-                    </button>
-                  </div>
-                )}
-              </RequestCard>
-            ))}
-          </ul>
-        )}
-      </div>
+                  )}
+                </RequestCard>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {/* 2차 처리 대기 (PM — 입금확인) */}
-      {step2List.length > 0 && (
+      {canStep2Approve && step2List.length > 0 && (
         <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-4 sm:p-5 shadow-sm">
           <h2 className="text-base font-bold text-blue-900 mb-1 flex items-center gap-2">
             <CreditCard size={18} className="shrink-0 text-blue-600" /> 입금확인 대기 (PM)
@@ -300,7 +311,7 @@ export default function JejuApproveClient() {
                     1차 승인: {r.step1ApproverName ?? "-"}
                     {r.step1ApprovedAt ? ` (${r.step1ApprovedAt.slice(0, 10)})` : ""}
                   </p>
-                  {r.isPmAdmin && (
+                  {r.canStep2Approve && (
                     <button
                       type="button"
                       onClick={() =>
@@ -315,7 +326,7 @@ export default function JejuApproveClient() {
                       입금확인 완료
                     </button>
                   )}
-                  {!r.isPmAdmin && (
+                  {!r.canStep2Approve && (
                     <p className="text-xs text-blue-600 text-center py-2">PM만 입금확인 가능합니다.</p>
                   )}
                 </div>
@@ -326,7 +337,7 @@ export default function JejuApproveClient() {
       )}
 
       {/* 취소 승인 대기 (복지부 — 1차) */}
-      {cancelRequestedList.length > 0 && (
+      {canCancelStep1Approve && cancelRequestedList.length > 0 && (
         <div className="rounded-2xl border border-amber-200/90 bg-amber-50/60 p-4 sm:p-5 shadow-sm">
           <h2 className="text-base font-bold text-amber-950 mb-1">취소 1차 승인 대기 (복지부)</h2>
           <p className="text-xs text-amber-900/80 mb-4">{cancelRequestedList.length}건</p>
@@ -368,7 +379,7 @@ export default function JejuApproveClient() {
       )}
 
       {/* 취소 입금취소 대기 (PM — 2차) */}
-      {cancelStep2List.length > 0 && (
+      {canCancelStep2Approve && cancelStep2List.length > 0 && (
         <div className="rounded-2xl border border-rose-200/80 bg-rose-50/40 p-4 sm:p-5 shadow-sm">
           <h2 className="text-base font-bold text-rose-900 mb-1 flex items-center gap-2">
             <CreditCard size={18} className="shrink-0 text-rose-600" /> 입금취소 처리 대기 (PM)
@@ -379,7 +390,7 @@ export default function JejuApproveClient() {
               <RequestCard key={r.id} r={r}>
                 <div className="border-t border-rose-100 bg-rose-50/40 p-3">
                   <p className="text-xs text-rose-700 mb-3">입금자: {r.depositorName ?? "-"}</p>
-                  {r.isPmAdmin && (
+                  {r.canCancelStep2Approve && (
                     <button
                       type="button"
                       onClick={() =>
@@ -394,7 +405,7 @@ export default function JejuApproveClient() {
                       입금취소 처리 완료
                     </button>
                   )}
-                  {!r.isPmAdmin && (
+                  {!r.canCancelStep2Approve && (
                     <p className="text-xs text-rose-600 text-center py-2">PM만 입금취소 처리 가능합니다.</p>
                   )}
                 </div>
