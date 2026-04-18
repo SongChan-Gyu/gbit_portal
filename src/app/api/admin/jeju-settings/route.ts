@@ -69,7 +69,7 @@ export async function PATCH(req: Request) {
     blockedDates?: string[];
     maxNights?: number;
     notifyConfig?: {
-      step1?: { phone?: string; email?: string; notifyVia?: string };
+      step1?: { phone?: string; phone2?: string; email?: string; notifyVia?: string };
       step2?: { phone?: string; email?: string; notifyVia?: string };
     };
   };
@@ -118,6 +118,7 @@ export async function PATCH(req: Request) {
       step1: {
         email: typeof cfg.step1?.email === "string" ? cfg.step1.email.trim() : "",
         phone: typeof cfg.step1?.phone === "string" ? cfg.step1.phone.trim() : "",
+        phone2: typeof cfg.step1?.phone2 === "string" ? cfg.step1.phone2.trim() : "",
         notifyVia: via(cfg.step1?.notifyVia),
       },
       step2: {

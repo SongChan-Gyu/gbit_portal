@@ -6,22 +6,22 @@ import { writeAudit, getIp } from "@/lib/audit";
 import { sendJejuNotification } from "@/lib/jejuNotify";
 
 /**
- * 1차 결재 (복지부) — PENDING → STEP1_APPROVED 또는 REJECTED
+ * 복지부 승인 — PENDING → STEP1_APPROVED 또는 REJECTED
  * - 복지부(dutyDept=WELFARE)만 처리 가능
- * - 정정으로 depositStatus=CONFIRMED 인 경우 1차 승인 시 바로 APPROVED로 전환
+ * - 정정으로 depositStatus=CONFIRMED 인 경우 복지부 승인 시 바로 APPROVED로 전환
  */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as any;
 
-  // 1차 결재권자: 복지부만
+  // 복지부 승인 권한
   const emp = await prisma.employee.findUnique({
     where: { id: user.employeeId },
     select: { dutyDept: true },
   });
   if (!isWelfareDept(emp)) {
-    return NextResponse.json({ error: "복지부 인원만 1차 승인/반려할 수 있습니다." }, { status: 403 });
+    return NextResponse.json({ error: "복지부 인원만 승인·반려할 수 있습니다." }, { status: 403 });
   }
 
   const body = await req.json();
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
   });
   if (!row) return NextResponse.json({ error: "신청을 찾을 수 없습니다." }, { status: 404 });
   if (row.status !== "PENDING") {
-    return NextResponse.json({ error: "1차 승인 대기 상태가 아닙니다." }, { status: 400 });
+    return NextResponse.json({ error: "복지부 승인 대기 상태가 아닙니다." }, { status: 400 });
   }
 
   const now = new Date();
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     await writeAudit({
       entityType: "JejuAccommodation", entityId: requestId, action: "REJECTED",
       actorId: user.employeeId, after: { status: "REJECTED", step: 1 },
-      note: `1차 반려: ${comment}`, ip: getIp(req) ?? undefined,
+      note: `복지부 반려: ${comment}`, ip: getIp(req) ?? undefined,
     });
     // 신청자에게 반려 알림 (메모리상 row에는 rejectComment가 없으므로 전달)
     await sendJejuNotification(prisma, "applicant_rejected", row.employee, { ...row, rejectComment: comment?.trim() ?? null }, 1).catch(console.warn);
@@ -87,11 +87,11 @@ export async function POST(req: Request) {
   await writeAudit({
     entityType: "JejuAccommodation", entityId: requestId, action: "APPROVED",
     actorId: user.employeeId, after: { status: nextStatus },
-    note: alreadyDeposited ? "1차 승인(입금 기확인, 최종 완료)" : "1차 승인",
+    note: alreadyDeposited ? "복지부 승인(입금 기확인, 최종 완료)" : "복지부 승인",
     ip: getIp(req) ?? undefined,
   });
 
-  // 신청자에게 1차 승인 알림 (최종이 아닌 경우)
+  // 신청자에게 복지부 승인 알림 (최종이 아닌 경우)
   await sendJejuNotification(prisma, "applicant_step1_approved", row.employee, row, 1).catch(console.warn);
 
   // 2차 결재가 필요한 경우 PM에게 입금확인 요청 알림

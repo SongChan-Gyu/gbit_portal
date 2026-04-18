@@ -39,7 +39,7 @@ export async function POST(req: Request) {
 
   if (action === "CONFIRM") {
     if (row.status !== "STEP1_APPROVED") {
-      return NextResponse.json({ error: "1차 승인 완료 후 입금확인 가능합니다." }, { status: 400 });
+      return NextResponse.json({ error: "복지부 승인 완료 후 입금확인 가능합니다." }, { status: 400 });
     }
     await prisma.jejuAccommodation.update({
       where: { id: requestId },

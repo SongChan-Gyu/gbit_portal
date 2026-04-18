@@ -26,9 +26,9 @@ async function getBlockedDates(): Promise<string[]> {
  * 정정 처리
  *
  * - PENDING: 즉시 수정 가능
- * - STEP1_APPROVED: 1차 승인이 있었으므로 → PENDING으로 리셋, 1차 결재부터 재시작
+ * - STEP1_APPROVED: 복지부 승인이 있었으므로 → PENDING으로 리셋, 복지부 승인 단계부터 재시작
  * - APPROVED(depositStatus=CONFIRMED): 입금 완료 상태이므로 → PENDING으로 리셋,
- *   depositStatus=CONFIRMED 유지 → 복지부 1차 승인 후 바로 최종 승인
+ *   depositStatus=CONFIRMED 유지 → 복지부 승인 후 바로 최종 승인
  */
 export async function PATCH(req: Request) {
   const session = await auth();
@@ -125,7 +125,7 @@ export async function PATCH(req: Request) {
     updates.guestCount = guestCount;
   }
 
-  // 1차 이상 승인된 상태에서 정정 시 결재 리셋
+  // 복지부 승인 이상 진행된 상태에서 정정 시 결재 리셋
   if (resetApproval && (row.status === "STEP1_APPROVED" || row.status === "APPROVED")) {
     // depositStatus=CONFIRMED 유지 (이미 입금된 경우 복지부 재승인 후 자동 최종 처리)
     updates.status = "PENDING";
@@ -149,7 +149,7 @@ export async function PATCH(req: Request) {
     actorId: user.employeeId, after: updates, ip: getIp(req) ?? undefined,
   });
 
-  // 정정으로 리셋된 경우 1차 승인 요청 알림
+  // 정정으로 리셋된 경우 복지부 승인 요청 알림
   if (resetApproval && (row.status === "STEP1_APPROVED" || row.status === "APPROVED")) {
     const updatedRow = { ...row, ...updates } as typeof row;
     await sendJejuNotification(prisma, "step1_notify", null, updatedRow as any, 1).catch(console.warn);

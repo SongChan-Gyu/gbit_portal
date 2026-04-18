@@ -6,7 +6,7 @@ import DatePickerButton from "@/components/ui/DatePickerButton";
 import type { JejuDepositAccount } from "@/lib/jeju";
 
 type NotifyVia = "email" | "alimtalk" | "both";
-type NotifyContact = { phone?: string; email?: string; notifyVia?: NotifyVia };
+type NotifyContact = { phone?: string; phone2?: string; email?: string; notifyVia?: NotifyVia };
 type JejuNotifyConfig = { step1?: NotifyContact; step2?: NotifyContact };
 
 export default function JejuSettingsTab() {
@@ -123,13 +123,14 @@ export default function JejuSettingsTab() {
       <div className="card max-w-xl">
         <h3 className="font-semibold text-gray-800 mb-1">결재 알림 수신자</h3>
         <p className="text-xs text-gray-500 mb-4">
-          1차(복지)·2차(PM) 각각 이메일·알림톡 수신 방식을 선택합니다. 알림톡만 선택한 경우 전화번호가 필요하고,
-          이메일만 선택한 경우 이메일이 필요합니다. 둘 다 선택 시 두 채널 모두 발송됩니다.
+          복지부 승인 단계·PM 입금확인 단계 각각 이메일·알림톡 수신 방식을 선택합니다. 알림톡만 선택한 경우 전화번호가 필요하고,
+          이메일만 선택한 경우 이메일이 필요합니다. 둘 다 선택 시 두 채널 모두 발송됩니다. 복지부 단계는 알림톡 수신 번호를 최대
+          두 명(두 번호)까지 넣을 수 있습니다.
         </p>
         <div className="space-y-4">
-          {/* 1차 (복지부) */}
+          {/* 복지부 승인 알림 */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">1차 결재 담당자 (복지부)</p>
+            <p className="text-sm font-medium text-gray-700 mb-2">복지부 승인 알림 (담당)</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="label">알림 채널</label>
@@ -159,7 +160,7 @@ export default function JejuSettingsTab() {
                 />
               </div>
               <div>
-                <label className="label">전화번호 (알림톡)</label>
+                <label className="label">전화번호 (알림톡) 1</label>
                 <input
                   type="tel"
                   className="input w-full"
@@ -168,11 +169,21 @@ export default function JejuSettingsTab() {
                   placeholder="01012345678"
                 />
               </div>
+              <div>
+                <label className="label">전화번호 (알림톡) 2 — 선택</label>
+                <input
+                  type="tel"
+                  className="input w-full"
+                  value={notifyConfig.step1?.phone2 ?? ""}
+                  onChange={(e) => setNotifyConfig((c) => ({ ...c, step1: { ...c.step1, phone2: e.target.value } }))}
+                  placeholder="추가 수신자 번호"
+                />
+              </div>
             </div>
           </div>
           {/* 2차 (PM) */}
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">2차 결재 담당자 (PM — 입금확인)</p>
+            <p className="text-sm font-medium text-gray-700 mb-2">PM 입금확인 알림 (담당)</p>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="label">알림 채널</label>

@@ -109,6 +109,17 @@ export default async function DashboardPage({
     : [0, 0];
   const jejuPendingCount = jejuApplyPendingCount + jejuCancelPendingCount;
 
+  /** PM·ADMIN: 복지부 승인 후 입금확인·입금취소 처리 대기 (대시보드 알림용) */
+  let jejuPmDepositConfirm = 0;
+  let jejuPmDepositCancel = 0;
+  if (!isExternal && ["PM", "ADMIN"].includes(user.role)) {
+    [jejuPmDepositConfirm, jejuPmDepositCancel] = await Promise.all([
+      prisma.jejuAccommodation.count({ where: { status: "STEP1_APPROVED" } }),
+      prisma.jejuAccommodation.count({ where: { status: "CANCEL_STEP1_APPROVED" } }),
+    ]);
+  }
+  const jejuPmPendingTotal = jejuPmDepositConfirm + jejuPmDepositCancel;
+
   const assetPoolLeaveTypes = await prisma.leaveType.findMany({
     where: {
       isActive: true,
@@ -166,6 +177,12 @@ export default async function DashboardPage({
       });
     }
   }
+
+  const leaveStampApproverPending =
+    approvalPending + cancelApprovalPending + stampPending;
+  const approverDashPending =
+    leaveStampApproverPending +
+    (!isExternal && ["PM", "ADMIN"].includes(user.role) ? jejuPmPendingTotal : 0);
 
   // 팀 주간 일정 (팀이 있는 모든 직원)
   // 팀 월간 일정: 팀 소속이면 팀만, ADMIN/PM이면 팀 없어도 전사 일정 표시
@@ -268,8 +285,8 @@ export default async function DashboardPage({
             </div>
             {["TEAM_LEAD","PM","ADMIN"].includes(user.role) && (
               <div className="stat-card col-span-1">
-                <div className={`stat-num ${(approvalPending + cancelApprovalPending + stampPending) > 0 ? "text-red-600" : "text-gray-400"}`}>
-                  {approvalPending + cancelApprovalPending + stampPending}
+                <div className={`stat-num ${approverDashPending > 0 ? "text-red-600" : "text-gray-400"}`}>
+                  {approverDashPending}
                 </div>
                 <div className="stat-label">결재 대기</div>
               </div>
@@ -279,7 +296,9 @@ export default async function DashboardPage({
       </div>
 
       {/* 결재 대기 알림 */}
-      {(approvalPending > 0 || cancelApprovalPending > 0 || stampPending > 0 || (welfare && jejuPendingCount > 0)) && (
+      {(leaveStampApproverPending > 0 ||
+        (welfare && jejuPendingCount > 0) ||
+        (!isExternal && ["PM", "ADMIN"].includes(user.role) && jejuPmPendingTotal > 0)) && (
         <div className="panel">
           <div className="panel-header">
             <div className="flex items-center gap-2">
@@ -321,6 +340,19 @@ export default async function DashboardPage({
                 <span className="text-gray-700">
                   제주도 숙소 결재 대기 <span className="font-semibold text-teal-600">{jejuPendingCount}건</span>
                   <span className="ml-1 text-xs text-gray-500">(신청 {jejuApplyPendingCount} · 취소요청 {jejuCancelPendingCount})</span>
+                </span>
+                <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
+              </Link>
+            )}
+            {!isExternal && ["PM", "ADMIN"].includes(user.role) && jejuPmPendingTotal > 0 && (
+              <Link href="/jeju/approve"
+                className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors text-[15px] md:text-[13px] touch-manipulation">
+                <span className="text-gray-700">
+                  제주 숙소 입금 처리 대기{" "}
+                  <span className="font-semibold text-blue-600">{jejuPmPendingTotal}건</span>
+                  <span className="ml-1 text-xs text-gray-500">
+                    (입금확인 {jejuPmDepositConfirm} · 입금취소 {jejuPmDepositCancel})
+                  </span>
                 </span>
                 <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
               </Link>

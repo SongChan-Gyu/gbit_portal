@@ -59,7 +59,7 @@ export async function GET() {
     depositAmount: JEJU_DEPOSIT_AMOUNT,
     depositAccount,
     blockedDates,
-    /** 1차 승인 후 PM 입금 확인까지 허용 일수(초과 시 스케줄러가 자동 취소, 알림톡 없음) */
+    /** 복지부 승인 후 PM 입금 확인까지 허용 일수(초과 시 스케줄러가 자동 취소, 알림톡 없음) */
     depositDeadlineDays,
   });
 }

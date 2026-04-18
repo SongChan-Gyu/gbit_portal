@@ -6,7 +6,7 @@ import { writeAudit, getIp } from "@/lib/audit";
 import { sendJejuNotification } from "@/lib/jejuNotify";
 
 /**
- * 취소 1차 승인 (복지부/ADMIN)
+ * 취소 복지부 승인 (복지부/ADMIN)
  *
  * CANCEL_REQUESTED + depositStatus=NONE(STEP1_APPROVED에서 취소 요청)
  *   → APPROVE: CANCELLED (입금 없으므로 즉시 완료)
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       await writeAudit({
         entityType: "JejuAccommodation", entityId: requestId, action: "CANCELLED",
         actorId: user.employeeId, after: { status: "CANCEL_STEP1_APPROVED" },
-        note: "취소 1차 승인 (PM 입금취소 대기)", ip: getIp(req) ?? undefined,
+        note: "취소 복지부 승인 (PM 입금취소 대기)", ip: getIp(req) ?? undefined,
       });
       // PM에게 입금취소 처리 요청
       await sendJejuNotification(prisma, "cancel_step2_notify", null, row, 2).catch(console.warn);

@@ -12,7 +12,11 @@ import { directsendKakaoAlimtalk } from "@/lib/directsendKakao";
  * - DIRECTSEND_ALIMTALK_TEMPLATE_NOS: JSON. 포털 내부 템플릿 코드 → 다이렉트센드 user_template_no
  *   한 줄이어도 되고, 붙여넣기로 줄바꿈·공백이 섞여 있어도 파싱 전에 공백을 제거해 처리함.
  *   (.env 파일에서는 `KEY=` 다음 줄에 `{`만 두면 안 되고, 한 줄로 쓰거나 작은따옴표로 값 전체를 감쌀 것)
- *   코드별 note1~note5 매핑은 docs/alimtalk-templates.md 참고 (카카오 템플릿 변수와 맞출 것)
+ *   코드별 note1~note5 매핑은 docs/alimtalk-templates.md 참고 (카카오 템플릿 변수와 맞출 것).
+ *
+ * - ALIMTALK_NOTE_LAYOUT: `v1`(기본) | `v2`. 카카오 템플릿 검수 전에는 v1 유지.
+ *   v1 = 기존 승인 본문(비고5 비사용·제주 담당자 템플릿 note1=투숙 표기명 등).
+ *   v2 = 신규 본문(비고5 포털 URL·제주 직원/투숙/연도 누적 등). 새 템플릿 승인 후 v2로 전환.
  *
  * 선택
  * - ALIMTALK_ALLOWED_RECEIVER: 설정 시 나열된 번호로만 발송, 그 외 SKIPPED.
@@ -50,8 +54,32 @@ function loadDirectsendTemplateNos(): Record<string, string> {
   }
 }
 
-/** 다이렉트센드 API는 수신자당 note1~note5만 치환 가능 — 포털 템플릿 코드별 매핑 */
-function directsendNotesForPortalTemplate(
+/** 알림톡 본문 하단 포털 링크 — NEXTAUTH_URL → NEXT_PUBLIC_APP_URL → 운영 기본값 */
+function portalOriginForAlimtalkLink(): string {
+  const auth = process.env.NEXTAUTH_URL?.trim();
+  if (auth?.startsWith("http")) return auth.replace(/\/$/, "");
+  const pub = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (pub?.startsWith("http")) return pub.replace(/\/$/, "");
+  return "https://www.gbitportal.co.kr";
+}
+
+function alimtalkPortalPathUrl(path: string): string {
+  const origin = portalOriginForAlimtalkLink();
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${origin}${p}`;
+}
+
+/**
+ * 알림톡 note 매핑 버전. 기본 v1 = 기존 카카오 승인 템플릿과 동일 배치.
+ * v2 = docs/alimtalk-templates.md 최신(비고5 URL·제주 확장 필드).
+ */
+export function alimtalkNoteLayoutVersion(): "v1" | "v2" {
+  const v = process.env.ALIMTALK_NOTE_LAYOUT?.trim().toLowerCase();
+  return v === "v2" ? "v2" : "v1";
+}
+
+/** 기존(승인된) 카카오 템플릿과 동일 — 비고5 미사용, 제주 담당 note1=신청자명(실제 투숙 표기명) */
+function directsendNotesForPortalTemplateV1(
   templateCode: string,
   params: Record<string, string>,
 ): [string, string, string, string, string] {
@@ -80,10 +108,8 @@ function directsendNotesForPortalTemplate(
       return [g("신청자명"), periodJeju(), "", "", ""];
     case "JEJU_APPLICANT_STEP1_OK":
       return [g("신청자명"), g("투숙객명"), periodJeju(), "", ""];
-    /** 복지 1차 · PM 입금확인 공통 템플릿 — note4 처리단계로 구분 */
     case "JEJU_STAFF":
       return [g("신청자명"), g("이용기간"), g("입금자명"), g("처리단계"), ""];
-    /** 취소 1차 · PM 입금취소 공통 — note3 입금자명은 취소 1차일 때 빈 값 */
     case "JEJU_STAFF_CANCEL":
       return [g("신청자명"), g("이용기간"), g("입금자명"), g("처리단계"), ""];
     default:
@@ -91,8 +117,94 @@ function directsendNotesForPortalTemplate(
   }
 }
 
+function directsendNotesForPortalTemplateV2(
+  templateCode: string,
+  params: Record<string, string>,
+): [string, string, string, string, string] {
+  const g = (k: string) => (params[k] ?? "").trim();
+  const periodJeju = () =>
+    `${g("입실일")}(${g("입실요일")}) ~ ${g("퇴실일")}(${g("퇴실요일")})`;
+
+  switch (templateCode) {
+    case "LEAVE_REQUEST":
+      return [
+        g("결재자명"),
+        g("신청자명"),
+        g("휴가유형"),
+        `${g("시작일")}(${g("시작요일")}) ~ ${g("종료일")}(${g("종료요일")})`,
+        alimtalkPortalPathUrl("/leave/approve"),
+      ];
+    case "LEAVE_WITHDRAWN":
+      return [g("결재자명"), g("신청자명"), g("요약"), "", alimtalkPortalPathUrl("/leave/approve")];
+    case "LEAVE_RESULT":
+      return [g("신청자명"), g("처리결과"), g("처리코멘트"), "", alimtalkPortalPathUrl("/leave/my")];
+    case "JEJU_APPROVED":
+      return [
+        g("신청자명"),
+        g("투숙객명"),
+        periodJeju(),
+        `${g("숙박일수")}박 · 입실 ${g("입실인원")}명 · ${g("연도누적신청")}`,
+        alimtalkPortalPathUrl("/jeju/my"),
+      ];
+    case "JEJU_REJECTED":
+      return [
+        g("신청자명"),
+        g("투숙객명"),
+        periodJeju(),
+        `${g("반려사유")} · ${g("연도누적신청")}`,
+        alimtalkPortalPathUrl("/jeju/my"),
+      ];
+    case "JEJU_CANCELLED":
+      return [
+        g("신청자명"),
+        g("투숙객명"),
+        periodJeju(),
+        g("연도누적신청"),
+        alimtalkPortalPathUrl("/jeju/my"),
+      ];
+    case "JEJU_APPLICANT_STEP1_OK":
+      return [
+        g("신청자명"),
+        g("투숙객명"),
+        periodJeju(),
+        g("연도누적신청"),
+        alimtalkPortalPathUrl("/jeju/my"),
+      ];
+    case "JEJU_STAFF":
+      // note4=입금자명만, note5=처리·연도·URL 각 한 줄(\n). API는 비고 5개까지라 한 필드에 개행으로 묶음.
+      return [
+        g("직원신청자명"),
+        g("투숙객명"),
+        g("이용기간"),
+        g("입금자명"),
+        `${g("처리단계")}\n${g("연도누적신청")}\n${alimtalkPortalPathUrl("/jeju/approve")}`,
+      ];
+    case "JEJU_STAFF_CANCEL":
+      return [
+        g("직원신청자명"),
+        g("투숙객명"),
+        g("이용기간"),
+        g("입금자명"),
+        `${g("처리단계")}\n${g("연도누적신청")}\n${alimtalkPortalPathUrl("/jeju/approve")}`,
+      ];
+    default:
+      return ["", "", "", "", ""];
+  }
+}
+
+/** 다이렉트센드 API는 수신자당 note1~note5만 치환 가능 — 포털 템플릿 코드별 매핑 */
+function directsendNotesForPortalTemplate(
+  templateCode: string,
+  params: Record<string, string>,
+): [string, string, string, string, string] {
+  return alimtalkNoteLayoutVersion() === "v2"
+    ? directsendNotesForPortalTemplateV2(templateCode, params)
+    : directsendNotesForPortalTemplateV1(templateCode, params);
+}
+
 function receiverDisplayName(params: Record<string, string>): string {
   return (
+    params["직원신청자명"]?.trim() ||
     params["결재자명"]?.trim() ||
     params["신청자명"]?.trim() ||
     params["수신자명"]?.trim() ||

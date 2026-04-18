@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { kstYmd } from "@/lib/dateUtils";
+import { getJejuCalendarYearStats } from "@/lib/jejuYearStats";
+import { todayStr } from "@/lib/workdays";
 
 export async function GET() {
   const session = await auth();
@@ -14,8 +16,12 @@ export async function GET() {
     orderBy: { startDate: "desc" },
   });
 
-  return NextResponse.json(
-    list.map((r) => ({
+  const calendarYear = parseInt(todayStr().slice(0, 4), 10);
+  const yearStats = await getJejuCalendarYearStats(prisma, user.employeeId, calendarYear);
+
+  return NextResponse.json({
+    yearStats,
+    requests: list.map((r) => ({
       id: r.id,
       startDate: kstYmd(r.startDate),
       endDate: kstYmd(r.endDate),
@@ -37,6 +43,6 @@ export async function GET() {
       cancelReason: r.cancelReason,
       cancelRequestedAt: r.cancelRequestedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
-    }))
-  );
+    })),
+  });
 }

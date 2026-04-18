@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
 import { kstYmd } from "@/lib/dateUtils";
+import { getJejuCalendarYearStatsForEmployees, JEJU_YEARLY_SUBMIT_WARN_THRESHOLD } from "@/lib/jejuYearStats";
+import { todayStr } from "@/lib/workdays";
 
 /** 복지부 또는 PM/ADMIN: 전체 신청 목록 */
 export async function GET() {
@@ -35,8 +37,19 @@ export async function GET() {
     orderBy: [{ status: "asc" }, { startDate: "desc" }],
   });
 
+  const calendarYear = parseInt(todayStr().slice(0, 4), 10);
+  const statsMap = await getJejuCalendarYearStatsForEmployees(
+    prisma,
+    [...new Set(list.map((r) => r.employeeId))],
+    calendarYear,
+  );
+
   return NextResponse.json(
-    list.map((r) => ({
+    list.map((r) => {
+      const ys = statsMap.get(r.employeeId);
+      const submitted = ys?.submittedCount ?? 0;
+      const approvedStay = ys?.approvedStayInYearCount ?? 0;
+      return {
       id: r.id,
       employeeId: r.employeeId,
       employeeName: r.employee.name,
@@ -51,7 +64,11 @@ export async function GET() {
       guestCount: r.guestCount,
       depositorName: r.depositorName,
       status: r.status,
-      // 1차 결재
+      /** 달력연도(KST) 기준 집계 — 귀속연도와 무관 */
+      jejuCalendarYear: calendarYear,
+      jejuSubmittedThisYear: submitted,
+      jejuApprovedStayThisYear: approvedStay,
+      jejuHighYearlySubmissions: submitted >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
       step1ApproverId: r.step1ApproverId,
       step1ApproverName: r.step1Approver?.name ?? null,
       step1ApprovedAt: r.step1ApprovedAt?.toISOString() ?? null,
@@ -77,6 +94,7 @@ export async function GET() {
       canStep2Approve,
       canCancelStep1Approve,
       canCancelStep2Approve,
-    }))
+    };
+    }),
   );
 }

@@ -5,9 +5,15 @@ import { useRouter } from "next/navigation";
 import { CalendarDays } from "lucide-react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
 import DatePickerButton from "@/components/ui/DatePickerButton";
+import {
+  formatJejuYearStatsSummary,
+  JEJU_YEARLY_HIGH_SUBMISSION_HINT,
+  JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
+  type JejuCalendarYearStats,
+} from "@/lib/jejuYearStats";
 
 const STATUS_KO: Record<string, string> = {
-  PENDING: "1차 승인 대기",
+  PENDING: "복지부 승인 대기",
   STEP1_APPROVED: "입금확인 대기",
   APPROVED: "완료",
   REJECTED: "반려",
@@ -52,6 +58,7 @@ type MyRequest = {
 export default function JejuMyClient() {
   const router = useRouter();
   const [list, setList] = useState<MyRequest[]>([]);
+  const [yearStats, setYearStats] = useState<JejuCalendarYearStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [editId, setEditId] = useState<string | null>(null);
   const [editDates, setEditDates] = useState<Record<string, { startDate: string; endDate: string }>>({});
@@ -59,7 +66,21 @@ export default function JejuMyClient() {
 
   const load = async () => {
     const res = await fetch("/api/jeju/my");
-    if (res.ok) setList(await res.json());
+    if (res.ok) {
+      const data = (await res.json()) as
+        | MyRequest[]
+        | { requests?: MyRequest[]; yearStats?: JejuCalendarYearStats };
+      if (Array.isArray(data)) {
+        setList(data);
+        setYearStats(null);
+      } else {
+        setList(Array.isArray(data.requests) ? data.requests : []);
+        setYearStats(data.yearStats ?? null);
+      }
+    } else {
+      setList([]);
+      setYearStats(null);
+    }
     setLoading(false);
   };
 
@@ -136,7 +157,23 @@ export default function JejuMyClient() {
       <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
         <CalendarDays size={18} className="shrink-0 text-slate-600" /> 예약 신청 내역
       </h2>
-      <p className="text-xs text-gray-500 mb-4">대기·1차승인 상태에서는 수정·취소가 가능합니다.</p>
+      <p className="text-xs text-gray-500 mb-3">대기·복지부 승인 완료(입금 전) 상태에서는 수정·취소가 가능합니다.</p>
+      {yearStats && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50/90 px-3 py-3 space-y-2">
+          <p className="text-sm font-bold text-slate-900 tabular-nums leading-snug">
+            {formatJejuYearStatsSummary(
+              yearStats.year,
+              yearStats.submittedCount,
+              yearStats.approvedStayInYearCount,
+            )}
+          </p>
+          {yearStats.submittedCount >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD && (
+            <p className="text-sm font-bold text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 leading-snug">
+              {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
+            </p>
+          )}
+        </div>
+      )}
       {list.length === 0 ? (
         <p className="text-sm text-gray-500 py-6 text-center">신청 내역이 없습니다.</p>
       ) : (
@@ -248,7 +285,7 @@ export default function JejuMyClient() {
                     {r.reason && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{r.reason}</p>}
                     {r.status === "STEP1_APPROVED" && (
                       <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-                        1차 승인 완료 · PM 입금확인 대기 중입니다.
+                        복지부 승인 완료 · PM 입금확인 대기 중입니다.
                         {r.step1ApprovedAt && <span className="ml-1 text-xs text-blue-500">({r.step1ApprovedAt.slice(0, 10)})</span>}
                       </p>
                     )}
@@ -260,7 +297,9 @@ export default function JejuMyClient() {
                     )}
                     {r.status === "REJECTED" && r.rejectComment && (
                       <p className="text-sm text-rose-700 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">
-                        반려 사유{r.rejectStep ? ` (${r.rejectStep}차)` : ""}: {r.rejectComment}
+                        반려 사유
+                        {r.rejectStep === 1 ? " (복지부)" : r.rejectStep === 2 ? " (PM·입금)" : r.rejectStep ? ` (${r.rejectStep}차)` : ""}:{" "}
+                        {r.rejectComment}
                       </p>
                     )}
                     {r.status === "CANCEL_REQUESTED" && (
@@ -270,7 +309,7 @@ export default function JejuMyClient() {
                     )}
                     {r.status === "CANCEL_STEP1_APPROVED" && (
                       <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                        취소 1차 승인 완료 · PM 입금취소 처리 대기 중입니다.
+                        복지부 취소 승인 완료 · PM 입금취소 처리 대기 중입니다.
                       </p>
                     )}
                   </div>
@@ -293,7 +332,7 @@ export default function JejuMyClient() {
                       </button>
                     </div>
                   )}
-                  {/* STEP1_APPROVED: 정정(1차부터 재결재) 또는 취소 요청 */}
+                  {/* STEP1_APPROVED: 정정(복지부 승인 단계부터 재결재) 또는 취소 요청 */}
                   {r.status === "STEP1_APPROVED" && (
                     <div className="border-t border-gray-100 bg-gray-50/90 p-3 grid grid-cols-2 gap-2">
                       <button

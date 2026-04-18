@@ -12,6 +12,12 @@ import {
   isRedCalendarDay,
   CALENDAR_HOLIDAY_COLOR,
 } from "@/lib/calendarHolidayDisplay";
+import {
+  formatJejuYearStatsSummary,
+  JEJU_YEARLY_HIGH_SUBMISSION_HINT,
+  JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
+  type JejuCalendarYearStats,
+} from "@/lib/jejuYearStats";
 
 type JejuConfig = {
   maxNights: number;
@@ -83,6 +89,14 @@ function getValidCheckOutDates(
 
 const fetcher = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))));
 
+async function fetchMyJejuForYearStats(url: string): Promise<{ yearStats: JejuCalendarYearStats | null }> {
+  const r = await fetch(url, { credentials: "include" });
+  if (!r.ok) return { yearStats: null };
+  const j = (await r.json()) as { yearStats?: JejuCalendarYearStats; requests?: unknown };
+  if (j?.yearStats && typeof j.yearStats.year === "number") return { yearStats: j.yearStats };
+  return { yearStats: null };
+}
+
 export default function JejuClient({
   welfare,
   holidayYmds,
@@ -110,6 +124,11 @@ export default function JejuClient({
     revalidateOnFocus: false,
     dedupingInterval: 60_000,
   });
+  const { data: myJejuPayload, mutate: mutateMyJeju } = useSWR("/api/jeju/my", fetchMyJejuForYearStats, {
+    revalidateOnFocus: false,
+    dedupingInterval: 60_000,
+  });
+  const yearStats = myJejuPayload?.yearStats ?? null;
   const allList = allListRaw ?? [];
   const loading = loadingOccupied || (welfare && loadingRequests);
   const [checkInDate, setCheckInDate] = useState("");
@@ -255,6 +274,7 @@ export default function JejuClient({
     setApplyReason("");
     mutateOccupied();
     mutateRequests();
+    void mutateMyJeju();
     router.push("/jeju/my?applied=1");
     router.refresh();
   }
@@ -263,6 +283,22 @@ export default function JejuClient({
 
   return (
     <div className="space-y-6">
+      {yearStats && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50/90 px-4 py-3 space-y-2">
+          <p className="text-sm font-bold text-slate-900 tabular-nums leading-snug">
+            {formatJejuYearStatsSummary(
+              yearStats.year,
+              yearStats.submittedCount,
+              yearStats.approvedStayInYearCount,
+            )}
+          </p>
+          {yearStats.submittedCount >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD && (
+            <p className="text-sm font-bold text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 leading-snug">
+              {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
+            </p>
+          )}
+        </div>
+      )}
       {/* 달력 */}
       <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between mb-4">
@@ -456,7 +492,7 @@ export default function JejuClient({
                 </p>
               )}
               <p className="text-[11px] text-amber-800/90 leading-relaxed">
-                복지부 1차 승인 후 예약금 입금이 확인되어야 합니다. 1차 승인일부터{" "}
+                복지부 승인 후 예약금 입금이 확인되어야 합니다. 복지부 승인일부터{" "}
                 <span className="font-semibold">{config?.depositDeadlineDays ?? 5}일</span> 안에 입금 확인이
                 되지 않으면 예약은 자동으로 취소됩니다.
               </p>

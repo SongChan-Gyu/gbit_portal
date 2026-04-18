@@ -11,7 +11,7 @@ export interface JejuDepositDeadlineResult {
   errors: { id: string; error: string }[];
 }
 
-/** 1차 승인 후 입금 미확인 상태가 N일 지나면 STEP1_APPROVED → CANCELLED (신청자 알림톡은 발송하지 않음) */
+/** 복지부 승인 후 입금 미확인 상태가 N일 지나면 STEP1_APPROVED → CANCELLED (신청자 알림톡은 발송하지 않음) */
 export async function runJejuDepositDeadline(opts: {
   dryRun?: boolean;
   actorId?: string | null;

@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Check, CreditCard, List } from "lucide-react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
+import { formatJejuYearStatsSummary, JEJU_YEARLY_HIGH_SUBMISSION_HINT } from "@/lib/jejuYearStats";
 
 type ListRequest = {
   id: string;
+  employeeId: string;
   startDate: string;
   endDate: string;
   nights: number;
@@ -19,7 +21,11 @@ type ListRequest = {
   guestPhone: string;
   guestCount: number;
   depositorName: string | null;
-  // 1차 결재
+  /** 달력연도(KST) 기준 — 귀속연도 아님 */
+  jejuCalendarYear?: number;
+  jejuSubmittedThisYear?: number;
+  jejuApprovedStayThisYear?: number;
+  jejuHighYearlySubmissions?: boolean;
   step1ApproverId: string | null;
   step1ApproverName: string | null;
   step1ApprovedAt: string | null;
@@ -55,7 +61,7 @@ const STATUS_CLS: Record<string, string> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: "1차 승인 대기",
+  PENDING: "복지부 승인 대기",
   STEP1_APPROVED: "입금확인 대기",
   APPROVED: "완료",
   REJECTED: "반려",
@@ -192,6 +198,20 @@ export default function JejuApproveClient() {
                 <span className="text-gray-500 font-normal text-sm ml-1.5">{r.empNo}</span>
               </p>
               {r.teamName && <p className="text-xs text-gray-500 mt-0.5">{r.teamName}</p>}
+              {r.jejuCalendarYear != null && (
+                <p className="text-sm font-bold text-slate-800 mt-1.5 tabular-nums leading-snug">
+                  {formatJejuYearStatsSummary(
+                    r.jejuCalendarYear,
+                    r.jejuSubmittedThisYear ?? 0,
+                    r.jejuApprovedStayThisYear ?? 0,
+                  )}
+                </p>
+              )}
+              {r.jejuHighYearlySubmissions && (
+                <p className="text-sm font-bold text-amber-950 bg-amber-50 border border-amber-100 rounded px-2 py-1.5 mt-1.5 leading-snug">
+                  {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
+                </p>
+              )}
             </div>
             <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
               {STATUS_LABEL[r.status] ?? r.status}
@@ -230,11 +250,11 @@ export default function JejuApproveClient() {
 
   return (
     <div className="space-y-8">
-      {/* 1차 승인 대기 (복지부) */}
+      {/* 복지부 승인 대기 */}
       {canStep1Approve && (
         <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
           <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
-            <Check size={18} className="shrink-0 text-slate-600" /> 1차 승인 대기 (복지부)
+            <Check size={18} className="shrink-0 text-slate-600" /> 복지부 승인 대기
           </h2>
           <p className="text-xs text-gray-500 mb-4">{pendingList.length}건</p>
           {pendingList.length === 0 ? (
@@ -278,7 +298,7 @@ export default function JejuApproveClient() {
                         onClick={() => step1Approve(r.id)}
                         className="min-h-[48px] rounded-xl border border-slate-800 bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 touch-manipulation"
                       >
-                        1차 승인
+                        복지부 승인
                       </button>
                       <button
                         type="button"
@@ -308,7 +328,7 @@ export default function JejuApproveClient() {
               <RequestCard key={r.id} r={r}>
                 <div className="border-t border-blue-100 bg-blue-50/40 p-3">
                   <p className="text-xs text-blue-700 mb-3">
-                    1차 승인: {r.step1ApproverName ?? "-"}
+                    복지부 승인: {r.step1ApproverName ?? "-"}
                     {r.step1ApprovedAt ? ` (${r.step1ApprovedAt.slice(0, 10)})` : ""}
                   </p>
                   {r.canStep2Approve && (
@@ -336,10 +356,10 @@ export default function JejuApproveClient() {
         </div>
       )}
 
-      {/* 취소 승인 대기 (복지부 — 1차) */}
+      {/* 취소 — 복지부 승인 대기 */}
       {canCancelStep1Approve && cancelRequestedList.length > 0 && (
         <div className="rounded-2xl border border-amber-200/90 bg-amber-50/60 p-4 sm:p-5 shadow-sm">
-          <h2 className="text-base font-bold text-amber-950 mb-1">취소 1차 승인 대기 (복지부)</h2>
+          <h2 className="text-base font-bold text-amber-950 mb-1">취소 복지부 승인 대기</h2>
           <p className="text-xs text-amber-900/80 mb-4">{cancelRequestedList.length}건</p>
           <ul className="space-y-4">
             {cancelRequestedList.map((r) => (
@@ -431,6 +451,11 @@ export default function JejuApproveClient() {
                   <tr className="bg-gray-50 text-gray-600 text-left">
                     <th className="px-3 py-2 font-medium">신청자</th>
                     <th className="px-3 py-2 font-medium">팀</th>
+                    <th className="px-3 py-2 font-bold text-right whitespace-nowrap text-slate-800">
+                      올해 기준
+                      <br />
+                      <span className="font-bold text-[11px] text-slate-600">신청·확정</span>
+                    </th>
                     <th className="px-3 py-2 font-medium">이용일</th>
                     <th className="px-3 py-2 font-medium">투숙객 · 인원</th>
                     <th className="px-3 py-2 font-medium">입금자</th>
@@ -446,6 +471,14 @@ export default function JejuApproveClient() {
                         <span className="text-gray-400 font-normal ml-1 text-xs">{r.empNo}</span>
                       </td>
                       <td className="px-3 py-2 text-gray-500">{r.teamName ?? "-"}</td>
+                      <td className="px-3 py-2 text-sm text-right tabular-nums text-slate-800 align-top font-bold">
+                        <span>
+                          {(r.jejuSubmittedThisYear ?? 0)} / {r.jejuApprovedStayThisYear ?? 0}
+                        </span>
+                        {r.jejuHighYearlySubmissions && (
+                          <span className="block text-xs font-bold text-amber-900 mt-0.5 leading-tight">연간 신청 다수</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-gray-700 whitespace-nowrap text-xs">
                         {r.startDate} ~ {r.endDate}
                         <span className="text-gray-400 ml-1">{r.nights}박</span>
@@ -477,6 +510,20 @@ export default function JejuApproveClient() {
                           <span className="text-gray-400 font-normal text-xs ml-1">{r.empNo}</span>
                         </p>
                         <p className="text-xs text-gray-500 mt-0.5">{r.teamName ?? ""}</p>
+                        {r.jejuCalendarYear != null && (
+                          <p className="text-sm font-bold text-slate-800 mt-1 tabular-nums leading-snug">
+                            {formatJejuYearStatsSummary(
+                              r.jejuCalendarYear,
+                              r.jejuSubmittedThisYear ?? 0,
+                              r.jejuApprovedStayThisYear ?? 0,
+                            )}
+                          </p>
+                        )}
+                        {r.jejuHighYearlySubmissions && (
+                          <p className="text-sm font-bold text-amber-950 bg-amber-50 border border-amber-100 rounded px-2 py-1.5 mt-1 leading-snug">
+                            {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
+                          </p>
+                        )}
                       </div>
                       <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
                         {STATUS_LABEL[r.status] ?? r.status}

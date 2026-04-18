@@ -127,7 +127,7 @@ export async function POST(req: Request) {
       after: { startDate, endDate, nights, status: "PENDING" },
       ip: getIp(req) ?? undefined,
     });
-    // 복지부에게 1차 승인 요청 알림
+    // 복지부에게 승인 요청 알림
     const emp = await prisma.employee.findUnique({
       where: { id: user.employeeId },
       select: { id: true, name: true, phone: true, alimtalkEnabled: true },
