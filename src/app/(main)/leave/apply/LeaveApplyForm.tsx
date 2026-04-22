@@ -1289,7 +1289,6 @@ export default function LeaveApplyForm({
         const lastDay = new Date(calendarYear, calendarMonth, 0);
         const startPad = firstDay.getDay();
         const daysInMonth = lastDay.getDate();
-        const today = todayStr();
         const weekDays = ["일", "월", "화", "수", "목", "금", "토"];
         const cells: (string | null)[] = [];
         for (let i = 0; i < startPad; i++) cells.push(null);
@@ -1365,7 +1364,6 @@ export default function LeaveApplyForm({
                 ))}
                 {cells.map((dateStr, i) => {
                   if (!dateStr) return <div key={`e-${i}`} />;
-                  const isPast = dateStr < today;
                   const isStart = dateStr === start;
                   const isEnd = calendarStep === "end" && dateStr === it?.endDate;
                   const isInRange = calendarStep === "end" && start && dateStr > start && it?.endDate && dateStr < it.endDate;
@@ -1379,23 +1377,18 @@ export default function LeaveApplyForm({
                         ? { color: "#3b82f6" }
                         : isInRange
                           ? { color: "#1e40af" }
-                          : isPast
-                            ? { color: "#9ca3af" }
-                            : { color: "#111827" };
+                          : { color: "#111827" };
                   return (
                     <button key={dateStr} type="button"
                       onClick={() => onCalendarDateClick(dateStr)}
-                      disabled={isPast && calendarStep === "start"}
                       className={`aspect-square rounded-lg text-sm transition-colors ${
                         isStart || isEnd
                           ? "bg-blue-600 hover:bg-blue-700"
                           : isInRange
                             ? "bg-blue-100"
-                            : isPast
-                              ? "cursor-not-allowed opacity-40"
-                              : isRedDay
-                                ? "hover:bg-red-50"
-                                : "hover:bg-gray-100"
+                            : isRedDay
+                              ? "hover:bg-red-50"
+                              : "hover:bg-gray-100"
                       }`}>
                       <span style={spanStyle}>{dateStr.slice(8, 10).replace(/^0/, "")}</span>
                     </button>
