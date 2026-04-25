@@ -11,6 +11,8 @@ import {
   JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
   type JejuCalendarYearStats,
 } from "@/lib/jejuYearStats";
+import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
+import { formatJejuDepositAccountLine } from "@/lib/jeju";
 
 const STATUS_KO: Record<string, string> = {
   PENDING: "복지부 승인 대기",
@@ -63,6 +65,10 @@ export default function JejuMyClient() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editDates, setEditDates] = useState<Record<string, { startDate: string; endDate: string }>>({});
   const [cancelReasons, setCancelReasons] = useState<Record<string, string>>({});
+  const [depositNote, setDepositNote] = useState<{ days: number; line: string | null }>({
+    days: 5,
+    line: null,
+  });
 
   const load = async () => {
     const res = await fetch("/api/jeju/my");
@@ -86,6 +92,28 @@ export default function JejuMyClient() {
 
   useEffect(() => {
     load();
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/jeju/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          c: {
+            depositDeadlineDays?: number;
+            depositAccount?: { bankName: string; accountHolder: string; accountNumber: string };
+          } | null,
+        ) => {
+          if (!c) return;
+          const days = Math.max(1, Number(c.depositDeadlineDays) || 5);
+          const acc = c.depositAccount;
+          const line =
+            acc?.bankName && acc?.accountHolder && acc?.accountNumber
+              ? formatJejuDepositAccountLine(acc)
+              : null;
+          setDepositNote({ days, line });
+        },
+      );
   }, []);
 
   async function cancelRequest(id: string, isApproved: boolean) {
@@ -283,6 +311,12 @@ export default function JejuMyClient() {
                       )}
                     </dl>
                     {r.reason && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{r.reason}</p>}
+                    <JejuRefundPolicyNotice
+                      variant="full"
+                      className="mt-1"
+                      depositDeadlineDays={depositNote.days}
+                      depositAccountSummary={depositNote.line}
+                    />
                     {r.status === "STEP1_APPROVED" && (
                       <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
                         복지부 승인 완료 · PM 입금확인 대기 중입니다.

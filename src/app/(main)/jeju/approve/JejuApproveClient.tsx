@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Check, CreditCard, List } from "lucide-react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
 import { formatJejuYearStatsSummary, JEJU_YEARLY_HIGH_SUBMISSION_HINT } from "@/lib/jejuYearStats";
+import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
+import { formatJejuDepositAccountLine } from "@/lib/jeju";
 
 type ListRequest = {
   id: string;
@@ -88,6 +90,10 @@ export default function JejuApproveClient() {
     summary: string;
   } | null>(null);
   const [depositBusy, setDepositBusy] = useState(false);
+  const [depositNote, setDepositNote] = useState<{ days: number; line: string | null }>({
+    days: 5,
+    line: null,
+  });
 
   const loadAll = async () => {
     const res = await fetch("/api/jeju/requests");
@@ -97,6 +103,28 @@ export default function JejuApproveClient() {
   useEffect(() => {
     setLoading(true);
     loadAll().finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    void fetch("/api/jeju/config")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          c: {
+            depositDeadlineDays?: number;
+            depositAccount?: { bankName: string; accountHolder: string; accountNumber: string };
+          } | null,
+        ) => {
+          if (!c) return;
+          const days = Math.max(1, Number(c.depositDeadlineDays) || 5);
+          const acc = c.depositAccount;
+          const line =
+            acc?.bankName && acc?.accountHolder && acc?.accountNumber
+              ? formatJejuDepositAccountLine(acc)
+              : null;
+          setDepositNote({ days, line });
+        },
+      );
   }, []);
 
   async function step1Approve(id: string) {
@@ -242,6 +270,12 @@ export default function JejuApproveClient() {
             )}
           </dl>
           {r.reason && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{r.reason}</p>}
+          <JejuRefundPolicyNotice
+            variant="full"
+            className="mt-1"
+            depositDeadlineDays={depositNote.days}
+            depositAccountSummary={depositNote.line}
+          />
         </div>
         {children}
       </li>

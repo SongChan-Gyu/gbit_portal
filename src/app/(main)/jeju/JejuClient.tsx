@@ -18,6 +18,7 @@ import {
   JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
   type JejuCalendarYearStats,
 } from "@/lib/jejuYearStats";
+import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
 
 type JejuConfig = {
   maxNights: number;
@@ -492,10 +493,11 @@ export default function JejuClient({
                 </p>
               )}
               <p className="text-[11px] text-amber-800/90 leading-relaxed">
-                복지부 승인 후 예약금 입금이 확인되어야 합니다. 복지부 승인일부터{" "}
-                <span className="font-semibold">{config?.depositDeadlineDays ?? 5}일</span> 안에 입금 확인이
-                되지 않으면 예약은 자동으로 취소됩니다.
+                예약금은 신청 <span className="font-semibold">당일</span> 이체를 권장합니다. 입금확인 대기 상태가 된
+                뒤 <span className="font-semibold">{config?.depositDeadlineDays ?? 5}일</span> 안에 입금이 확인되지
+                않으면 예약은 자동으로 취소됩니다.
               </p>
+              <JejuRefundPolicyNotice variant="short" className="border-amber-200/80 bg-white/80" />
             </div>
 
             <div className="space-y-4">

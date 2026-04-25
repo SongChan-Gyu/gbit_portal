@@ -186,11 +186,11 @@ export default function StampClient({
           </div>
 
           {visibleCards.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-3">
+            <div className="rounded-xl border border-dashed border-amber-200 bg-amber-50/50 p-3 min-w-0">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-amber-900">진행 중인 장 (0/8)</span>
               </div>
-              <StampSlotGrid filledCount={0} size="md" />
+              <StampSlotGrid filledCount={0} size="md" className="min-w-0" />
               <p className="text-[11px] text-gray-500 mt-2.5 leading-snug">
                 아직 표시할 장이 없거나, 완성 후 혜택을 모두 사용한 장만 있습니다. 승인되면 칸이 채워집니다.
               </p>
@@ -252,8 +252,8 @@ export default function StampClient({
                         <ChevronRight size={20} />
                       </button>
                     </div>
-                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3">
-                      <StampSlotGrid filledCount={n} stamps={card.stamps} size="md" />
+                    <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3 min-w-0">
+                      <StampSlotGrid filledCount={n} stamps={card.stamps} size="md" className="min-w-0" />
                     </div>
                     {visibleCards.length > 1 && (
                       <div className="flex justify-center gap-1.5 pt-0.5">
@@ -280,7 +280,7 @@ export default function StampClient({
 
       <div className="panel overflow-visible">
         <div className="panel-header py-2 px-4">
-          <span className="panel-title">힐링데이 신청</span>
+          <span className="panel-title">힐링데이(스탬프) 신청</span>
           <span className="badge badge-default">힐링 1회 소진 · 스탬프 칸 유지</span>
         </div>
         <div className="panel-body py-3 px-4 space-y-3">

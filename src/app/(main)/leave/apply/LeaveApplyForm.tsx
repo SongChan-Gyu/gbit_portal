@@ -3,7 +3,7 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import DatePickerButton from "@/components/ui/DatePickerButton";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
-import { calcHolidayExtFullDays } from "@/lib/holidayExt";
+import { calcHolidayExtFullDays, isHolidayOrWeekendYmd } from "@/lib/holidayExt";
 import { calendarUtcDowFromYMD, eachYmdInInclusiveRange, formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
 import { leaveItemDeductDays, leaveItemFormDisplayDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
@@ -11,6 +11,7 @@ import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 import { buildHolidayDisplaySet, isRedCalendarDay, CALENDAR_HOLIDAY_COLOR } from "@/lib/calendarHolidayDisplay";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
+import { isHealingHalfReplaceCode, isHalfdayMonthlySharedPoolCode } from "@/lib/healingLeaveCodes";
 
 // ── 타입 ──────────────────────────────────────────────────────
 interface LT {
@@ -134,18 +135,21 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
   {
     key: "stamp",
     label: "스탬프",
-    meta: "오후인정·힐링데이",
+    meta: "오후인정·힐링데이(스탬프)",
     color: "#d97706",
     borderClass: "border-amber-500",
     subs: [
-      { label: "힐링데이",   code: "HEALING_DAY" },
+      { label: "힐링데이(스탬프)", code: "HEALING_DAY" },
       { label: "오후 인정", code: "PM_RECOG_STAMP" },
     ],
   },
   {
     key: "halfday", label: "하프데이", meta: "",
     color: "#0284c7", borderClass: "border-sky-500",
-    subs: [{ label: "하프데이", code: "PM_HALF_MONTH" }],
+    subs: [
+      { label: "하프데이", code: "PM_HALF_MONTH", desc: "수요일 오후" },
+      { label: "힐링데이(하프대체)", code: "HEALING_DAY_HALF_REPLACE", desc: "0일 · 영업일 요일 무관" },
+    ],
   },
   {
     key: "sick",
@@ -163,7 +167,7 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
   {
     key: "tenure",
     label: "근속휴가",
-    meta: "",
+    meta: "입사 N주년 부여",
     color: "#10b981",
     borderClass: "border-emerald-600",
     /** 하위 항목은 `dynamicLeaveGroups`에서 DB(`applyGroupKey === tenure`)로 채움 */
@@ -172,7 +176,7 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
   {
     key: "birthday",
     label: "생일반차",
-    meta: "생일이 있는 달에 자동 부여 0.5일",
+    meta: "생일에 자동 부여 0.5일",
     color: "#ec4899",
     borderClass: "border-pink-500",
     subs: [
@@ -237,6 +241,7 @@ function detectOverlap(items: LeaveItem[], leaveTypes: LT[]): string | null {
     if (!item.leaveTypeId || !item.startDate) continue;
     const lt = leaveTypes.find((t) => t.id === item.leaveTypeId);
     if (!lt) continue;
+    if (isHealingHalfReplaceCode(lt.code)) continue;
     const slot = resolveItemTimeSlot(item, leaveTypeWithPolicy(lt));
     const s = item.startDate.slice(0, 10);
     const e = (item.endDate || item.startDate).slice(0, 10);
@@ -309,6 +314,18 @@ export default function LeaveApplyForm({
   );
 
   const holidaySet = useMemo(() => buildHolidayDisplaySet(holidays), [holidays]);
+
+  const canSubmitZeroHalfReplace = useMemo(() => {
+    return items.some((it) => {
+      if (!needsLeaveRowValidation(it)) return false;
+      if (!it.leaveTypeId?.trim()) return false;
+      const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
+      if (!lt || !isHealingHalfReplaceCode(lt.code)) return false;
+      const y = it.startDate?.slice(0, 10);
+      if (!y) return false;
+      return !isHolidayOrWeekendYmd(y, holidaySet);
+    });
+  }, [items, leaveTypes, holidaySet]);
 
   /** 연휴연장: 영업일만 일수에 포함 (API·calcHolidayExtFullDays와 동일) */
   function fullDaysForLeaveType(lt: LT | undefined, start: string, end: string) {
@@ -476,11 +493,12 @@ export default function LeaveApplyForm({
       else timeSlot = "";
       const single = pol.allowsHalfDay && !pol.allowsFullDay;
       const isHalfDay = timeSlot === "AM" || timeSlot === "PM";
-      const days = single || isHalfDay
+      let days = single || isHalfDay
         ? (timeSlot ? 0.5 : 0)
         : timeSlot === "FULL" || (pol.allowsFullDay && !pol.allowsHalfDay)
           ? fullDaysForLeaveType(lt, it.startDate, it.endDate)
           : 0;
+      if (isHealingHalfReplaceCode(lt.code)) days = 0;
       return {
         ...it, leaveTypeId: lt.id,
         _groupKey: groupKey ?? codeToGroup[code] ?? it._groupKey,
@@ -497,9 +515,10 @@ export default function LeaveApplyForm({
       if (i !== idx) return it;
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
       if (!lt) return it;
-      const days = slot === "FULL"
+      let days = slot === "FULL"
         ? fullDaysForLeaveType(lt, it.startDate, it.endDate)
         : 0.5;
+      if (isHealingHalfReplaceCode(lt.code)) days = 0;
       const endDate = slot === "FULL" ? it.endDate : it.startDate;
       return { ...it, timeSlot: slot, days, endDate };
     }));
@@ -524,6 +543,7 @@ export default function LeaveApplyForm({
       } else if (pol && pol.allowsFullDay && pol.allowsHalfDay) {
         days = ts === "FULL" ? fullDaysForLeaveType(lt ?? undefined, newStart, newEnd) : (ts === "AM" || ts === "PM" ? 0.5 : 0);
       }
+      if (lt && isHealingHalfReplaceCode(lt.code)) days = 0;
       return { ...it, startDate: newStart, endDate: newEnd, days };
     }));
   }
@@ -599,6 +619,10 @@ export default function LeaveApplyForm({
           setError("하프데이는 수요일을 선택해 주세요.");
           return;
         }
+        if (isHealingHalfReplaceCode(lt?.code) && isHolidayOrWeekendYmd(dateStr, holidaySetForCalendar)) {
+          setError("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
+          return;
+        }
         changeDate(calendarItemIdx, "startDate", dateStr);
         closeCalendar();
         return;
@@ -647,12 +671,20 @@ export default function LeaveApplyForm({
         ? leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, lt, holidaySet)
         : 0;
       if (actualDays <= 0) {
-        setError(
-          lt?.code === "HOLIDAY_EXT"
-            ? "연휴연장은 주말·공휴일만 고르면 영업일 0일입니다. 앞·뒤·징검다리 영업일을 골랐는지, 휴무 3일 이상 연속 조건에 맞는지 확인하세요. 공휴일 DB는 npm run db:seed:base 등으로 반영하세요."
-            : "휴가 일수를 확인해 주세요.",
-        );
-        return;
+        if (isHealingHalfReplaceCode(lt?.code)) {
+          const y = it.startDate.slice(0, 10);
+          if (!y || isHolidayOrWeekendYmd(y, holidaySet)) {
+            setError("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
+            return;
+          }
+        } else {
+          setError(
+            lt?.code === "HOLIDAY_EXT"
+              ? "연휴연장은 주말·공휴일만 고르면 영업일 0일입니다. 앞·뒤·징검다리 영업일을 골랐는지, 휴무 3일 이상 연속 조건에 맞는지 확인하세요. 공휴일 DB는 npm run db:seed:base 등으로 반영하세요."
+              : "휴가 일수를 확인해 주세요.",
+          );
+          return;
+        }
       }
       if (lt?.code === "PM_RECOG_STAMP" && afternoonStampSlots < 1) {
         setError(`${lt.name}: 8칸 완성·오후 미사용인 스탬프 장이 없습니다.`);
@@ -664,8 +696,9 @@ export default function LeaveApplyForm({
           return;
         }
       }
-      if (lt?.code === "PM_HALF_MONTH" && halfDayUsed >= 1) {
-        setError("하프데이는 이번 달 이미 사용하셨습니다."); return;
+      if (lt && isHalfdayMonthlySharedPoolCode(lt.code) && halfDayUsed >= 1) {
+        setError("하프데이·힐링데이(하프대체)는 같은 달에 합쳐서 1회만 사용할 수 있습니다.");
+        return;
       }
     }
     let annualNeed = 0;
@@ -775,7 +808,9 @@ export default function LeaveApplyForm({
                       </span>
                       <ChevronRight size={12} className="text-gray-300" />
                       <span className="text-xs text-gray-600">{lt.name}</span>
-                      <span className="ml-2 text-xs font-bold text-gray-800">{actualDays}일</span>
+                      <span className="ml-2 text-xs font-bold text-gray-800">
+                        {isHealingHalfReplaceCode(lt.code) ? "0일(출퇴근 조정)" : `${actualDays}일`}
+                      </span>
                     </>
                   )}
                 </div>
@@ -1041,12 +1076,29 @@ export default function LeaveApplyForm({
                         하프데이는 <strong>수요일 오후</strong>에만 사용 가능합니다.
                       </p>
                     )}
+                    {lt && isHealingHalfReplaceCode(lt.code) && (
+                      <p className="mt-2 text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
+                        힐링데이(하프대체)는 <strong>영업일이면 요일과 관계없이</strong> 신청할 수 있습니다. 휴가일수는{" "}
+                        <strong>0일(출퇴근 조정)</strong>이며, 하프데이와 같은 달 사용 횟수(1회)를 공유합니다.
+                      </p>
+                    )}
                     <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 text-sm ${
                       actualDays > 0
                         ? "bg-blue-50 border border-blue-100 text-blue-700"
                         : "bg-gray-50 border border-gray-200 text-gray-400"
                     }`}>
-                      {lt && (resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "AM" || resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "PM") ? (
+                      {lt && isHealingHalfReplaceCode(lt.code) ? (
+                        item.startDate?.trim() &&
+                        isHolidayOrWeekendYmd(item.startDate.slice(0, 10), holidaySet) ? (
+                          <span>
+                            힐링데이(하프대체)는 <strong>영업일</strong>에만 신청할 수 있습니다. 주말·공휴일은 선택할 수 없습니다.
+                          </span>
+                        ) : (
+                          <span>
+                            휴가일수 <strong>0일(출퇴근 조정)</strong>
+                          </span>
+                        )
+                      ) : lt && (resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "AM" || resolveItemTimeSlot({ timeSlot: item.timeSlot }, leaveTypeWithPolicy(lt)) === "PM") ? (
                         actualDays <= 0 ? (
                           <span>
                             선택한 날은 <strong>영업일이 아닙니다</strong>. 반차는 영업일에만 신청할 수 있습니다.
@@ -1186,7 +1238,7 @@ export default function LeaveApplyForm({
       )}
 
       {/* ── 신청 요약 + 제출 ─────────────────────────────────── */}
-      {(totalDays > 0 || healingSubmitItems.length > 0) && (
+      {(totalDays > 0 || healingSubmitItems.length > 0 || canSubmitZeroHalfReplace) && (
         <div className="panel bg-slate-50 border-slate-200">
           <div className="panel-header border-b border-slate-200">
             <div className="flex items-center gap-2">
@@ -1213,7 +1265,7 @@ export default function LeaveApplyForm({
                         <span className="text-xs text-gray-400 ml-2">{ymdWithDay(it.startDate)}</span>
                       </div>
                     </div>
-                    <span className="text-sm font-bold text-gray-700">시간차감</span>
+                    <span className="text-sm font-bold text-gray-700">0일(출퇴근 조정)</span>
                   </div>
                 );
               }
@@ -1223,6 +1275,10 @@ export default function LeaveApplyForm({
               const slot = resolveItemTimeSlot({ timeSlot: it.timeSlot }, leaveTypeWithPolicy(t));
               const slotLabel = slot === "FULL" ? "종일" : slot === "AM" ? "오전" : "오후";
               const d = leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, t, holidaySet);
+              const summaryLeft = isHealingHalfReplaceCode(t.code)
+                ? `${g?.label ?? ""} · ${t.name}`
+                : `${g?.label} · ${slotLabel}`;
+              const summaryRight = isHealingHalfReplaceCode(t.code) ? "0일(출퇴근 조정)" : `${d}일`;
               return (
                 <div key={i} className="px-4 py-2.5 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1230,7 +1286,7 @@ export default function LeaveApplyForm({
                       style={{ background: g?.color ?? "#94a3b8" }} />
                     <div>
                       <span className="text-[13px] font-medium text-gray-800">
-                        {g?.label} · {slotLabel}
+                        {summaryLeft}
                       </span>
                       <span className="text-xs text-gray-400 ml-2">
                         {it.startDate === it.endDate
@@ -1239,7 +1295,7 @@ export default function LeaveApplyForm({
                       </span>
                     </div>
                   </div>
-                  <span className="text-sm font-bold text-gray-800 tabular-nums">{d}일</span>
+                  <span className="text-sm font-bold text-gray-800 tabular-nums">{summaryRight}</span>
                 </div>
               );
             })}
@@ -1254,7 +1310,7 @@ export default function LeaveApplyForm({
             <div className="flex gap-2">
               <button type="button" onClick={() => router.back()}
                 className="btn-secondary btn-sm px-4">취소</button>
-              <button type="submit" disabled={loading || totalDays <= 0}
+              <button type="submit" disabled={loading || (totalDays <= 0 && healingSubmitItems.length === 0 && !canSubmitZeroHalfReplace)}
                 className="btn-primary btn-sm px-6">
                 {loading ? (
                   <><span className="spinner" /><span>신청 중…</span></>
@@ -1268,7 +1324,7 @@ export default function LeaveApplyForm({
       )}
 
       {/* 신청 요약 없을 때 하단 버튼 */}
-      {totalDays <= 0 && healingSubmitItems.length === 0 && (
+      {totalDays <= 0 && healingSubmitItems.length === 0 && !canSubmitZeroHalfReplace && (
         <div className="flex gap-3">
           <button type="button" onClick={() => router.back()} className="btn-secondary flex-1">취소</button>
           <button type="submit" disabled className="btn-primary flex-1 opacity-40 cursor-not-allowed">

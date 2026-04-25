@@ -25,15 +25,16 @@ async function seedLeaveTypes() {
     ["PUBLIC", "공가", 1, false, 2, null, null, false, null, false, false, false, "귀속연도", null, "#64748b", 7],
     ["RECOGNITION", "인정휴가", 1, false, 2, null, null, false, null, false, false, false, "귀속연도", null, "#64748b", 10],
     ["PM_HALF_MONTH", "하프데이", 0.5, false, 1, 1, null, false, null, true, false, true, "귀속연도", null, "#0ea5e9", 13],
-    ["SICK", "병가", 1, false, 2, null, null, false, null, false, false, false, "귀속연도", null, "#ef4444", 14],
-    ["HEALING_DAY", "힐링데이", 0, false, 1, null, null, true, 4, false, false, false, "부여일기준", null, "#f59e0b", 15],
-    ["PM_RECOG_STAMP", "오후인정(스탬프)", 0.5, false, 1, null, null, true, 8, true, false, true, "부여일기준", null, "#a855f7", 16],
+    ["HEALING_DAY_HALF_REPLACE", "힐링데이(하프대체)", 0, false, 1, 1, null, false, null, true, false, true, "귀속연도", null, "#38bdf8", 14],
+    ["SICK", "병가", 1, false, 2, null, null, false, null, false, false, false, "귀속연도", null, "#ef4444", 15],
+    ["HEALING_DAY", "힐링데이(스탬프)", 0, false, 1, null, null, true, 4, false, false, false, "부여일기준", null, "#f59e0b", 16],
+    ["PM_RECOG_STAMP", "오후인정(스탬프)", 0.5, false, 1, null, null, true, 8, true, false, true, "부여일기준", null, "#a855f7", 17],
     // 부여 일수는 휴가규정·AllocationSourceConfig.defaultDays 기준. maxPerYear는 연간 사용 한도가 아니므로 두지 않음.
-    ["TENURE_1Y", "1년근속휴가", 3, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 17],
-    ["TENURE_5Y", "5년근속휴가", 5, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 18],
-    ["TENURE_10Y", "10년근속휴가", 10, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 19],
-    ["AWARD", "포상휴가", 1, false, 2, null, null, false, null, false, false, false, "부여일기준", 12, "#f59e0b", 20],
-    ["HOLIDAY_EXT", "연휴연장", 1, false, 1, null, null, false, null, false, false, false, "귀속연도", null, "#0ea5e9", 21],
+    ["TENURE_1Y", "1년근속휴가", 3, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 18],
+    ["TENURE_5Y", "5년근속휴가", 5, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 19],
+    ["TENURE_10Y", "10년근속휴가", 10, false, 1, null, null, false, null, false, false, false, "입사일기준", 12, "#10b981", 20],
+    ["AWARD", "포상휴가", 1, false, 2, null, null, false, null, false, false, false, "부여일기준", 12, "#f59e0b", 21],
+    ["HOLIDAY_EXT", "연휴연장", 1, false, 1, null, null, false, null, false, false, false, "귀속연도", null, "#0ea5e9", 22],
     ["BIRTHDAY_HALF", "생일반차", 0.5, false, 1, null, null, false, null, true, false, true, "부여일기준", 3, "#ec4899", 25],
   ] as const;
 
@@ -72,7 +73,9 @@ async function seedLeaveTypes() {
     if (code === "CARE") return "연 2일 한도";
     if (code === "HOLIDAY_EXT") return "휴무 3일+ 연속 시 전후·징검다리 영업일 1일";
     if (code === "PM_HALF_MONTH") return "수요일 오후";
-    if (code === "BIRTHDAY_HALF") return "생일이 있는 달에 자동 부여 0.5일(부여 후 3개월 유효)";
+    if (code === "HEALING_DAY_HALF_REPLACE") return "0일 · 영업일 요일 무관 (하프데이 월한도 공유)";
+    if (code === "HEALING_DAY") return "스탬프 4칸 이상 장당 1회 · 1시간40분 출퇴근 조정";
+    if (code === "BIRTHDAY_HALF") return "생일에 자동 부여 0.5일";
     if (code === "AWARD") return "별도 부여";
     if (code === "TENURE_1Y") return "입사 1주년 부여";
     if (code === "TENURE_5Y") return "입사 5주년 부여";
@@ -140,6 +143,7 @@ async function seedLeaveTypes() {
       validityMonths: vMon as number | null,
       color,
       sortOrder: sort as number,
+      isActive: true,
     };
     await prisma.leaveType.upsert({
       where: { code },

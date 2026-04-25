@@ -15,6 +15,7 @@ import {
 } from "@/lib/dateUtils";
 import { kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
 import { itemSlotLabelKo } from "@/lib/leaveTimeSlot";
+import { isZeroDayTeamCalendarCode } from "@/lib/healingLeaveCodes";
 import DashboardMonthCalendar from "./DashboardMonthCalendar";
 import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
@@ -229,7 +230,9 @@ export default async function DashboardPage({
         const eY = kstYmd(new Date(item.endDate));
         for (const ds of eachYmdInInclusiveRange(sY, eY)) {
           if (dates.includes(ds)) {
-            const status = itemSlotLabelKo(item, item.leaveType);
+            const status = isZeroDayTeamCalendarCode(item.leaveType.code)
+              ? item.leaveType.name
+              : itemSlotLabelKo(item, item.leaveType);
             if (!byDay[ds]) byDay[ds] = [];
             const name = req.employee?.name ?? "";
             const ex = byDay[ds].find((x) => x.name === name);

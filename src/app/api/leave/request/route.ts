@@ -17,6 +17,7 @@ import { calcWorkingDays, getFiscalYearFromStr, listWorkingYmds, splitYmdRangeBy
 import { calcHolidayExtFullDays, isHolidayOrWeekendYmd, isValidHolidayExtDay } from "@/lib/holidayExt";
 import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
 import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { isHealingHalfReplaceCode, isHalfdayMonthlySharedPoolCode } from "@/lib/healingLeaveCodes";
 const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 
 export async function POST(req: Request) {
@@ -49,6 +50,12 @@ export async function POST(req: Request) {
     const ltIds = [...new Set(items.map((i) => i.leaveTypeId))];
     const leaveTypes = await prisma.leaveType.findMany({ where: { id: { in: ltIds } } });
     const ltMap = Object.fromEntries(leaveTypes.map((t) => [t.id, t]));
+
+    const [pmPoolLt, hrPoolLt] = await Promise.all([
+      prisma.leaveType.findUnique({ where: { code: "PM_HALF_MONTH" }, select: { id: true } }),
+      prisma.leaveType.findUnique({ where: { code: "HEALING_DAY_HALF_REPLACE" }, select: { id: true } }),
+    ]);
+    const halfdaySharedPoolIds = [pmPoolLt?.id, hrPoolLt?.id].filter(Boolean) as string[];
 
     /** 공휴일(영업일·연휴연장 계산용) — 신청 입력 일자 기준 */
     const itemYmdsEarly = items.flatMap((i) => [i.startDate.slice(0, 10), i.endDate.slice(0, 10)]);
@@ -117,6 +124,7 @@ export async function POST(req: Request) {
           }
         }
         days = 0.5;
+        if (isHealingHalfReplaceCode(lt.code)) days = 0;
       }
       if (lt.code === "HOLIDAY_EXT") {
         const checkDates = slot === "FULL" ? [s, e] : [s];
@@ -201,7 +209,28 @@ export async function POST(req: Request) {
         }
       }
 
-      if (lt.maxPerMonth) {
+      if (halfdaySharedPoolIds.length && isHalfdayMonthlySharedPoolCode(lt.code)) {
+        const s = new Date(it.startDate);
+        const cnt = await prisma.leaveRequestItem.count({
+          where: {
+            leaveTypeId: { in: halfdaySharedPoolIds },
+            leaveRequest: {
+              employeeId: user.employeeId,
+              status: { notIn: ["CANCELLED", "WITHDRAWN"] },
+              startDate: {
+                gte: new Date(s.getFullYear(), s.getMonth(), 1),
+                lt: new Date(s.getFullYear(), s.getMonth() + 1, 1),
+              },
+            },
+          },
+        });
+        if (cnt >= 1) {
+          return NextResponse.json(
+            { error: "하프데이·힐링데이(하프대체)는 같은 달에 합쳐서 1회만 사용할 수 있습니다." },
+            { status: 400 },
+          );
+        }
+      } else if (lt.maxPerMonth) {
         const s = new Date(it.startDate);
         const cnt = await prisma.leaveRequestItem.count({
           where: {

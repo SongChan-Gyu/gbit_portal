@@ -15,16 +15,21 @@ type Props = {
 };
 
 /**
- * 스탬프 8칸 그리드. 별(★) 대신 스탬프 아이콘으로 표시.
+ * 스탬프 8칸 그리드 (4×2). 칸은 가로 폭에 맞춰 키우고, 아이콘은 칸 안에서 비율·상한으로 스케일.
  */
 export function StampSlotGrid({ filledCount, stamps, size = "md", className = "" }: Props) {
   const n = Math.min(8, Math.max(0, filledCount));
-  const box = size === "sm" ? "w-5 h-5 min-w-[1.25rem]" : "w-7 h-7 min-w-[1.75rem]";
-  const iconSize = size === "sm" ? 11 : 14;
+  const gap = size === "sm" ? "gap-1.5" : "gap-1.5 sm:gap-2 md:gap-2";
+  const cellPad = size === "sm" ? "p-1" : "p-1 sm:p-1.5 md:p-1.5";
+  const rounded = size === "sm" ? "rounded-md" : "rounded-lg";
+  const iconClass =
+    size === "sm"
+      ? "h-[52%] w-[52%] min-h-2.5 min-w-2.5 max-h-4 max-w-4"
+      : "h-[50%] w-[50%] min-h-2.5 min-w-2.5 max-h-8 max-w-8 sm:max-h-9 sm:max-w-9 md:max-h-9 md:max-w-9";
 
   return (
     <div
-      className={`grid grid-cols-4 gap-y-1.5 gap-x-0.5 ${className}`}
+      className={`grid w-full grid-cols-4 grid-rows-2 ${gap} ${className}`}
       role="list"
       aria-label={`스탬프 ${n}칸`}
     >
@@ -36,16 +41,15 @@ export function StampSlotGrid({ filledCount, stamps, size = "md", className = ""
             key={i}
             role="listitem"
             title={dateStr ?? (filled ? "스탬프" : "빈 칸")}
-            className={`${box} rounded-md flex items-center justify-center border-2 transition-colors ${
+            className={`${cellPad} ${rounded} flex aspect-square w-full min-w-0 items-center justify-center border-2 transition-colors ${
               filled
                 ? "border-amber-500 bg-amber-500 text-white shadow-sm"
                 : "border-dashed border-gray-300 bg-white text-gray-300"
             }`}
           >
             <Stamp
-              size={iconSize}
               strokeWidth={filled ? 2.2 : 1.4}
-              className={filled ? "text-white" : "text-gray-400"}
+              className={`shrink-0 ${iconClass} ${filled ? "text-white" : "text-gray-400"}`}
               aria-hidden
             />
           </span>

@@ -50,23 +50,26 @@ export default async function LeaveApplyPage() {
     .filter((a) => new Date(a.validFrom) <= dayEnd && new Date(a.validUntil) >= dayStart)
     .reduce((s, a) => s + Math.max(0, a.totalDays - a.usedDays), 0);
 
-  // 이번 달 하프데이 사용 횟수
+  // 이번 달 하프데이 + 힐링데이(하프대체) 합산(월 1회 공유)
   const halfDayType = leaveTypes.find((t) => t.code === "PM_HALF_MONTH");
-  const halfDayUsed = halfDayType
-    ? await prisma.leaveRequestItem.count({
-        where: {
-          leaveTypeId: halfDayType.id,
-          leaveRequest: {
-            employeeId: user.employeeId,
-            status: { notIn: ["CANCELLED", "WITHDRAWN"] },
-            startDate: {
-              gte: new Date(now.getFullYear(), now.getMonth(), 1),
-              lt:  new Date(now.getFullYear(), now.getMonth() + 1, 1),
+  const halfReplaceType = leaveTypes.find((t) => t.code === "HEALING_DAY_HALF_REPLACE");
+  const halfPoolIds = [halfDayType?.id, halfReplaceType?.id].filter(Boolean) as string[];
+  const halfDayUsed =
+    halfPoolIds.length > 0
+      ? await prisma.leaveRequestItem.count({
+          where: {
+            leaveTypeId: { in: halfPoolIds },
+            leaveRequest: {
+              employeeId: user.employeeId,
+              status: { notIn: ["CANCELLED", "WITHDRAWN"] },
+              startDate: {
+                gte: new Date(now.getFullYear(), now.getMonth(), 1),
+                lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),
+              },
             },
           },
-        },
-      })
-    : 0;
+        })
+      : 0;
 
   return (
     <div className="max-w-2xl">
@@ -102,7 +105,7 @@ export default async function LeaveApplyPage() {
               <p className="text-[clamp(1rem,4vw,1.25rem)] font-black text-gray-600 leading-none tabular-nums">
                 {halfDayUsed > 0 ? "완료" : "미사용"}
               </p>
-              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-tight">이달 하프데이</p>
+              <p className="text-[11px] sm:text-xs text-gray-500 mt-1 leading-tight">이달 하프데이·하프대체</p>
             </div>
           </div>
           <p className="text-right text-[10px] text-gray-400 mt-2 hidden sm:block">

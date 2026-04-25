@@ -3,6 +3,7 @@ import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 import { isHolidayOrWeekendYmd, isValidHolidayExtDay } from "@/lib/holidayExt";
+import { isHealingHalfReplaceCode } from "@/lib/healingLeaveCodes";
 
 /** 클라이언트 LT 등 allows* 가 비어 있을 수 있음 → leaveTypeWithPolicy 로 보완 */
 export function leaveItemDeductDays(
@@ -20,6 +21,7 @@ export function leaveItemDeductDays(
     | undefined,
 ): number {
   if (!lt) return it.days;
+  if (isHealingHalfReplaceCode(lt.code)) return 0;
   const slot = resolveItemTimeSlot(it, leaveTypeWithPolicy(lt));
   if (slot === "AM" || slot === "PM") return 0.5;
   /** FULL: 폼·서버가 계산한 영업일 수(연휴연장은 calcHolidayExtFullDays). 예전처럼 1로 고정하면 주말만 골랐을 때 UI가 틀어짐 */
@@ -37,6 +39,12 @@ export function leaveItemFormDisplayDays(
   holidayYmdSet: Set<string>,
 ): number {
   if (!lt) return it.days;
+  if (isHealingHalfReplaceCode(lt.code)) {
+    const s = it.startDate.slice(0, 10);
+    if (!s) return 0;
+    if (isHolidayOrWeekendYmd(s, holidayYmdSet)) return 0;
+    return 0;
+  }
   const slot = resolveItemTimeSlot(it, leaveTypeWithPolicy(lt));
   if (slot === "AM" || slot === "PM") {
     const s = it.startDate.slice(0, 10);

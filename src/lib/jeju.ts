@@ -93,3 +93,8 @@ export function formatJejuAccountNumber(num: string): string {
   if (n.length <= 5) return `${n.slice(0, 3)}-${n.slice(3)}`;
   return `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}`;
 }
+
+/** 예약금 이체 안내 한 줄 (은행 예금주 계좌) */
+export function formatJejuDepositAccountLine(account: JejuDepositAccount): string {
+  return `${account.bankName} ${account.accountHolder} ${formatJejuAccountNumber(account.accountNumber)}`;
+}
