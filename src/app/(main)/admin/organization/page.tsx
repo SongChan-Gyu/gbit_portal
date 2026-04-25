@@ -37,7 +37,7 @@ export default async function OrganizationPage({
       : Promise.resolve([]),
 
     tab === "teams"
-      ? prisma.employee.findMany({ where:{ status:"ACTIVE" }, orderBy:{ name:"asc" } })
+      ? prisma.employee.findMany({ where:{ status:{ not:"INACTIVE" } }, orderBy:{ name:"asc" } })
       : Promise.resolve([]),
   ]);
 
