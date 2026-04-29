@@ -16,6 +16,8 @@ export const TEMPLATE_HEADERS = [
   "이메일",
   "고용유형",
   "역할",
+  /** 회사 사번(로그인 ID). 비우면 엑셀만으로는 미입력 — 인사 화면에서도 설정 가능 */
+  "회사사번",
 ] as const;
 
 /** 직급: 사원, 대리, 과장, 차장, 부장, 이사 (한글 그대로 저장) */
@@ -94,6 +96,8 @@ export interface ParsedEmployeeRow {
   email: string;
   employeeType: string;
   role: string;
+  /** 회사 사번(로그인 ID). 빈 문자열이면 미입력 */
+  companyStaffNo: string;
 }
 
 /** 엑셀 시리얼 날짜(숫자) → YYYY-MM-DD */
@@ -188,6 +192,7 @@ export function parseSheetToRows(
       email: get("이메일"),
       employeeType,
       role,
+      companyStaffNo: get("회사사번"),
     });
   }
   return { rows: result, errors };

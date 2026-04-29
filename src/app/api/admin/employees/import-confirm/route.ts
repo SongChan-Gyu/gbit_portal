@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import type { ParsedEmployeeRow } from "@/lib/employeeExcel";
 import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
+import { normalizeCompanyStaffNo, ensureInternalUserFromCompanyStaffNo } from "@/lib/employeeCompanyStaffNo";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -38,22 +39,38 @@ export async function POST(req: Request) {
 
     const emailTrim = (row.email || "").trim();
     const emailNorm = emailTrim || null;
+    const companyStaffNo = normalizeCompanyStaffNo(row.companyStaffNo ?? "");
+    if (companyStaffNo) {
+      const dupEmp = await prisma.employee.findUnique({ where: { companyStaffNo }, select: { id: true } });
+      if (dupEmp) {
+        errors.push({ row: row._rowIndex, message: `회사사번 ${companyStaffNo} 이미 존재` });
+        continue;
+      }
+    }
+    const rowType = row.employeeType || "FULL";
     try {
-      const emp = await prisma.employee.create({
-        data: {
-          empNo,
-          name: row.name,
-          teamId,
-          position: row.position,
-          dutyDept: row.dutyDept || null,
-          role: row.role || "STAFF",
-          employeeType: row.employeeType || "FULL",
-          hireDate: new Date(row.hireDate),
-          birthDate: row.birthDate ? new Date(row.birthDate) : null,
-          phone: row.phone || "",
-          email: emailNorm,
-          emailEnabled: emailEnabledSyncedToAddress(emailNorm),
-        },
+      const emp = await prisma.$transaction(async (tx) => {
+        const createdEmp = await tx.employee.create({
+          data: {
+            empNo,
+            name: row.name,
+            teamId,
+            position: row.position,
+            dutyDept: row.dutyDept || null,
+            role: row.role || "STAFF",
+            employeeType: rowType,
+            hireDate: new Date(row.hireDate),
+            birthDate: row.birthDate ? new Date(row.birthDate) : null,
+            phone: row.phone || "",
+            email: emailNorm,
+            emailEnabled: emailEnabledSyncedToAddress(emailNorm),
+            ...(companyStaffNo ? { companyStaffNo } : {}),
+          },
+        });
+        if (companyStaffNo && rowType !== "EXTERNAL") {
+          await ensureInternalUserFromCompanyStaffNo(tx, createdEmp.id, companyStaffNo);
+        }
+        return createdEmp;
       });
       created.push(emp.id);
     } catch (e: any) {

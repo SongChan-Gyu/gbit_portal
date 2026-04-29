@@ -16,6 +16,7 @@ export default async function MePage({ searchParams }: { searchParams: Promise<{
     select: {
       id: true,
       empNo: true,
+      companyStaffNo: true,
       name: true,
       phone: true,
       email: true,

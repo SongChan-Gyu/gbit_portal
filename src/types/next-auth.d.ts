@@ -9,6 +9,7 @@ declare module "next-auth" {
     role?: string;
     teamId?: string | null;
     position?: string;
+    mustChangePassword?: boolean;
   }
 
   interface Session {
@@ -22,5 +23,6 @@ declare module "next-auth/jwt" {
     role?: string;
     teamId?: string | null;
     position?: string;
+    mustChangePassword?: boolean;
   }
 }

@@ -37,10 +37,17 @@ export async function PATCH(req: Request) {
   if (!valid) return NextResponse.json({ error: "현재 비밀번호가 올바르지 않습니다." }, { status: 400 });
 
   const nextHash = await bcrypt.hash(newPassword, 10);
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { passwordHash: nextHash, mustChangePassword: false },
-  });
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash: nextHash, mustChangePassword: false },
+    }),
+    /** 최초 비밀번호 변경: 미가입에 가까운 상태(PENDING/INVITED)만 재직(ACTIVE)으로. 이미 ACTIVE면 행 0건 갱신(영향 없음). */
+    prisma.employee.updateMany({
+      where: { id: employeeId, status: { in: ["PENDING", "INVITED"] } },
+      data: { status: "ACTIVE" },
+    }),
+  ]);
 
   return NextResponse.json({ ok: true, message: "비밀번호가 변경되었습니다." });
 }

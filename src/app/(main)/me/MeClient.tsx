@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { signOut } from "next-auth/react";
 
 /** 숫자만 (최대 11자리, 휴대폰) */
 function phoneDigits(s: string): string {
@@ -19,6 +20,7 @@ function formatKrMobileDisplay(raw: string): string {
 type Emp = {
   id: string;
   empNo: string;
+  companyStaffNo: string | null;
   name: string;
   position: string;
   team: { name: string } | null;
@@ -108,7 +110,16 @@ export default function MeClient({ initial, forcePasswordChange = false }: { ini
     setPw({ currentPassword: "", newPassword: "", confirmPassword: "" });
     setPwOkMsg("비밀번호가 변경되었습니다.");
     if (forcePasswordChange) {
-      setTimeout(() => router.replace("/me"), 600);
+      setTimeout(() => {
+        void (async () => {
+          try {
+            await signOut({ redirect: false });
+          } catch {
+            /* ignore */
+          }
+          window.location.href = "/login?relogin=1";
+        })();
+      }, 700);
     }
   }
 
@@ -123,13 +134,19 @@ export default function MeClient({ initial, forcePasswordChange = false }: { ini
       <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-base font-semibold text-gray-900">{initial.name}</p>
-          <p className="text-xs text-gray-500">{initial.empNo}</p>
+          <p className="text-xs text-gray-500 tabular-nums">시스템 {initial.empNo}</p>
         </div>
         <p className="text-sm text-gray-600 mt-1">
           {initial.team?.name ?? "팀 없음"} · {initial.position}
         </p>
+        <p className="text-sm text-gray-800 mt-2">
+          <span className="text-gray-500 text-xs font-medium uppercase tracking-wide">회사사번</span>{" "}
+          <span className="font-semibold tabular-nums">{initial.companyStaffNo?.trim() || "—"}</span>
+        </p>
       </div>
 
+      {!forcePasswordChange && (
+      <>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
           <label className="label">연락처</label>
@@ -193,11 +210,13 @@ export default function MeClient({ initial, forcePasswordChange = false }: { ini
       {okMsg && <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">{okMsg}</p>}
 
         <div className="flex gap-3 pt-1">
-          {!forcePasswordChange && <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>뒤로</button>}
+          <button type="button" className="btn-secondary flex-1" onClick={() => router.back()}>뒤로</button>
           <button type="button" className="btn-primary flex-1" onClick={save} disabled={saving}>
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>
+      </>
+      )}
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm space-y-4">

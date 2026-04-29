@@ -13,6 +13,7 @@ export async function GET() {
     select: {
       id: true,
       empNo: true,
+      companyStaffNo: true,
       name: true,
       phone: true,
       email: true,

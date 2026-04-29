@@ -1,19 +1,26 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { AlertCircle, Lock, Sparkles, User } from "lucide-react";
 
-export default function LoginPage() {
+function LoginForm() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]       = useState("");
+  const [info, setInfo]         = useState("");
   const [loading, setLoading]   = useState(false);
-  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("relogin") === "1") {
+      setInfo("비밀번호를 변경했습니다. 새 비밀번호로 로그인해 주세요.");
+    }
+  }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true); setError("");
+    setLoading(true); setError(""); setInfo("");
     const res = await signIn("credentials", { username, password, redirect: false });
     setLoading(false);
     if (res?.error) setError("아이디 또는 비밀번호가 올바르지 않습니다.");
@@ -22,11 +29,18 @@ export default function LoginPage() {
         const meRes = await fetch("/api/me");
         const me = await meRes.json().catch(() => ({}));
         if (meRes.ok && me?.mustChangePassword) {
-          router.push("/first-setup");
+          window.location.href = "/me?forcePassword=1";
           return;
         }
       } catch {}
-      router.push("/dashboard");
+      const cb = searchParams.get("callbackUrl");
+      const safe =
+        cb &&
+        cb.startsWith("/") &&
+        !cb.startsWith("//") &&
+        !cb.includes("://") &&
+        !cb.startsWith("/login");
+      window.location.href = safe ? cb : "/dashboard";
     }
   }
 
@@ -105,6 +119,13 @@ export default function LoginPage() {
                 </div>
               </div>
 
+              {info && (
+                <div className="flex items-center gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  <AlertCircle size={14} className="shrink-0" />
+                  {info}
+                </div>
+              )}
+
               {error && (
                 <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
                   <AlertCircle size={14} className="shrink-0" />
@@ -125,5 +146,13 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center text-gray-500 text-sm">로딩…</div>}>
+      <LoginForm />
+    </Suspense>
   );
 }

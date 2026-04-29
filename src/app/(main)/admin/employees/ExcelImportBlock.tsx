@@ -22,6 +22,7 @@ const SAMPLE_ROW: Record<string, string> = {
   이메일: "hong@example.com",
   고용유형: "정규직",
   역할: "팀원",
+  회사사번: "200410",
 };
 
 function dutyDeptLabel(code: string): string {
@@ -167,7 +168,7 @@ export default function ExcelImportBlock() {
           </table>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          직급: 사원/대리/과장/차장/부장/이사 · 직급부서: 운영부/교육부/복지부/해당사항없음 · 고용유형: 정규직/프리랜서/외부개발자 · 역할: 팀원/팀장/PM/관리자
+          직급: 사원/대리/과장/차장/부장/이사 · 직급부서: 운영부/교육부/복지부/해당사항없음 · 고용유형: 정규직/프리랜서/외부개발자 · 역할: 팀원/팀장/PM/관리자 · 회사사번: 비우거나 입력(계정 연동은 인사 화면에서)
         </p>
       </div>
 

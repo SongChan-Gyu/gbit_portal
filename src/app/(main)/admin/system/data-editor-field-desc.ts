@@ -47,7 +47,8 @@ export const DATA_EDITOR_FIELD_DESCRIPTIONS: Record<string, Record<string, strin
   // ── 읽기 전용 테이블 ─────────────────────────────────────
   Employee: {
     id: "사원 고유 ID",
-    empNo: "사번 (예: E001)",
+    empNo: "시스템 사번 (자동 E001 형식 등, PK 아님)",
+    companyStaffNo: "회사 사번(로그인 ID). 내부 직원용, UNIQUE·NULL 허용(외부개발자 등). 저장 시 계정이 있으면 User.username과 동기화",
     name: "이름",
     teamId: "소속 팀 ID",
     position: "직급 (예: 대리, 과장)",
@@ -67,7 +68,7 @@ export const DATA_EDITOR_FIELD_DESCRIPTIONS: Record<string, Record<string, strin
   User: {
     id: "계정 고유 ID",
     employeeId: "연결된 사원 ID",
-    username: "로그인 아이디 (휴대폰 번호 숫자만)",
+    username: "로그인 아이디 (회사 사번 또는 휴대폰 번호 숫자 등)",
     passwordHash: "bcrypt 해시 비밀번호 (평문 노출 불가)",
     mustChangePassword: "다음 로그인 시 비밀번호 변경 강제 여부",
     lastLoginAt: "마지막 로그인 시각",

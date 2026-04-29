@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import DatePickerButton from "@/components/ui/DatePickerButton";
 import { todayKstYmd } from "@/lib/dateUtils";
+import { INTERNAL_STAFF_FIXED_TEMP_PASSWORD } from "@/lib/employeeCompanyStaffNo";
 
 interface Team { id:string; name:string; }
 interface Employee {
@@ -10,6 +11,8 @@ interface Employee {
   dutyDept:string|null; role:string; employeeType:string; hireDate:string; birthDate:string|null;
   phone:string; email:string|null; status:string;
   alimtalkEnabled: boolean;
+  /** 회사 사번(로그인 ID). 외부 등은 비움 */
+  companyStaffNo?: string | null;
 }
 
 const ROLES = [["STAFF","팀원"],["TEAM_LEAD","팀장"],["PM","PM"],["ADMIN","관리자"]];
@@ -44,9 +47,11 @@ function stripEmployeeForForm(raw: Record<string, unknown>): Partial<Employee> {
     status,
     alimtalkEnabled,
   } = raw;
+  const companyStaffNo = String(raw.companyStaffNo ?? "").trim();
   return {
     id: rid as string,
     empNo: empNo as string,
+    companyStaffNo,
     name: name as string,
     teamId: (teamId as string | null) ?? null,
     position: position as string,
@@ -66,9 +71,21 @@ function stripEmployeeForForm(raw: Record<string, unknown>): Partial<Employee> {
   };
 }
 
-export default function EmployeeForm({ teams, employee }: { teams:Team[]; employee?:Record<string, unknown> }) {
+export default function EmployeeForm({
+  teams,
+  employee,
+  hasLinkedAccount = false,
+}: {
+  teams: Team[];
+  employee?: Record<string, unknown>;
+  /** 수정 시 계정(User)이 연결되어 있는지 */
+  hasLinkedAccount?: boolean;
+}) {
   const router = useRouter();
   const today = todayKstYmd();
+  const initialCompanyStaffNoRef = useRef(
+    employee ? String(employee.companyStaffNo ?? "").trim() : "",
+  );
   const [form, setForm] = useState<Partial<Employee>>(() => {
     if (employee) {
       const s = stripEmployeeForForm(employee);
@@ -86,6 +103,7 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
       hireDate: today,
       dutyDept:"",
       alimtalkEnabled: false,
+      companyStaffNo: "",
     };
   });
   const [loading, setLoading] = useState(false);
@@ -103,10 +121,31 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError("");
+
+    let resetPasswordOnCompanyStaffNoChange: boolean | undefined;
+    if (isEdit && hasLinkedAccount) {
+      const prev = initialCompanyStaffNoRef.current.trim();
+      const next = String(form.companyStaffNo ?? "").trim();
+      if (next !== prev && next.length > 0) {
+        const example = INTERNAL_STAFF_FIXED_TEMP_PASSWORD;
+        const ok = window.confirm(
+          `회사사번(로그인 ID)이 바뀝니다.\n\n` +
+            `비밀번호를 「${example}」로 초기화하면, 해당 사원은 다음 로그인 시 이 비밀번호로 들어온 뒤 새 비밀번호를 반드시 설정해야 합니다.\n\n` +
+            `[확인] 초기화 적용\n[취소] 로그인 ID만 바꾸고 비밀번호는 유지`,
+        );
+        resetPasswordOnCompanyStaffNoChange = ok;
+      }
+    }
+
+    const payload: Record<string, unknown> = { ...form };
+    if (resetPasswordOnCompanyStaffNoChange !== undefined) {
+      payload.resetPasswordOnCompanyStaffNoChange = resetPasswordOnCompanyStaffNoChange;
+    }
+
     const res = await fetch(isEdit ? `/api/admin/employees/${(form as Employee).id}` : "/api/admin/employees", {
       method: isEdit ? "PATCH" : "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     setLoading(false);
@@ -133,6 +172,23 @@ export default function EmployeeForm({ teams, employee }: { teams:Team[]; employ
           <label className="label">이름 *</label>
           <input className="input" value={form.name??""} onChange={(e)=>set("name",e.target.value)} required />
         </div>
+      </div>
+
+      <div>
+        <label className="label">회사사번 (로그인 ID)</label>
+        <input
+          className="input max-w-md"
+          value={form.companyStaffNo ?? ""}
+          onChange={(e) => set("companyStaffNo", e.target.value)}
+          placeholder="예: 200410 (내부 직원)"
+          autoComplete="off"
+        />
+        <p className="text-xs text-gray-500 mt-1 leading-snug">
+          내부 직원은 회사 사번을 입력합니다. <strong>계정이 없을 때</strong> 회사사번을 저장하면 로그인 계정이 자동으로 만들어지며, 초기 비밀번호는{" "}
+          <strong className="tabular-nums">「{INTERNAL_STAFF_FIXED_TEMP_PASSWORD}」</strong> (고정 9자, 사번과 무관)이고 다음 로그인 시 변경해야 합니다. 이미 계정이 있으면 로그인 ID가 같이
+          바뀌며, 저장 시 비밀번호를 같은 규칙으로 초기화할지 선택할 수 있습니다.
+          외부개발자 등은 비워 두면 됩니다. 위 &quot;사번&quot;은 시스템 자동 부여 번호(E001…)로 그대로 둡니다.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

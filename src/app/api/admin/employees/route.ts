@@ -5,13 +5,29 @@ import prisma from "@/lib/db";
 import { getNextEmpNo } from "@/lib/empNo";
 import { writeAudit, getIp } from "@/lib/audit";
 import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
+import { normalizeCompanyStaffNo, ensureInternalUserFromCompanyStaffNo } from "@/lib/employeeCompanyStaffNo";
+
+type EmployeePostBody = {
+  empNo?: string;
+  name: string;
+  teamId?: string | null;
+  position: string;
+  dutyDept?: string | null;
+  role?: string;
+  employeeType?: string;
+  hireDate: string;
+  birthDate?: string | null;
+  phone?: string;
+  email?: string | null;
+  alimtalkEnabled?: boolean;
+  companyStaffNo?: string | null;
+};
 
 export async function POST(req: Request) {
   const session = await auth();
   const user = session?.user as any;
   const guard = requirePMOrAdmin(user); if (guard) return guard;
 
-  const body = await req.json();
   const {
     empNo: empNoRaw,
     name,
@@ -25,7 +41,8 @@ export async function POST(req: Request) {
     phone,
     email,
     alimtalkEnabled,
-  } = body;
+    companyStaffNo: companyStaffNoRaw,
+  } = (await req.json()) as EmployeePostBody;
   const missing: string[] = [];
   const nameVal = String(name ?? "").trim();
   const positionVal = String(position ?? "").trim();
@@ -41,18 +58,39 @@ export async function POST(req: Request) {
   const exists = await prisma.employee.findUnique({ where:{empNo} });
   if (exists) return NextResponse.json({ error:"이미 존재하는 사번입니다." }, { status:400 });
 
+  const companyStaffNo = normalizeCompanyStaffNo(
+    companyStaffNoRaw !== undefined ? String(companyStaffNoRaw ?? "") : "",
+  );
+  if (companyStaffNo) {
+    const dup = await prisma.employee.findUnique({ where: { companyStaffNo }, select: { id: true } });
+    if (dup) return NextResponse.json({ error: "이미 사용 중인 회사사번입니다." }, { status: 400 });
+  }
+
   const emailNorm = String(email ?? "").trim() || null;
-  const emp = await prisma.employee.create({
-    data:{
-      empNo, name, teamId:teamId||null, position, dutyDept:dutyDept||null, role:role||"STAFF",
-      employeeType:employeeType||"FULL",
-      hireDate:new Date(hireDateVal),
-      birthDate:birthDate ? new Date(birthDate) : null,
-      phone:phone||"",
-      email: emailNorm,
-      emailEnabled: emailEnabledSyncedToAddress(emailNorm),
-      alimtalkEnabled: !!alimtalkEnabled,
-    },
+  const nextType = employeeType || "FULL";
+  const emp = await prisma.$transaction(async (tx) => {
+    const created = await tx.employee.create({
+      data: {
+        empNo,
+        name,
+        teamId: teamId || null,
+        position,
+        dutyDept: dutyDept || null,
+        role: role || "STAFF",
+        employeeType: nextType,
+        hireDate: new Date(hireDateVal),
+        birthDate: birthDate ? new Date(birthDate) : null,
+        phone: phone || "",
+        email: emailNorm,
+        emailEnabled: emailEnabledSyncedToAddress(emailNorm),
+        alimtalkEnabled: !!alimtalkEnabled,
+        ...(companyStaffNo ? { companyStaffNo } : {}),
+      },
+    });
+    if (companyStaffNo && nextType !== "EXTERNAL") {
+      await ensureInternalUserFromCompanyStaffNo(tx, created.id, companyStaffNo);
+    }
+    return created;
   });
 
   await writeAudit({

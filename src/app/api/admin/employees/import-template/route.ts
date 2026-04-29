@@ -13,7 +13,7 @@ export async function GET() {
     const wb = XLSX.utils.book_new();
     const wsData: string[][] = [
       [...TEMPLATE_HEADERS],
-      ["홍길동", "개발팀", "사원", "운영부", "2024-01-15", "1990-05-20", "010-1234-5678", "hong@example.com", "정규직", "팀원"],
+      ["홍길동", "개발팀", "사원", "운영부", "2024-01-15", "1990-05-20", "010-1234-5678", "hong@example.com", "정규직", "팀원", "200410"],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     XLSX.utils.book_append_sheet(wb, ws, "사원목록");

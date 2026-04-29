@@ -27,6 +27,8 @@ model Team {
 model Employee {
   id           String       @id @default(cuid())
   empNo        String       @unique
+  /// 회사 사번(로그인 ID). 내부 직원은 인사에서 입력 후 User.username과 동기화. 외부개발자 등은 null 가능.
+  companyStaffNo String?    @unique
   name         String
   teamId       String?
   team         Team?        @relation("TeamMembers", fields: [teamId], references: [id])

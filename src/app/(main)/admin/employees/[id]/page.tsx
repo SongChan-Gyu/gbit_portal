@@ -31,7 +31,7 @@ export default async function EditEmployeePage({ params }: { params: Promise<{ i
   return (
     <div className="max-w-2xl mx-auto">
       <h1 className="page-title mb-6">사원 정보 수정</h1>
-      <EmployeeForm teams={teams} employee={empForForm as any} />
+      <EmployeeForm teams={teams} employee={empForForm as any} hasLinkedAccount={!!employee.user} />
     </div>
   );
 }
