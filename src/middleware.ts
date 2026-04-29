@@ -2,6 +2,21 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+/** Auth.js v5: HTTPS에서는 `__Secure-authjs.session-token` — getToken에 맞춰야 세션을 읽습니다. */
+function isHttpsRequest(req: NextRequest): boolean {
+  const forwarded = req.headers.get("x-forwarded-proto");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first === "https") return true;
+    if (first === "http") return false;
+  }
+  return req.nextUrl.protocol === "https:";
+}
+
+function authSecret(): string | undefined {
+  return process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+}
+
 function isPublicPath(pathname: string): boolean {
   if (pathname === "/login") return true;
   if (pathname.startsWith("/register")) return true;
@@ -24,7 +39,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const secret = authSecret();
+  const secureCookie = isHttpsRequest(req);
+  const token = secret
+    ? await getToken({ req, secret, secureCookie })
+    : null;
 
   if (!token) {
     if (!isPublicPath(pathname)) {
