@@ -1,8 +1,15 @@
+import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
 import { JEJU_DEPOSIT_ACCOUNT_DEFAULT, JEJU_MAX_NIGHTS_DEFAULT, type JejuDepositAccount } from "@/lib/jeju";
+import {
+  JEJU_EXTERNAL_STAY_CONFIG_KEY,
+  loadJejuExternalStayViewConfig,
+  type JejuExternalStayViewConfig,
+} from "@/lib/jejuExternalStayView";
 
 /** 복지부 또는 PM/ADMIN만 접근 */
 async function canManageJejuSettings(user: { employeeId?: string; role?: string }) {
@@ -27,6 +34,8 @@ export async function GET() {
   let blockedDates: string[] = [];
   let maxNights = JEJU_MAX_NIGHTS_DEFAULT;
   let notifyConfig: object = { step1: {}, step2: {} };
+  const ext = await loadJejuExternalStayViewConfig();
+  const portalBaseUrl = (process.env.NEXTAUTH_URL ?? "").replace(/\/$/, "");
   try {
     const [accountConfig, blockedConfig, maxNightsConfig, notifyConfigRow] = await Promise.all([
       prisma.systemConfig.findUnique({ where: { key: "jejuDepositAccount" } }),
@@ -52,7 +61,18 @@ export async function GET() {
   } catch {
     // keep defaults
   }
-  return NextResponse.json({ depositAccount, blockedDates, maxNights, notifyConfig });
+  return NextResponse.json({
+    depositAccount,
+    blockedDates,
+    maxNights,
+    notifyConfig,
+    externalStayView: {
+      enabled: ext.enabled,
+      urlToken: ext.urlToken,
+      pinIsSet: !!ext.pinHash,
+    },
+    portalBaseUrl,
+  });
 }
 
 /** PATCH - 예약금 계좌, 예약 불가일 저장 */
@@ -71,6 +91,11 @@ export async function PATCH(req: Request) {
     notifyConfig?: {
       step1?: { phone?: string; phone2?: string; email?: string; notifyVia?: string };
       step2?: { phone?: string; email?: string; notifyVia?: string };
+    };
+    externalStayView?: {
+      enabled?: boolean;
+      pin?: string;
+      regenerateUrlToken?: boolean;
     };
   };
 
@@ -107,6 +132,27 @@ export async function PATCH(req: Request) {
       where: { key: "jejuMaxNights" },
       create: { key: "jejuMaxNights", value: String(n) },
       update: { value: String(n) },
+    });
+  }
+
+  if (body.externalStayView != null) {
+    const cur = await loadJejuExternalStayViewConfig();
+    const next: JejuExternalStayViewConfig = {
+      enabled: typeof body.externalStayView.enabled === "boolean" ? body.externalStayView.enabled : cur.enabled,
+      urlToken: cur.urlToken,
+      pinHash: cur.pinHash,
+    };
+    if (!next.urlToken) next.urlToken = randomBytes(24).toString("base64url");
+    if (body.externalStayView.regenerateUrlToken) {
+      next.urlToken = randomBytes(24).toString("base64url");
+    }
+    if (typeof body.externalStayView.pin === "string" && /^\d{4}$/.test(body.externalStayView.pin)) {
+      next.pinHash = await bcrypt.hash(body.externalStayView.pin, 10);
+    }
+    await prisma.systemConfig.upsert({
+      where: { key: JEJU_EXTERNAL_STAY_CONFIG_KEY },
+      create: { key: JEJU_EXTERNAL_STAY_CONFIG_KEY, value: JSON.stringify(next) },
+      update: { value: JSON.stringify(next) },
     });
   }
 

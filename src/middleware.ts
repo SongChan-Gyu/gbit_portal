@@ -23,6 +23,7 @@ function isPublicPath(pathname: string): boolean {
   if (pathname === "/find-id") return true;
   if (pathname === "/forgot-password") return true;
   if (pathname === "/reset-password") return true;
+  if (pathname.startsWith("/jeju-external/")) return true;
   return false;
 }
 
