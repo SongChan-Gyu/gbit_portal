@@ -259,7 +259,12 @@ export default function EmployeeForm({
         </div>
         <div>
           <label className="label">생년월일</label>
-          <DatePickerButton value={form.birthDate??""} onChange={(d)=>set("birthDate",d)} />
+          <input
+            type="date"
+            className="input"
+            value={form.birthDate ?? ""}
+            onChange={(e) => set("birthDate", e.target.value)}
+          />
           <p className="text-xs text-gray-500 mt-1">생일반차쿠폰 자동 부여용</p>
         </div>
       </div>
