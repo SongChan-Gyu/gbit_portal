@@ -27,24 +27,28 @@ export async function POST(req: Request) {
   const guard = requirePMOrAdmin(u); if (guard) return guard;
 
   const body = await req.json().catch(() => ({}));
-  const { title, slug, description, isActive, fields } = body;
-  if (!title || !slug)
-    return NextResponse.json({ error: "제목과 URL 경로(slug)는 필수입니다." }, { status: 400 });
+  const { title, slug, description, isActive, fields, showInMenu, audience } = body;
+  if (!title)
+    return NextResponse.json({ error: "제목은 필수입니다." }, { status: 400 });
 
-  const slugNorm = String(slug).trim().replace(/\s+/g, "-").toLowerCase();
-  if (!/^[a-z0-9-]+$/.test(slugNorm))
+  const slugRaw = slug ? String(slug).trim().replace(/\s+/g, "-").toLowerCase() : null;
+  if (slugRaw && !/^[a-z0-9-]+$/.test(slugRaw))
     return NextResponse.json({ error: "URL 경로는 영문 소문자, 숫자, 하이픈만 가능합니다." }, { status: 400 });
 
-  const existing = await prisma.form.findUnique({ where: { slug: slugNorm } });
-  if (existing)
-    return NextResponse.json({ error: "이미 사용 중인 URL 경로입니다." }, { status: 400 });
+  if (slugRaw) {
+    const existing = await prisma.form.findUnique({ where: { slug: slugRaw } });
+    if (existing)
+      return NextResponse.json({ error: "이미 사용 중인 URL 경로입니다." }, { status: 400 });
+  }
 
   const form = await prisma.form.create({
     data: {
       title,
-      slug: slugNorm,
+      slug: slugRaw,
       description: description ?? null,
       isActive: isActive !== false,
+      showInMenu: !!showInMenu,
+      audience: audience ?? "ALL",
       fields: {
         create: (Array.isArray(fields) ? fields : []).map((f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({
           sortOrder: i,

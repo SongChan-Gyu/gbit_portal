@@ -167,8 +167,16 @@ export default function ExcelImportBlock() {
             </tbody>
           </table>
         </div>
-        <p className="text-xs text-gray-500 mt-2">
-          직급: 사원/대리/과장/차장/부장/이사 · 직급부서: 운영부/교육부/복지부/해당사항없음 · 고용유형: 정규직/프리랜서/외부개발자 · 역할: 팀원/팀장/PM/관리자 · 회사사번: 비우거나 입력(계정 연동은 인사 화면에서)
+        <p className="text-xs text-gray-500 mt-2 space-y-1">
+          <span className="block">
+            직급: 사원/대리/과장/차장/부장/이사 · 직급부서: 운영부/교육부/복지부/해당사항없음 · 고용유형: 정규직/프리랜서/외부개발자 · 역할: 팀원/팀장/PM/관리자 · 회사사번: 비우거나 입력(계정 연동은 인사 화면에서)
+          </span>
+          <span className="block text-gray-600">
+            <strong>팀</strong> 열은 <strong>조직 관리에 등록된 팀 이름과 완전히 같아야</strong> 연결됩니다. 미등록 이름이면 팀 없음으로 들어갑니다. 외부개발팀·외부운영팀 등은 먼저 조직에서 팀을 만든 뒤, 엑셀에 그 이름을 그대로 적어 주세요.
+          </span>
+          <span className="block text-gray-600">
+            <strong>입사일</strong>은 고용유형이 <strong>외부개발자</strong>일 때 비워도 됩니다(저장 시 시스템 기본일로 기록).
+          </span>
         </p>
       </div>
 
@@ -240,7 +248,7 @@ export default function ExcelImportBlock() {
                     <td className="px-2 py-1.5">{r.team || "-"}</td>
                     <td className="px-2 py-1.5">{r.position}</td>
                     <td className="px-2 py-1.5">{dutyDeptLabel(r.dutyDept)}</td>
-                    <td className="px-2 py-1.5">{r.hireDate}</td>
+                    <td className="px-2 py-1.5">{r.hireDate || (r.employeeType === "EXTERNAL" ? "—" : "")}</td>
                     <td className="px-2 py-1.5">{r.birthDate || "-"}</td>
                     <td className="px-2 py-1.5">{r.phone || "-"}</td>
                     <td className="px-2 py-1.5">{r.email || "-"}</td>

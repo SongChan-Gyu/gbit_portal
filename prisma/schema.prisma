@@ -167,6 +167,11 @@ model LeaveType {
   isActive         Boolean @default(true)
   sortOrder        Int     @default(0)
   color            String  @default("#3b82f6") // 캘린더 색상
+  // DB 실제 컬럼 (마이그레이션 20260425132000/140500)
+  allowedWeekdays  String? // JSON: ["MON","TUE",...] null=제한없음
+  deductMode       String  @default("STANDARD")  // STANDARD | MANUAL
+  monthlyQuotaKey  String? // 월 사용 쿼터 그룹 키 (null=제한없음)
+  requestFlow      String  @default("STANDARD")  // STANDARD | AUTO_APPROVE
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
@@ -384,6 +389,8 @@ model AllocationSourceConfig {
   skipForFreelancer Boolean @default(false) // true면 FREE(프리랜서) 사원 제외
   // tenureYears 기반 근속 마일스톤: 귀속 초기화 시 기념일이 KST 오늘 이후면 제외할지(LeaveType.fiscalInitOnlyAfterGrantDate와 동일 의미)
   fiscalInitOnlyAfterGrantDate Boolean @default(true)
+  // DB 실제 컬럼 (마이그레이션 20260425132000)
+  isAnnualPool Boolean @default(false) // true이면 연차 풀로 취급
 
   note        String?
   createdAt   DateTime @default(now())
@@ -531,9 +538,12 @@ model JejuAccommodation {
 model Form {
   id          String    @id @default(cuid())
   title       String    // e.g. "건강검진 신청"
-  slug        String    @unique  // URL용: health-check-2025
+  slug        String?   @unique  // URL용: health-check-2025 (없으면 공개 링크 미사용)
   description String?   @db.Text
   isActive    Boolean   @default(true)
+  // 포털 메뉴 노출 설정
+  showInMenu  Boolean   @default(false)
+  audience    String    @default("ALL")  // ALL | INTERNAL | EXTERNAL
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -562,9 +572,10 @@ model FormSubmission {
   id            String    @id @default(cuid())
   formId        String
   form          Form      @relation(fields: [formId], references: [id], onDelete: Cascade)
-  submitterName String    // 본인 이름 (필수)
+  submitterName String    @default("")  // 제출자 이름 (세션 or 빈 문자열)
   submitterEmail String?  @default("")
   submitterPhone String?  @default("")
+  employeeId    String?   // 로그인 제출 시 연결
   createdAt     DateTime  @default(now())
 
   answers FormSubmissionAnswer[]

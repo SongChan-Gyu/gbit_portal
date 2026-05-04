@@ -83,6 +83,9 @@ export const EMPLOYEE_TYPE_TO_LABEL: Record<string, string> = {
   EXTERNAL: "외부개발자",
 };
 
+/** EXTERNAL이고 입사일 엑셀 미입력일 때 DB에 넣는 날짜(의미 없음·표시용 구분 가능) */
+export const EXTERNAL_DEFAULT_HIRE_YMD = "2000-01-01";
+
 export interface ParsedEmployeeRow {
   _rowIndex: number;
   empNo: string; // 비어 있으면 import 시 자동 부여
@@ -163,7 +166,8 @@ export function parseSheetToRows(
     const name = get("이름");
     const position = (get("직급") || get("직위")).trim();
     const hireDate = get("입사일");
-    if (!name && !position && !hireDate) continue;
+    const employeeType = (EMPLOYEE_TYPE_MAP[get("고용유형")] ?? get("고용유형")) || "FULL";
+    if (!name && !position && !hireDate && !get("고용유형")) continue;
     if (!name) {
       errors.push(`${i + 1}행: 이름이 비어 있습니다.`);
       continue;
@@ -172,13 +176,12 @@ export function parseSheetToRows(
       errors.push(`${i + 1}행: 직급이 비어 있습니다.`);
       continue;
     }
-    if (!hireDate) {
-      errors.push(`${i + 1}행: 입사일이 비어 있습니다.`);
+    if (!hireDate && employeeType !== "EXTERNAL") {
+      errors.push(`${i + 1}행: 입사일이 비어 있습니다. (외부개발자는 생략 가능)`);
       continue;
     }
     const dutyDept = (DUTY_DEPT_MAP[get("직급부서")] ?? get("직급부서")) || "";
     const role = (ROLE_MAP[get("역할")] ?? get("역할")) || "STAFF";
-    const employeeType = (EMPLOYEE_TYPE_MAP[get("고용유형")] ?? get("고용유형")) || "FULL";
     result.push({
       _rowIndex: i + 1,
       empNo: get("사번") || "", // 비어 있으면 import-confirm에서 자동 부여

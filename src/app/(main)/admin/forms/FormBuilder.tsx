@@ -17,6 +17,8 @@ export type FormDef = {
   slug: string;
   description: string;
   isActive: boolean;
+  showInMenu: boolean;
+  audience: "ALL" | "INTERNAL" | "EXTERNAL";
   fields: FormFieldDef[];
 };
 
@@ -41,6 +43,8 @@ export default function FormBuilder({
     slug: "",
     description: "",
     isActive: true,
+    showInMenu: false,
+    audience: "ALL",
     fields: [],
   });
 
@@ -48,9 +52,11 @@ export default function FormBuilder({
     if (initial) {
       setForm({
         title: initial.title,
-        slug: initial.slug,
+        slug: initial.slug ?? "",
         description: initial.description ?? "",
         isActive: initial.isActive,
+        showInMenu: initial.showInMenu ?? false,
+        audience: (initial.audience as FormDef["audience"]) ?? "ALL",
         fields: initial.fields.map((f) => ({
           ...f,
           options: f.fieldType === "select" ? (f.options ?? []) : undefined,
@@ -93,15 +99,13 @@ export default function FormBuilder({
       setError("제목을 입력하세요.");
       return;
     }
-    if (!form.slug.trim()) {
-      setError("URL 경로(slug)를 입력하세요.");
-      return;
-    }
     const payload = {
       title: form.title.trim(),
-      slug: form.slug.trim().replace(/\s+/g, "-").toLowerCase(),
+      slug: form.slug.trim().replace(/\s+/g, "-").toLowerCase() || null,
       description: form.description.trim() || null,
       isActive: form.isActive,
+      showInMenu: form.showInMenu,
+      audience: form.audience,
       fields: form.fields.map((f) => ({
         label: f.label.trim(),
         fieldType: f.fieldType,
@@ -149,15 +153,17 @@ export default function FormBuilder({
           />
         </div>
         <div>
-          <label className="label">URL 경로 (공개 링크에 사용) *</label>
-          <p className="text-xs text-gray-500 mb-1">영문 소문자, 숫자, 하이픈만. 예: health-check-2025</p>
+          <label className="label">URL 경로 (공개 링크, 선택)</label>
+          <p className="text-xs text-gray-500 mb-1">영문 소문자·숫자·하이픈만. 예: health-check-2025. 비우면 /f/ 공개 링크 없이 포털 내부 메뉴로만 사용됩니다.</p>
           <input
             className="input w-full font-mono"
             value={form.slug}
             onChange={(e) => set("slug", e.target.value)}
-            placeholder="health-check-2025"
+            placeholder="health-check-2025 (선택)"
           />
-          <p className="text-xs text-gray-500 mt-1">제출 링크: /f/{form.slug || "..."}</p>
+          {form.slug.trim() && (
+            <p className="text-xs text-gray-500 mt-1">공개 제출 링크: /f/{form.slug.trim()}</p>
+          )}
         </div>
         <div>
           <label className="label">설명 (선택)</label>
@@ -168,14 +174,38 @@ export default function FormBuilder({
             placeholder="안내 문구"
           />
         </div>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={form.isActive}
-            onChange={(e) => set("isActive", e.target.checked)}
-          />
-          <span className="text-sm text-gray-700">활성화 (비활성 시 링크로 제출 불가)</span>
-        </label>
+        <div className="space-y-3 pt-1">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => set("isActive", e.target.checked)}
+            />
+            <span className="text-sm text-gray-700">활성화 (비활성 시 제출 불가)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={form.showInMenu}
+              onChange={(e) => set("showInMenu", e.target.checked)}
+            />
+            <span className="text-sm text-gray-700">포털 사이드바 메뉴에 노출</span>
+          </label>
+        </div>
+        {form.showInMenu && (
+          <div>
+            <label className="label">메뉴 노출 대상</label>
+            <select
+              className="input w-full"
+              value={form.audience}
+              onChange={(e) => set("audience", e.target.value as FormDef["audience"])}
+            >
+              <option value="ALL">전체 (내부직원 + 외부개발자)</option>
+              <option value="INTERNAL">내부직원만</option>
+              <option value="EXTERNAL">외부개발자만</option>
+            </select>
+          </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
@@ -193,7 +223,7 @@ export default function FormBuilder({
           텍스트: 자유 입력. 콤보: 선택 항목을 한 줄에 하나씩 입력하세요.
         </p>
         <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
-          <span className="font-medium">제출 화면에 항상 표시되는 항목:</span> 이름(필수), 이메일(선택), 연락처(선택). 아래는 이 양식 전용 질문입니다.
+          아래는 이 양식 전용 질문입니다. 제출자 정보(이름·연락처·이메일)는 별도 수집하지 않습니다.
         </div>
 
         {form.fields.length === 0 ? (

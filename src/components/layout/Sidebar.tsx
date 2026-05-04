@@ -2,15 +2,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, ClipboardList } from "lucide-react";
 import { useState, useMemo, useEffect } from "react";
 import { MENU_GROUPS } from "@/lib/menuConfig";
 import { ICON_MAP, SECTION_LABEL, DEFAULT_MENU_ICON } from "@/lib/menuIcons";
 
+type FormMenuItem = { id: string; title: string };
+
 export default function Sidebar({
   allowedMenuKeys,
+  formMenuItems,
   onClose,
-}: { allowedMenuKeys?: string[]; onClose?: () => void }) {
+}: { allowedMenuKeys?: string[]; formMenuItems?: FormMenuItem[]; onClose?: () => void }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const user = session?.user as any;
@@ -37,12 +40,24 @@ export default function Sidebar({
     return key?.key ?? null;
   }, [pathname, visibleGroups]);
 
-  const [expanded, setExpanded] = useState<string | null>(expandedByPath);
+  const FORMS_GROUP_KEY = "__forms__";
+
+  const isFormActive = useMemo(
+    () => formMenuItems?.some((f) => pathname === `/forms/${f.id}`) ?? false,
+    [pathname, formMenuItems],
+  );
+
+  const expandedByPathOrForms = useMemo(
+    () => isFormActive ? FORMS_GROUP_KEY : expandedByPath,
+    [isFormActive, expandedByPath],
+  );
+
+  const [expanded, setExpanded] = useState<string | null>(expandedByPathOrForms);
 
   // 경로 변경 시 항상 동기화 (null 포함) — 다른 섹션으로 이동하면 열렸던 그룹 자동 접힘
   useEffect(() => {
-    setExpanded(expandedByPath);
-  }, [expandedByPath]);
+    setExpanded(expandedByPathOrForms);
+  }, [expandedByPathOrForms]);
 
   const isOpen = (groupKey: string) => expanded === groupKey;
 
@@ -127,6 +142,40 @@ export default function Sidebar({
             </div>
           );
         })}
+
+        {/* 동적 양식 제출 대메뉴 — 다른 섹션 아래 맨 끝 */}
+        {formMenuItems && formMenuItems.length > 0 && (
+          <div className="mb-0.5">
+            <button
+              type="button"
+              onClick={() => setExpanded((p) => (p === FORMS_GROUP_KEY ? null : FORMS_GROUP_KEY))}
+              className="flex items-center gap-2.5 mx-2 px-3 py-2.5 rounded-lg w-full text-left transition-colors text-sm text-gray-600 hover:bg-gray-50 active:bg-gray-100 hover:text-gray-900 min-h-[44px] touch-manipulation"
+            >
+              <ClipboardList size={17} className="text-gray-400" />
+              <span className="flex-1">양식 제출</span>
+              {expanded === FORMS_GROUP_KEY
+                ? <ChevronDown size={14} className="text-gray-400" />
+                : <ChevronRight size={14} className="text-gray-400" />}
+            </button>
+            {expanded === FORMS_GROUP_KEY && (
+              <div className="ml-4 pl-2 border-l border-gray-100 space-y-0.5">
+                {formMenuItems.map((f) => {
+                  const href = `/forms/${f.id}`;
+                  const active = pathname === href;
+                  return (
+                    <Link key={f.id} href={href} onClick={onClose}
+                      className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors min-h-[40px] touch-manipulation ${
+                        active ? "bg-blue-50 text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50 active:bg-gray-100 hover:text-gray-900"
+                      }`}>
+                      <span className="flex-1">{f.title}</span>
+                      {active && <ChevronRight size={12} className="text-blue-400" />}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </nav>
 
       <div className="border-t border-gray-200 px-4 py-3">

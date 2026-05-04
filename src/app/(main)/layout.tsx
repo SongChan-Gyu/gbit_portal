@@ -26,12 +26,27 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     where: { id: user.employeeId },
     select: { dutyDept: true, employeeType: true },
   });
-  if (employee?.employeeType === "EXTERNAL") {
+  const isExternal = employee?.employeeType === "EXTERNAL";
+  if (isExternal) {
     allowedMenuKeys = ["dashboard", "notices", "jeju", "jeju_my", "jeju_info"];
   } else if (isWelfareDept(employee)) {
     if (!allowedMenuKeys.includes("jeju_admin")) allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
     if (!allowedMenuKeys.includes("jeju_approve")) allowedMenuKeys = [...allowedMenuKeys, "jeju_approve"];
   }
+
+  // 포털 메뉴 노출 양식: showInMenu=true, isActive=true, audience 매칭
+  const formMenuItems = await prisma.form.findMany({
+    where: {
+      showInMenu: true,
+      isActive: true,
+      OR: [
+        { audience: "ALL" },
+        { audience: isExternal ? "EXTERNAL" : "INTERNAL" },
+      ],
+    },
+    select: { id: true, title: true },
+    orderBy: { createdAt: "asc" },
+  });
 
   return (
     <SessionProvider session={session}>
@@ -41,10 +56,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <div className="flex flex-1 min-h-0 max-w-full overflow-hidden overflow-x-hidden">
           {/* 사이드바 - 데스크톱 */}
           <aside className="hidden md:flex flex-col w-64 lg:w-72 shrink-0 bg-white border-r border-gray-100 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
-            <Sidebar allowedMenuKeys={allowedMenuKeys} />
+            <Sidebar allowedMenuKeys={allowedMenuKeys} formMenuItems={formMenuItems} />
           </aside>
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <Header allowedMenuKeys={allowedMenuKeys} />
+            <Header allowedMenuKeys={allowedMenuKeys} formMenuItems={formMenuItems} />
             <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain safe-area-bottom">
               <div className="px-4 py-5 md:px-6 md:py-6 max-w-5xl mx-auto w-full min-w-0">
                 {children}

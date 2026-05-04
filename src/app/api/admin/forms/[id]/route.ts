@@ -25,8 +25,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const form = await prisma.form.findUnique({ where: { id } });
   if (!form) return NextResponse.json({ error: "폼을 찾을 수 없습니다." }, { status: 404 });
   const body = await req.json().catch(() => ({}));
-  const { title, slug, description, isActive, fields } = body;
-  const slugNorm = slug != null ? String(slug).trim().replace(/\s+/g, "-").toLowerCase() : form.slug;
+  const { title, slug, description, isActive, fields, showInMenu, audience } = body;
+  const slugRaw = slug != null ? String(slug).trim().replace(/\s+/g, "-").toLowerCase() : undefined;
+  const slugNorm = slugRaw || null; // 빈 문자열 → null (공개 링크 없음)
   if (slugNorm && !/^[a-z0-9-]+$/.test(slugNorm))
     return NextResponse.json({ error: "URL 경로는 영문 소문자, 숫자, 하이픈만 가능합니다." }, { status: 400 });
   if (slugNorm && slugNorm !== form.slug) {
@@ -40,9 +41,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
       where: { id },
       data: {
         ...(title != null && { title }),
-        ...(slug != null && { slug: slugNorm }),
+        ...(slug !== undefined && { slug: slugNorm }),
         ...(description !== undefined && { description: description || null }),
         ...(isActive !== undefined && { isActive: !!isActive }),
+        ...(showInMenu !== undefined && { showInMenu: !!showInMenu }),
+        ...(audience != null && { audience: String(audience) }),
         fields: {
           create: (Array.isArray(fields) ? fields : []).map(
             (f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({

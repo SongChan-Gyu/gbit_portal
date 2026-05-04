@@ -20,9 +20,11 @@ export default async function EditFormPage({ params }: { params: Promise<{ id: s
 
   const initial = {
     title: form.title,
-    slug: form.slug,
+    slug: form.slug ?? "",
     description: form.description ?? "",
     isActive: form.isActive,
+    showInMenu: form.showInMenu,
+    audience: (form.audience ?? "ALL") as "ALL" | "INTERNAL" | "EXTERNAL",
     fields: form.fields.map((f) => ({
       id: f.id,
       label: f.label,
@@ -39,7 +41,7 @@ export default async function EditFormPage({ params }: { params: Promise<{ id: s
           ← 양식 관리
         </Link>
         <h1 className="page-title mt-2">양식 수정</h1>
-        <p className="text-sm text-gray-500 mt-0.5">{form.title} · /f/{form.slug}</p>
+        <p className="text-sm text-gray-500 mt-0.5">{form.title}{form.slug ? ` · /f/${form.slug}` : ""}</p>
       </div>
       <FormBuilder formId={id} initial={initial} />
     </div>

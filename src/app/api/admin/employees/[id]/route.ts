@@ -12,6 +12,7 @@ import {
   INTERNAL_STAFF_FIXED_TEMP_PASSWORD,
   ensureInternalUserFromCompanyStaffNo,
 } from "@/lib/employeeCompanyStaffNo";
+import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
 
 type EmployeePatchBody = {
   name: string;
@@ -65,6 +66,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     companyStaffNoRaw !== undefined ? normalizeCompanyStaffNo(String(companyStaffNoRaw ?? "")) : undefined;
 
   const nextEmployeeType = employeeType ?? existing.employeeType;
+  const hireIn = String(hireDate ?? "").trim();
+  let hireResolved: Date;
+  if (nextEmployeeType === "EXTERNAL" && !hireIn) {
+    hireResolved = new Date(`${EXTERNAL_DEFAULT_HIRE_YMD}T00:00:00`);
+  } else {
+    if (!hireIn) {
+      return NextResponse.json({ error: "입사일을 입력해 주세요." }, { status: 400 });
+    }
+    hireResolved = new Date(hireIn);
+  }
+  if (Number.isNaN(hireResolved.getTime())) {
+    return NextResponse.json({ error: "입사일 형식이 올바르지 않습니다." }, { status: 400 });
+  }
+
   if (companyStaffNo !== undefined) {
     if (companyStaffNo == null && existing.user && nextEmployeeType !== "EXTERNAL") {
       return NextResponse.json(
@@ -95,7 +110,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
           dutyDept: dutyDept || null,
           role,
           employeeType: employeeType || "FULL",
-          hireDate: new Date(hireDate),
+          hireDate: hireResolved,
           birthDate: birthDate ? new Date(birthDate) : null,
           phone: phone || "",
           email: nextEmail,

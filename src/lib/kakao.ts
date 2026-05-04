@@ -112,6 +112,8 @@ function directsendNotesForPortalTemplateV1(
       return [g("신청자명"), g("이용기간"), g("입금자명"), g("처리단계"), ""];
     case "JEJU_STAFF_CANCEL":
       return [g("신청자명"), g("이용기간"), g("입금자명"), g("처리단계"), ""];
+    case "EXTERNAL_INVITE":
+      return [g("이름"), g("가입링크"), g("만료일"), "", ""];
     default:
       return ["", "", "", "", ""];
   }
@@ -187,6 +189,8 @@ function directsendNotesForPortalTemplateV2(
         g("입금자명"),
         `${g("처리단계")}\n${g("연도누적신청")}\n${alimtalkPortalPathUrl("/jeju/approve")}`,
       ];
+    case "EXTERNAL_INVITE":
+      return [g("이름"), g("가입링크"), g("만료일"), "", ""];
     default:
       return ["", "", "", "", ""];
   }
@@ -366,4 +370,29 @@ export async function sendJejuApplicantAlimtalk(
   params: Record<string, string>,
 ) {
   await sendAlimtalk(prisma, employeeId, phone, templateCode, params);
+}
+
+/**
+ * 외부개발자 가입 초대 알림톡 (EXTERNAL_INVITE)
+ * note1=이름, note2=가입링크, note3=만료일(7일 후)
+ */
+export async function sendExternalInviteAlimtalk(
+  prisma: DB,
+  employeeId: string,
+  phone: string,
+  name: string,
+  registerUrl: string,
+  expiresAt: Date,
+) {
+  const expiryLabel = expiresAt.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  await sendAlimtalk(prisma, employeeId, phone, "EXTERNAL_INVITE", {
+    수신자명: name,
+    이름: name,
+    가입링크: registerUrl,
+    만료일: expiryLabel,
+  });
 }

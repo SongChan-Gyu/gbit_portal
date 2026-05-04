@@ -225,16 +225,37 @@ export default function EmployeeForm({
         </div>
         <div>
           <label className="label">고용유형</label>
-          <select className="input" value={form.employeeType??""} onChange={(e)=>set("employeeType",e.target.value)}>
-            {TYPES.map(([v,l]) => <option key={v} value={v}>{l}</option>)}
+          <select
+            className="input"
+            value={form.employeeType ?? ""}
+            onChange={(e) => {
+              const v = e.target.value;
+              setForm((p) => {
+                const next: Partial<Employee> = { ...p, employeeType: v };
+                if (v === "EXTERNAL" && !isEdit) next.hireDate = "";
+                else if (v !== "EXTERNAL" && !String(p.hireDate ?? "").trim()) next.hireDate = today;
+                return next;
+              });
+            }}
+          >
+            {TYPES.map(([v, l]) => (
+              <option key={v} value={v}>
+                {l}
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
-          <label className="label">입사일 *</label>
+          <label className="label">
+            입사일 {form.employeeType === "EXTERNAL" ? "(외부개발자는 생략 가능)" : "*"}
+          </label>
           <DatePickerButton value={form.hireDate??""} onChange={(d)=>set("hireDate",d)} />
+          {form.employeeType === "EXTERNAL" && (
+            <p className="text-xs text-gray-500 mt-1">비우고 저장하면 시스템 기본 입사일로 저장됩니다.</p>
+          )}
         </div>
         <div>
           <label className="label">생년월일</label>

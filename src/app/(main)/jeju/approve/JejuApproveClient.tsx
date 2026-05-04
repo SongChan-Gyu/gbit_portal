@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Check, CreditCard, List } from "lucide-react";
-import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
+import { Check, CreditCard, List, ChevronLeft, ChevronRight } from "lucide-react";
+import { formatMDWithDayFromYMD, todayKstYmd } from "@/lib/dateUtils";
 import { formatJejuYearStatsSummary, JEJU_YEARLY_HIGH_SUBMISSION_HINT } from "@/lib/jejuYearStats";
 import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
 import { formatJejuDepositAccountLine } from "@/lib/jeju";
@@ -78,9 +78,27 @@ function dateLine(start: string, end: string) {
     : `${formatMDWithDayFromYMD(start)} ~ ${formatMDWithDayFromYMD(end)}`;
 }
 
+function kstTodayYearMonth(): { year: number; month: number } {
+  const t = todayKstYmd();
+  return {
+    year: parseInt(t.slice(0, 4), 10),
+    month: parseInt(t.slice(5, 7), 10),
+  };
+}
+
+/** YYYY-MM-DD 문자열 기준, 이용 기간이 해당 달과 겹치는지 */
+function stayOverlapsCalendarMonth(startYmd: string, endYmd: string, year: number, month: number): boolean {
+  const m = String(month).padStart(2, "0");
+  const first = `${year}-${m}-01`;
+  const lastD = new Date(year, month, 0).getDate();
+  const last = `${year}-${m}-${String(lastD).padStart(2, "0")}`;
+  return endYmd >= first && startYmd <= last;
+}
+
 export default function JejuApproveClient() {
   const router = useRouter();
   const [allList, setAllList] = useState<ListRequest[]>([]);
+  const [historyYm, setHistoryYm] = useState(() => kstTodayYearMonth());
   const [loading, setLoading] = useState(true);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectComment, setRejectComment] = useState("");
@@ -194,16 +212,30 @@ export default function JejuApproveClient() {
   const canCancelStep1Approve = allList[0]?.canCancelStep1Approve ?? false;
   const canCancelStep2Approve = allList[0]?.canCancelStep2Approve ?? false;
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const monthStart = new Date(year, month - 1, 1);
-  const monthEnd = new Date(year, month, 0);
-  const filteredAllList = allList.filter((r) => {
-    const s = new Date(r.startDate);
-    const e = new Date(r.endDate);
-    return e >= monthStart && s <= monthEnd;
-  });
+  const { year: historyYear, month: historyMonth } = historyYm;
+  const filteredAllList = allList.filter((r) =>
+    stayOverlapsCalendarMonth(r.startDate, r.endDate, historyYear, historyMonth),
+  );
+
+  function shiftHistoryMonth(delta: number) {
+    setHistoryYm((cur) => {
+      let m = cur.month + delta;
+      let y = cur.year;
+      while (m < 1) {
+        m += 12;
+        y -= 1;
+      }
+      while (m > 12) {
+        m -= 12;
+        y += 1;
+      }
+      return { year: y, month: m };
+    });
+  }
+
+  function goHistoryThisMonth() {
+    setHistoryYm(kstTodayYearMonth());
+  }
 
   if (loading) {
     return <div className="py-8 text-center text-gray-500">로딩 중...</div>;
@@ -469,14 +501,79 @@ export default function JejuApproveClient() {
         </div>
       )}
 
-      {/* 전체 신청 내역 (이번 달) */}
+      {/* 전체 신청 내역 (월별 — 이용일이 해당 달과 겹치는 건) */}
       <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm">
-        <h2 className="text-base font-bold text-gray-900 mb-1 flex items-center gap-2">
-          <List size={18} className="shrink-0 text-slate-600" /> {year}년 {month}월 신청 내역
-        </h2>
-        <p className="text-xs text-gray-500 mb-4">{filteredAllList.length}건</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+          <h2 className="text-base font-bold text-gray-900 flex items-center gap-2">
+            <List size={18} className="shrink-0 text-slate-600" /> 신청 내역 (월별)
+          </h2>
+          <div className="flex flex-wrap items-center gap-y-2 gap-x-2">
+            <div className="flex items-center gap-1 rounded-lg border border-gray-200 bg-gray-50/80 p-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => shiftHistoryMonth(-1)}
+                className="p-2 rounded-md hover:bg-white text-gray-600 touch-manipulation"
+                aria-label="이전 달"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              <span className="text-sm font-semibold text-gray-800 tabular-nums min-w-[5.5rem] text-center px-1">
+                {historyYear}년 {historyMonth}월
+              </span>
+              <button
+                type="button"
+                onClick={() => shiftHistoryMonth(1)}
+                className="p-2 rounded-md hover:bg-white text-gray-600 touch-manipulation"
+                aria-label="다음 달"
+              >
+                <ChevronRight size={18} />
+              </button>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0 flex-1 sm:flex-initial">
+              <select
+                className="input h-9 min-h-0 text-sm leading-none py-0 px-2 min-w-[4.25rem] max-w-[40%] sm:max-w-none"
+                value={historyYear}
+                onChange={(e) => setHistoryYm((h) => ({ ...h, year: Number(e.target.value) }))}
+                aria-label="연도"
+              >
+                {(() => {
+                  const cy = kstTodayYearMonth().year;
+                  const from = Math.min(2020, cy - 2, historyYear);
+                  const to = Math.max(2035, cy + 3, historyYear);
+                  return Array.from({ length: to - from + 1 }, (_, i) => from + i).map((y) => (
+                    <option key={y} value={y}>
+                      {y}년
+                    </option>
+                  ));
+                })()}
+              </select>
+              <select
+                className="input h-9 min-h-0 text-sm leading-none py-0 px-2 min-w-[3.25rem] max-w-[32%] sm:max-w-none"
+                value={historyMonth}
+                onChange={(e) => setHistoryYm((h) => ({ ...h, month: Number(e.target.value) }))}
+                aria-label="월"
+              >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map((mo) => (
+                  <option key={mo} value={mo}>
+                    {mo}월
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={goHistoryThisMonth}
+                className="h-9 shrink-0 whitespace-nowrap rounded-md border border-blue-200 bg-blue-50 px-2.5 text-xs font-medium text-blue-700 hover:bg-blue-100 inline-flex items-center justify-center touch-manipulation"
+              >
+                이번 달
+              </button>
+            </div>
+          </div>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">
+          이용 기간이 위 달과 하루라도 겹치면 표시됩니다. · {filteredAllList.length}건
+        </p>
         {filteredAllList.length === 0 ? (
-          <p className="text-sm text-gray-500 py-6 text-center">이 달의 신청이 없습니다.</p>
+          <p className="text-sm text-gray-500 py-6 text-center">선택한 달과 이용일이 겹치는 신청이 없습니다.</p>
         ) : (
           <>
             <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-100">

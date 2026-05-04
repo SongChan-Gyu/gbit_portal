@@ -8,9 +8,11 @@ import { Pencil, FileText, Trash2, Copy, ExternalLink } from "lucide-react";
 type FormWithCount = {
   id: string;
   title: string;
-  slug: string;
+  slug: string | null;
   description: string | null;
   isActive: boolean;
+  showInMenu: boolean;
+  audience: string;
   _count: { submissions: number };
   fields: { id: string; label: string }[];
 };
@@ -19,9 +21,9 @@ export default function FormListClient({ forms }: { forms: FormWithCount[] }) {
   const router = useRouter();
   const [deleting, setDeleting] = useState<string | null>(null);
 
-  const formPagePath = (slug: string) => `/f/${slug}`;
-  const fullFormUrl = (slug: string) =>
-    typeof window !== "undefined" ? `${window.location.origin}/f/${slug}` : "";
+  const formPagePath = (slug: string | null) => slug ? `/f/${slug}` : null;
+  const fullFormUrl = (slug: string | null) =>
+    slug && typeof window !== "undefined" ? `${window.location.origin}/f/${slug}` : "";
 
   async function handleDelete(id: string) {
     if (!confirm("이 양식을 삭제하면 제출된 내용도 모두 삭제됩니다. 계속할까요?")) return;
@@ -54,32 +56,38 @@ export default function FormListClient({ forms }: { forms: FormWithCount[] }) {
                 <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600">비활성</span>
               )}
             </div>
-            <p className="text-xs text-gray-500 mt-0.5">
-              /f/{f.slug} · 필드 {f.fields.length}개 · 제출 {f._count.submissions}건
+            <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-1.5">
+              {f.slug ? <span>/f/{f.slug}</span> : <span className="text-orange-500">공개링크없음</span>}
+              <span>· 필드 {f.fields.length}개 · 제출 {f._count.submissions}건</span>
+              {f.showInMenu && <span className="text-blue-600">· 메뉴노출 ({f.audience === "ALL" ? "전체" : f.audience === "EXTERNAL" ? "외부" : "내부"})</span>}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <a
-              href={formPagePath(f.slug)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
-            >
-              <ExternalLink className="w-4 h-4" /> 미리보기
-            </a>
-            <button
-              type="button"
-              onClick={() => {
-                const url = fullFormUrl(f.slug);
-                if (url) {
-                  navigator.clipboard.writeText(url);
-                  alert("링크가 복사되었습니다: " + url);
-                }
-              }}
-              className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"
-            >
-              <Copy className="w-4 h-4" /> 링크 복사
-            </button>
+            {f.slug && (
+              <>
+                <a
+                  href={formPagePath(f.slug)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800"
+                >
+                  <ExternalLink className="w-4 h-4" /> 미리보기
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = fullFormUrl(f.slug);
+                    if (url) {
+                      navigator.clipboard.writeText(url);
+                      alert("링크가 복사되었습니다: " + url);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"
+                >
+                  <Copy className="w-4 h-4" /> 링크 복사
+                </button>
+              </>
+            )}
             <Link
               href={`/admin/forms/${f.id}/submissions`}
               className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"

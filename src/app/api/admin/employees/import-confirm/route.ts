@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import type { ParsedEmployeeRow } from "@/lib/employeeExcel";
+import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
 import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 import { normalizeCompanyStaffNo, ensureInternalUserFromCompanyStaffNo } from "@/lib/employeeCompanyStaffNo";
 
@@ -48,6 +49,17 @@ export async function POST(req: Request) {
       }
     }
     const rowType = row.employeeType || "FULL";
+    const hireStr = (row.hireDate || "").trim();
+    let hireDateObj: Date;
+    if (rowType === "EXTERNAL" && !hireStr) {
+      hireDateObj = new Date(`${EXTERNAL_DEFAULT_HIRE_YMD}T00:00:00`);
+    } else {
+      hireDateObj = new Date(hireStr);
+    }
+    if (Number.isNaN(hireDateObj.getTime())) {
+      errors.push({ row: row._rowIndex, message: "입사일 형식이 올바르지 않습니다." });
+      continue;
+    }
     try {
       const emp = await prisma.$transaction(async (tx) => {
         const createdEmp = await tx.employee.create({
@@ -59,7 +71,7 @@ export async function POST(req: Request) {
             dutyDept: row.dutyDept || null,
             role: row.role || "STAFF",
             employeeType: rowType,
-            hireDate: new Date(row.hireDate),
+            hireDate: hireDateObj,
             birthDate: row.birthDate ? new Date(row.birthDate) : null,
             phone: row.phone || "",
             email: emailNorm,

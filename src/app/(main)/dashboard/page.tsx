@@ -17,6 +17,7 @@ import { kstEndOfDay, kstMidnightFromYmd } from "@/lib/workdays";
 import { itemSlotLabelKo } from "@/lib/leaveTimeSlot";
 import { isZeroDayTeamCalendarCode } from "@/lib/healingLeaveCodes";
 import DashboardMonthCalendar from "./DashboardMonthCalendar";
+import DashboardExternalJeju from "./DashboardExternalJeju";
 import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 import { leaveRequestStatusMeta } from "@/lib/statusMeta";
@@ -70,6 +71,44 @@ export default async function DashboardPage({
     include: { team: { include: { employees: true } } },
   });
   const isExternal = employee?.employeeType === "EXTERNAL";
+
+  const recentNotices = await prisma.notice.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 2,
+    select: { id: true, title: true },
+  });
+
+  if (isExternal && user.employeeId) {
+    const myJeju = await prisma.jejuAccommodation.findMany({
+      where: { employeeId: user.employeeId },
+      orderBy: { updatedAt: "desc" },
+    });
+    const inProgress = myJeju.filter((r) =>
+      ["PENDING", "STEP1_APPROVED", "CANCEL_REQUESTED", "CANCEL_STEP1_APPROVED"].includes(r.status),
+    ).length;
+    const approved = myJeju.filter((r) => r.status === "APPROVED").length;
+    const rows = myJeju.slice(0, 8).map((r) => ({
+      id: r.id,
+      startDate: kstYmd(r.startDate),
+      endDate: kstYmd(r.endDate),
+      nights: r.nights,
+      status: r.status,
+      guestName: r.guestName,
+      guestCount: r.guestCount,
+    }));
+    return (
+      <DashboardExternalJeju
+        employeeName={employee?.name ?? ""}
+        teamName={employee?.team?.name ?? null}
+        position={employee?.position ?? ""}
+        rows={rows}
+        inProgress={inProgress}
+        approved={approved}
+        total={myJeju.length}
+        notices={recentNotices}
+      />
+    );
+  }
 
   let allocations: any[] = [];
   let pendingReqs = 0;
@@ -244,12 +283,6 @@ export default async function DashboardPage({
     }
     teamMonthData = { year, month, dates, byDay, holidayYmds };
   }
-
-  const recentNotices = await prisma.notice.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 2,
-    select: { id: true, title: true },
-  });
 
   return (
     <div className="space-y-4">

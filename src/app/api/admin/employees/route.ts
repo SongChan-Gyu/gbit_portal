@@ -6,6 +6,7 @@ import { getNextEmpNo } from "@/lib/empNo";
 import { writeAudit, getIp } from "@/lib/audit";
 import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 import { normalizeCompanyStaffNo, ensureInternalUserFromCompanyStaffNo } from "@/lib/employeeCompanyStaffNo";
+import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
 
 type EmployeePostBody = {
   empNo?: string;
@@ -47,11 +48,22 @@ export async function POST(req: Request) {
   const nameVal = String(name ?? "").trim();
   const positionVal = String(position ?? "").trim();
   const hireDateVal = String(hireDate ?? "").trim();
+  const nextType = employeeType || "FULL";
   if (!nameVal) missing.push("이름");
   if (!positionVal) missing.push("직급");
-  if (!hireDateVal || Number.isNaN(new Date(hireDateVal).getTime())) missing.push("입사일");
+  if (nextType !== "EXTERNAL" && (!hireDateVal || Number.isNaN(new Date(hireDateVal).getTime()))) {
+    missing.push("입사일");
+  }
   if (missing.length > 0) {
     return NextResponse.json({ error:`필수 항목 누락 (${missing.join(", ")})` }, { status:400 });
+  }
+
+  const hireResolved =
+    nextType === "EXTERNAL" && !hireDateVal
+      ? new Date(`${EXTERNAL_DEFAULT_HIRE_YMD}T00:00:00`)
+      : new Date(hireDateVal);
+  if (Number.isNaN(hireResolved.getTime())) {
+    return NextResponse.json({ error: "입사일 형식이 올바르지 않습니다." }, { status: 400 });
   }
 
   const empNo = (empNoRaw && String(empNoRaw).trim()) || (await getNextEmpNo(prisma));
@@ -67,7 +79,6 @@ export async function POST(req: Request) {
   }
 
   const emailNorm = String(email ?? "").trim() || null;
-  const nextType = employeeType || "FULL";
   const emp = await prisma.$transaction(async (tx) => {
     const created = await tx.employee.create({
       data: {
@@ -78,7 +89,7 @@ export async function POST(req: Request) {
         dutyDept: dutyDept || null,
         role: role || "STAFF",
         employeeType: nextType,
-        hireDate: new Date(hireDateVal),
+        hireDate: hireResolved,
         birthDate: birthDate ? new Date(birthDate) : null,
         phone: phone || "",
         email: emailNorm,

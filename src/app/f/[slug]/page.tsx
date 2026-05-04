@@ -25,9 +25,6 @@ export default function PublicFormPage() {
   const [form, setForm] = useState<FormData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [submitterName, setSubmitterName] = useState("");
-  const [submitterEmail, setSubmitterEmail] = useState("");
-  const [submitterPhone, setSubmitterPhone] = useState("");
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -58,11 +55,6 @@ export default function PublicFormPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form) return;
-    const name = submitterName.trim();
-    if (!name) {
-      alert("이름을 입력해 주세요.");
-      return;
-    }
     const required = form.fields.filter((f) => f.required);
     for (const f of required) {
       if (!String(answers[f.id] ?? "").trim()) {
@@ -74,12 +66,7 @@ export default function PublicFormPage() {
     const res = await fetch(`/api/forms/${slug}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        submitterName: name,
-        submitterEmail: submitterEmail.trim() || undefined,
-        submitterPhone: submitterPhone.trim() || undefined,
-        answers,
-      }),
+      body: JSON.stringify({ answers }),
     });
     const data = await res.json();
     setSubmitting(false);
@@ -129,48 +116,8 @@ export default function PublicFormPage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div>
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">제출자 정보</h2>
-              <p className="text-xs text-gray-500 mb-3">제출 시 항상 수집되는 항목입니다.</p>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">이름 *</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    value={submitterName}
-                    onChange={(e) => setSubmitterName(e.target.value)}
-                    placeholder="본인 이름"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">이메일 (선택)</label>
-                  <input
-                    type="email"
-                    className="input w-full"
-                    value={submitterEmail}
-                    onChange={(e) => setSubmitterEmail(e.target.value)}
-                    placeholder="example@email.com"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">연락처 (선택)</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    value={submitterPhone}
-                    onChange={(e) => setSubmitterPhone(e.target.value)}
-                    placeholder="010-0000-0000"
-                  />
-                </div>
-              </div>
-            </div>
-
             {form.fields.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-gray-700 mb-3">양식 질문</h2>
-                <div className="space-y-4">
+              <div className="space-y-4">
             {form.fields.map((f) => (
               <div key={f.id}>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -202,7 +149,6 @@ export default function PublicFormPage() {
                 )}
               </div>
             ))}
-                </div>
               </div>
             )}
             <button
