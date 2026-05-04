@@ -61,7 +61,7 @@ export default async function LeaveApplyPage() {
             leaveTypeId: { in: halfPoolIds },
             leaveRequest: {
               employeeId: user.employeeId,
-              status: { notIn: ["CANCELLED", "WITHDRAWN"] },
+              status: { notIn: ["CANCELLED", "WITHDRAWN", "REJECTED"] },
               startDate: {
                 gte: new Date(now.getFullYear(), now.getMonth(), 1),
                 lt: new Date(now.getFullYear(), now.getMonth() + 1, 1),

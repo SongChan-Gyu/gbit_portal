@@ -216,7 +216,7 @@ export async function POST(req: Request) {
             leaveTypeId: { in: halfdaySharedPoolIds },
             leaveRequest: {
               employeeId: user.employeeId,
-              status: { notIn: ["CANCELLED", "WITHDRAWN"] },
+              status: { notIn: ["CANCELLED", "WITHDRAWN", "REJECTED"] },
               startDate: {
                 gte: new Date(s.getFullYear(), s.getMonth(), 1),
                 lt: new Date(s.getFullYear(), s.getMonth() + 1, 1),
@@ -237,7 +237,7 @@ export async function POST(req: Request) {
             leaveTypeId: lt.id,
             leaveRequest: {
               employeeId: user.employeeId,
-              status: { notIn: ["CANCELLED", "WITHDRAWN"] },
+              status: { notIn: ["CANCELLED", "WITHDRAWN", "REJECTED"] },
               startDate: {
                 gte: new Date(s.getFullYear(), s.getMonth(), 1),
                 lt: new Date(s.getFullYear(), s.getMonth() + 1, 1),
