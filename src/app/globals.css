@@ -245,8 +245,8 @@
     }
   }
 
-  /* ─── 하단 Safe area (노치 등) */
+  /* ─── 하단 Safe area (노치·브라우저 하단 바 등) */
   .safe-area-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
   }
 }

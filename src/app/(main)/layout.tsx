@@ -51,7 +51,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   return (
     <SessionProvider session={session}>
       {/* 상단: 전환 배너(있을 때) + 본문 영역; 배너는 문서 흐름이라 메뉴를 덮지 않음 */}
-      <div className="flex flex-col h-screen min-h-0 max-w-[100vw] overflow-hidden overflow-x-hidden bg-gray-50">
+      <div className="flex flex-col h-[100dvh] min-h-0 max-w-[100vw] overflow-hidden overflow-x-hidden bg-gray-50">
         <ImpersonationBanner />
         <div className="flex flex-1 min-h-0 max-w-full overflow-hidden overflow-x-hidden">
           {/* 사이드바 - 데스크톱 */}
@@ -61,7 +61,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
             <Header allowedMenuKeys={allowedMenuKeys} formMenuItems={formMenuItems} />
             <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain safe-area-bottom">
-              <div className="px-4 py-5 md:px-6 md:py-6 max-w-5xl mx-auto w-full min-w-0">
+              <div className="px-4 py-5 md:px-6 md:py-6 pb-10 md:pb-6 max-w-5xl mx-auto w-full min-w-0">
                 {children}
               </div>
             </main>
