@@ -1300,18 +1300,18 @@ export default function LeaveApplyForm({
               );
             })}
           </div>
-          <div className="px-4 py-3 flex items-center justify-between border-t border-slate-200 bg-white">
-            <div>
+          <div className="px-4 py-3 flex items-center justify-between gap-3 border-t border-slate-200 bg-white">
+            <div className="shrink-0">
               <span className="text-xs text-gray-500">합계</span>
-              <span className="ml-2 text-lg font-black text-blue-700">
+              <span className="ml-1.5 text-lg font-black text-blue-700">
                 {totalDays.toFixed(1)}<span className="text-sm font-normal ml-0.5">일</span>
               </span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <button type="button" onClick={() => router.back()}
-                className="btn-secondary btn-sm px-4">취소</button>
+                className="btn-secondary btn-sm px-3 whitespace-nowrap">취소</button>
               <button type="submit" disabled={loading || (totalDays <= 0 && healingSubmitItems.length === 0 && !canSubmitZeroHalfReplace)}
-                className="btn-primary btn-sm px-6">
+                className="btn-primary btn-sm px-4 whitespace-nowrap">
                 {loading ? (
                   <><span className="spinner" /><span>신청 중…</span></>
                 ) : (
