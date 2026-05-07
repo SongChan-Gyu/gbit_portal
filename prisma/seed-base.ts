@@ -82,9 +82,9 @@ async function seedLeaveTypes() {
     if (code === "TENURE_10Y") return "입사 10주년 부여";
     return null;
   }
-  /** 관리자 수동 이월(FY 할당 탭) 허용. 근속 마일스톤 풀은 false. */
+  /** 관리자 수동 이월(FY 할당 탭) 허용. 1년근속은 귀속연도 말 만료이므로 이월 허용. */
   function carryoverEligibleForCode(code: string): boolean {
-    return code === "ANNUAL" || code === "POOL_TENURE_BONUS";
+    return code === "ANNUAL" || code === "POOL_TENURE_BONUS" || code === "TENURE_1Y";
   }
   /** 귀속연도 초기화 API — 포상 등 수동 전용은 false */
   function includeInFiscalInitForCode(code: string): boolean {

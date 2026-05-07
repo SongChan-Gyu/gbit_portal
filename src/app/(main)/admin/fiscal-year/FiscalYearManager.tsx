@@ -41,9 +41,10 @@ function sourceAllowsManualCarryover(
   options: SourceOption[],
   tenureMilestoneSourceCodes: Set<string>,
 ): boolean {
-  if (tenureMilestoneSourceCodes.has(sourceCode)) return false;
   if (sourceCode === "CARRYOVER") return true;
   const opt = options.find((o) => o.value === sourceCode);
+  // 근속 마일스톤이라도 carryoverEligible:true로 설정된 경우 이월 허용
+  if (tenureMilestoneSourceCodes.has(sourceCode)) return opt?.carryoverEligible === true;
   return opt?.carryoverEligible === true;
 }
 

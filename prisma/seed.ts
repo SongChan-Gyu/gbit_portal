@@ -598,7 +598,7 @@ async function seedLeaveTypes() {
     return null;
   }
   function carryoverEligibleForCode(code: string): boolean {
-    return code === "ANNUAL" || code === "POOL_TENURE_BONUS";
+    return code === "ANNUAL" || code === "POOL_TENURE_BONUS" || code === "TENURE_1Y";
   }
   function includeInFiscalInitForCode(code: string): boolean {
     return code !== "AWARD" && code !== "POOL_TENURE_BONUS";

@@ -1224,9 +1224,13 @@ export default function LeaveApplyForm({
 
       {/* 항목 추가 버튼 */}
       <button type="button" onClick={addItem}
-        className="w-full py-2.5 border border-dashed border-gray-300 rounded-lg text-xs text-gray-400
-                   hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50/30 transition-all">
-        + 항목 추가 &nbsp;<span className="text-gray-300">예: 오전반차 + 오후인정 복수 신청</span>
+        className="w-full py-3 border-2 border-dashed border-blue-300 rounded-xl
+                   flex items-center justify-center gap-2
+                   text-sm font-medium text-blue-500
+                   hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50 transition-all">
+        <span className="text-lg leading-none font-bold">+</span>
+        <span>항목 추가</span>
+        <span className="text-xs font-normal text-gray-400">예: 오전반차 + 오후인정 복수 신청</span>
       </button>
 
       {/* 오류 */}

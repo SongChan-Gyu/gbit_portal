@@ -91,12 +91,12 @@ export async function POST(req: Request) {
 
   try {
     const created = await prisma.$transaction(async (tx) => {
+      // 전체 예약 대상으로 중복 체크 (퇴실일 당일 입실은 허용: lt/gt 사용)
       const overlapping = await tx.jejuAccommodation.findFirst({
         where: {
-          employeeId: user.employeeId,
           status: { in: ["PENDING", "STEP1_APPROVED", "APPROVED"] },
           OR: [
-            { startDate: { lte: endDate }, endDate: { gte: startDate } },
+            { startDate: { lt: endDate }, endDate: { gt: startDate } },
           ],
         },
       });

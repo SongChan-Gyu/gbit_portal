@@ -100,12 +100,12 @@ export async function PATCH(req: Request) {
     if (nights > maxNights) {
       return NextResponse.json({ error: `최대 연박은 ${maxNights}일입니다.` }, { status: 400 });
     }
+    // 전체 예약 대상으로 중복 체크 (퇴실일 당일 입실은 허용: lt/gt 사용)
     const overlapping = await prisma.jejuAccommodation.findFirst({
       where: {
-        employeeId: user.employeeId,
         id: { not: requestId },
         status: { in: ["PENDING", "STEP1_APPROVED", "APPROVED"] },
-        OR: [{ startDate: { lte: endDate }, endDate: { gte: startDate } }],
+        OR: [{ startDate: { lt: endDate }, endDate: { gt: startDate } }],
       },
     });
     if (overlapping) {

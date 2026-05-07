@@ -151,8 +151,8 @@ export async function POST(req: Request) {
       });
     }
 
-    // 동일한 날짜에 이미 신청/승인된 휴가가 있는지만 체크 (중간 날짜만 포함되는 넓은 구간은 허용)
-    const overlappingItem = await prisma.leaveRequestItem.findFirst({
+    // 동일한 날짜에 이미 신청/승인된 휴가가 있는지 체크 (timeSlot 고려: AM/PM 서로 다른 반차는 허용)
+    const candidateItems = await prisma.leaveRequestItem.findMany({
       where: {
         leaveRequest: {
           employeeId: user.employeeId,
@@ -165,6 +165,20 @@ export async function POST(req: Request) {
       },
       include: { leaveRequest: true },
     });
+    const overlappingItem = candidateItems.find((existing) =>
+      workItems.some((it) => {
+        const es = existing.startDate.getTime();
+        const ee = existing.endDate.getTime();
+        const ns = new Date(it.startDate).getTime();
+        const ne = new Date(it.endDate).getTime();
+        if (es > ne || ee < ns) return false;
+        // 단일 날짜 반차끼리: AM ↔ PM은 겹치지 않음
+        const existSlot = existing.timeSlot ?? "FULL";
+        const newSlot = it.timeSlot ?? "FULL";
+        if (existSlot !== "FULL" && newSlot !== "FULL" && existSlot !== newSlot) return false;
+        return true;
+      }),
+    );
     if (overlappingItem) {
       const r = overlappingItem.leaveRequest;
       return NextResponse.json(
