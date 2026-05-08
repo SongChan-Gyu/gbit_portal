@@ -4,6 +4,7 @@ import { useState } from "react";
 import JejuSettingsTab from "@/app/(main)/admin/leave-management/JejuSettingsTab";
 import JejuManualEntryTab from "./JejuManualEntryTab";
 import JejuBulkImportTab from "./JejuBulkImportTab";
+import JejuCorrectTab from "./JejuCorrectTab";
 
 type EmpOption = {
   id: string;
@@ -14,7 +15,7 @@ type EmpOption = {
   status: string;
 };
 
-type Tab = "settings" | "manual" | "bulk";
+type Tab = "settings" | "manual" | "bulk" | "correct";
 
 export default function JejuAdminTabs({ employees }: { employees: EmpOption[] }) {
   const [tab, setTab] = useState<Tab>("settings");
@@ -40,6 +41,12 @@ export default function JejuAdminTabs({ employees }: { employees: EmpOption[] })
       active: "border-green-600 text-green-700 bg-green-50/60",
       inactive: "border-transparent text-gray-500 hover:text-gray-700",
     },
+    {
+      key: "correct",
+      label: "데이터 정정",
+      active: "border-orange-500 text-orange-700 bg-orange-50/60",
+      inactive: "border-transparent text-gray-500 hover:text-gray-700",
+    },
   ];
 
   return (
@@ -63,6 +70,7 @@ export default function JejuAdminTabs({ employees }: { employees: EmpOption[] })
       {tab === "settings" && <JejuSettingsTab />}
       {tab === "manual" && <JejuManualEntryTab employees={employees} />}
       {tab === "bulk" && <JejuBulkImportTab />}
+      {tab === "correct" && <JejuCorrectTab />}
     </div>
   );
 }

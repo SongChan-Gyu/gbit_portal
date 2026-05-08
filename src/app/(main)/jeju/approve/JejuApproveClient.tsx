@@ -589,6 +589,7 @@ export default function JejuApproveClient() {
                     </th>
                     <th className="px-3 py-2 font-medium">이용일</th>
                     <th className="px-3 py-2 font-medium">투숙객 · 인원</th>
+                    <th className="px-3 py-2 font-medium">연락처</th>
                     <th className="px-3 py-2 font-medium">입금자</th>
                     <th className="px-3 py-2 font-medium">상태</th>
                     <th className="px-3 py-2 font-medium">입금</th>
@@ -615,6 +616,7 @@ export default function JejuApproveClient() {
                         <span className="text-gray-400 ml-1">{r.nights}박</span>
                       </td>
                       <td className="px-3 py-2 text-gray-600 text-xs">{r.guestName} · {r.guestCount}명</td>
+                      <td className="px-3 py-2 text-gray-500 text-xs tabular-nums">{r.guestPhone || "-"}</td>
                       <td className="px-3 py-2 text-gray-500 text-xs">{r.depositorName ?? "-"}</td>
                       <td className="px-3 py-2">
                         <span className={`badge ${STATUS_CLS[r.status] ?? "badge-default"}`}>
@@ -663,6 +665,7 @@ export default function JejuApproveClient() {
                     <p className="text-sm font-medium text-slate-800">{dateLine(r.startDate, r.endDate)}</p>
                     <p className="text-xs text-gray-600">
                       {r.nights}박 · {r.guestCount}명 · {r.guestName}
+                      {r.guestPhone ? ` · ${r.guestPhone}` : ""}
                       {r.depositorName ? ` · 입금 ${r.depositorName}` : ""}
                     </p>
                     {r.depositStatus === "CONFIRMED" && (
