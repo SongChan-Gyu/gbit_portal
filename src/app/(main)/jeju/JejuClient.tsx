@@ -285,8 +285,8 @@ export default function JejuClient({
   return (
     <div className="space-y-6">
       {yearStats && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50/90 px-4 py-3 space-y-2">
-          <p className="text-sm font-bold text-slate-900 tabular-nums leading-snug">
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 space-y-2 shadow-sm">
+          <p className="text-[13px] font-semibold text-slate-700 tabular-nums leading-snug">
             {formatJejuYearStatsSummary(
               yearStats.year,
               yearStats.submittedCount,
@@ -294,32 +294,35 @@ export default function JejuClient({
             )}
           </p>
           {yearStats.submittedCount >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD && (
-            <p className="text-sm font-bold text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 leading-snug">
+            <p className="text-[13px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-snug">
               {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
             </p>
           )}
         </div>
       )}
       {/* 달력 */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100">
-              <ChevronLeft size={20} />
-            </button>
-            <span className="font-semibold text-gray-800 min-w-[120px] text-center">
-              {year}년 {month}월
-            </span>
-            <button type="button" onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100">
-              <ChevronRight size={20} />
-            </button>
-          </div>
+      <div className="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        {/* 달력 헤더 */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2">
+          <button type="button" onClick={prevMonth} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+            <ChevronLeft size={20} className="text-gray-600" />
+          </button>
+          <span className="font-bold text-gray-900 text-base">
+            {year}년 {month}월
+          </span>
+          <button type="button" onClick={nextMonth} className="p-2 rounded-xl hover:bg-gray-100 transition-colors">
+            <ChevronRight size={20} className="text-gray-600" />
+          </button>
         </div>
         {config && (
-          <p className="text-sm text-gray-700 mb-3 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2">
-            <span className="font-medium">입실 15:00</span> · <span className="font-medium">퇴실 11:00</span> (고정) · 최대 {config.maxNights}박 · 예약 가능 ~{config.bookingWindowEnd}
-          </p>
+          <div className="mx-4 mb-3 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-600">
+            <span>입실 <span className="font-semibold text-slate-900">15:00</span></span>
+            <span>퇴실 <span className="font-semibold text-slate-900">11:00</span> <span className="text-slate-400">(고정)</span></span>
+            <span>최대 <span className="font-semibold text-slate-900">{config.maxNights}박</span></span>
+            <span>예약 가능 <span className="font-semibold text-slate-900">~{config.bookingWindowEnd}</span></span>
+          </div>
         )}
+        <div className="px-4 pb-4">
         {loading ? (
           <div className="h-64 flex items-center justify-center text-gray-400">로딩 중...</div>
         ) : (
@@ -386,9 +389,10 @@ export default function JejuClient({
             })}
           </div>
         )}
-        <p className="text-xs text-gray-500 mt-2">
-          입실일을 클릭한 뒤 퇴실일을 클릭하세요. (1박 이상, 이미 예약된 기간과 겹칠 수 없습니다.)
-        </p>
+          <p className="text-xs text-gray-400 mt-2">
+            입실일을 클릭한 뒤 퇴실일을 클릭하세요. (1박 이상, 이미 예약된 기간과 겹칠 수 없습니다.)
+          </p>
+        </div>
       </div>
 
       {/* 선택 후 상세 입력 (날짜 고정) — 모바일 터치·구역 구분 */}

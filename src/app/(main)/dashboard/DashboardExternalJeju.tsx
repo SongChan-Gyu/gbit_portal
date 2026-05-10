@@ -65,56 +65,44 @@ export default function DashboardExternalJeju({
     <div className="space-y-4">
 
       {/* 헤더 카드 */}
-      <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-md">
-        <div className="flex items-start justify-between gap-3 mb-4">
+      <div className="panel">
+        <div className="panel-header">
           <div>
-            <p className="text-lg font-bold leading-tight">{employeeName}</p>
-            <p className="text-teal-200 text-sm mt-0.5">{teamName ?? "팀 없음"} · {position}</p>
+            <p className="panel-title">{employeeName}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{teamName ?? "팀 없음"} · {position}</p>
           </div>
-          <span className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-white/20 text-white border border-white/30">
-            외부개발자
-          </span>
+          <span className="shrink-0 badge bg-teal-50 text-teal-800 border border-teal-200">외부개발자</span>
         </div>
-
-        {/* 스탯 3개 */}
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          <div className="bg-white/15 rounded-xl px-3 py-3 text-center">
-            <p className={`text-2xl font-bold ${inProgress > 0 ? "text-yellow-200" : "text-white/60"}`}>{inProgress}</p>
-            <p className="text-xs text-teal-100 mt-0.5 leading-tight">진행 중</p>
+        <div className="panel-body space-y-4">
+          {/* 스탯 + 버튼 6셀 동일 높이 그리드 */}
+          <div className="grid grid-cols-3 gap-2">
+            {/* 스탯 */}
+            <div className="h-20 flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
+              <span className={`text-2xl font-bold tabular-nums ${inProgress > 0 ? "text-amber-500" : "text-gray-400"}`}>{inProgress}</span>
+              <span className="text-xs text-gray-500 mt-0.5">진행 중</span>
+            </div>
+            <div className="h-20 flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
+              <span className={`text-2xl font-bold tabular-nums ${approved > 0 ? "text-green-600" : "text-gray-400"}`}>{approved}</span>
+              <span className="text-xs text-gray-500 mt-0.5">예약 확정</span>
+            </div>
+            <div className="h-20 flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-gray-50">
+              <span className="text-2xl font-bold tabular-nums text-gray-800">{total}</span>
+              <span className="text-xs text-gray-500 mt-0.5">누적 신청</span>
+            </div>
+            {/* 버튼 */}
+            <Link href="/jeju" className="h-20 flex flex-col items-center justify-center gap-1.5 rounded-xl bg-slate-800 text-white font-semibold text-xs hover:bg-slate-900 transition-colors">
+              <Home size={18} />
+              예약하기
+            </Link>
+            <Link href="/jeju/my" className="h-20 flex flex-col items-center justify-center gap-1.5 rounded-xl bg-gray-100 text-gray-700 font-medium text-xs hover:bg-gray-200 transition-colors">
+              <List size={18} />
+              신청 내역
+            </Link>
+            <Link href="/jeju/info" className="h-20 flex flex-col items-center justify-center gap-1.5 rounded-xl bg-gray-100 text-gray-700 font-medium text-xs hover:bg-gray-200 transition-colors">
+              <MapPin size={18} />
+              숙소 정보
+            </Link>
           </div>
-          <div className="bg-white/15 rounded-xl px-3 py-3 text-center">
-            <p className={`text-2xl font-bold ${approved > 0 ? "text-green-200" : "text-white/60"}`}>{approved}</p>
-            <p className="text-xs text-teal-100 mt-0.5 leading-tight">예약 확정</p>
-          </div>
-          <div className="bg-white/15 rounded-xl px-3 py-3 text-center">
-            <p className="text-2xl font-bold text-white">{total}</p>
-            <p className="text-xs text-teal-100 mt-0.5 leading-tight">누적 신청</p>
-          </div>
-        </div>
-
-        {/* 버튼 */}
-        <div className="grid grid-cols-3 gap-2">
-          <Link
-            href="/jeju"
-            className="flex flex-col items-center gap-1.5 bg-white text-teal-700 rounded-xl py-3 font-semibold text-xs hover:bg-teal-50 transition-colors shadow-sm"
-          >
-            <Home size={20} />
-            예약하기
-          </Link>
-          <Link
-            href="/jeju/my"
-            className="flex flex-col items-center gap-1.5 bg-white/20 text-white rounded-xl py-3 font-medium text-xs hover:bg-white/30 transition-colors border border-white/20"
-          >
-            <List size={20} />
-            신청 내역
-          </Link>
-          <Link
-            href="/jeju/info"
-            className="flex flex-col items-center gap-1.5 bg-white/20 text-white rounded-xl py-3 font-medium text-xs hover:bg-white/30 transition-colors border border-white/20"
-          >
-            <MapPin size={20} />
-            숙소 정보
-          </Link>
         </div>
       </div>
 
