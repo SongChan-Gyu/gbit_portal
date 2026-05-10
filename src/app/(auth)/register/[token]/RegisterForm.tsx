@@ -45,6 +45,7 @@ export default function RegisterForm({
 }) {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState(existingEmail);
+  const [alimtalkEnabled, setAlimtalkEnabled] = useState(true);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -96,7 +97,7 @@ export default function RegisterForm({
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, username, password, email: email.trim() }),
+      body: JSON.stringify({ token, username, password, email: email.trim(), alimtalkEnabled }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error ?? "등록 실패"); setLoading(false); return; }
@@ -208,6 +209,25 @@ export default function RegisterForm({
         {pwMismatch && (
           <p className="text-xs text-red-500 mt-1 flex items-center gap-1"><AlertCircle size={11} /> 비밀번호가 일치하지 않습니다.</p>
         )}
+      </div>
+
+      {/* 알림톡 수신 동의 */}
+      <div className="rounded-xl bg-yellow-50 border border-yellow-200 px-4 py-3.5 space-y-2">
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={alimtalkEnabled}
+            onChange={(e) => setAlimtalkEnabled(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-yellow-500 shrink-0"
+          />
+          <div>
+            <p className="text-sm font-semibold text-yellow-900">카카오 알림톡 수신 허용</p>
+            <p className="text-xs text-yellow-700 mt-0.5 leading-relaxed">
+              제주도 숙소 예약 결과, 건강검진 등 양식 제출 요청 알림을 카카오톡으로 받아보실 수 있습니다.
+              원활한 서비스 이용을 위해 <strong>허용을 권장드립니다.</strong> 가입 후 내 정보에서 언제든지 변경 가능합니다.
+            </p>
+          </div>
+        </label>
       </div>
 
       {error && (

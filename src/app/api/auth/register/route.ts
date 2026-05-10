@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 
 export async function POST(req: Request) {
-  const { token, username, password, email } = await req.json();
+  const { token, username, password, email, alimtalkEnabled } = await req.json();
 
   if (!token || !username || !password)
     return NextResponse.json({ error: "필수 항목 누락" }, { status: 400 });
@@ -68,6 +68,7 @@ export async function POST(req: Request) {
         status: "ACTIVE",
         email: emailNorm,
         emailEnabled: emailEnabledSyncedToAddress(emailNorm),
+        alimtalkEnabled: alimtalkEnabled !== false,
       },
     });
   });
