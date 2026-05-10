@@ -28,7 +28,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   });
   const isExternal = employee?.employeeType === "EXTERNAL";
   if (isExternal) {
-    allowedMenuKeys = ["dashboard", "notices", "jeju", "jeju_my", "jeju_info"];
+    allowedMenuKeys = ["dashboard", "me", "notices", "jeju", "jeju_my", "jeju_info"];
   } else if (isWelfareDept(employee)) {
     if (!allowedMenuKeys.includes("jeju_admin")) allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
     if (!allowedMenuKeys.includes("jeju_approve")) allowedMenuKeys = [...allowedMenuKeys, "jeju_approve"];
