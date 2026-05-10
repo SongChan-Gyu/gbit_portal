@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Home, List, MapPin, Calendar, ChevronRight } from "lucide-react";
+import { Home, List, MapPin, Calendar, ChevronRight, BedDouble, CheckCircle2, Clock3, FileText } from "lucide-react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
 
 export type ExternalJejuRow = {
@@ -63,63 +63,117 @@ export default function DashboardExternalJeju({
 }) {
   return (
     <div className="space-y-4">
-      <div className="panel">
-        <div className="panel-header">
+
+      {/* 헤더 카드 */}
+      <div className="rounded-2xl bg-gradient-to-br from-teal-600 to-teal-700 p-5 text-white shadow-md">
+        <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <span className="panel-title">{employeeName}</span>
-            <span className="text-gray-500 text-sm md:text-xs ml-2">
-              {teamName ?? "팀 없음"} · {position}
-            </span>
+            <p className="text-lg font-bold leading-tight">{employeeName}</p>
+            <p className="text-teal-200 text-sm mt-0.5">{teamName ?? "팀 없음"} · {position}</p>
           </div>
-          <span className="badge bg-teal-50 text-teal-800 border border-teal-200">외부개발자 · 제주 숙소</span>
+          <span className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-white/20 text-white border border-white/30">
+            외부개발자
+          </span>
         </div>
-        <div className="panel-body">
-          <p className="text-sm text-gray-600 mb-4">
-            휴가·연차 기능은 사용 대상이 아닙니다. 아래에서 <strong className="text-gray-800">제주도 숙소 예약</strong>을 이용하실 수 있습니다.
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="stat-card">
-              <div className={`stat-num ${inProgress > 0 ? "text-amber-600" : "text-gray-400"}`}>{inProgress}</div>
-              <div className="stat-label">진행 중 신청</div>
-            </div>
-            <div className="stat-card">
-              <div className={`stat-num ${approved > 0 ? "text-green-600" : "text-gray-400"}`}>{approved}</div>
-              <div className="stat-label">예약 확정</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-num text-gray-800">{total}</div>
-              <div className="stat-label">누적 신청 건수</div>
-            </div>
+
+        {/* 스탯 3개 */}
+        <div className="grid grid-cols-3 gap-2 mb-5">
+          <div className="bg-white/15 rounded-xl px-3 py-3 text-center">
+            <p className={`text-2xl font-bold ${inProgress > 0 ? "text-yellow-200" : "text-white/60"}`}>{inProgress}</p>
+            <p className="text-xs text-teal-100 mt-0.5 leading-tight">진행 중</p>
           </div>
-          <div className="mt-4 flex flex-col sm:flex-row flex-wrap gap-2">
-            <Link href="/jeju" className="btn-primary text-center py-2.5 px-4 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2">
-              <Home size={16} /> 예약하기
-            </Link>
-            <Link
-              href="/jeju/my"
-              className="btn-secondary text-center py-2.5 px-4 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2"
-            >
-              <List size={16} /> 예약 신청 내역
-            </Link>
-            <Link
-              href="/jeju/info"
-              className="btn-secondary text-center py-2.5 px-4 rounded-lg text-sm font-medium inline-flex items-center justify-center gap-2"
-            >
-              <MapPin size={16} /> 숙소 정보
-            </Link>
+          <div className="bg-white/15 rounded-xl px-3 py-3 text-center">
+            <p className={`text-2xl font-bold ${approved > 0 ? "text-green-200" : "text-white/60"}`}>{approved}</p>
+            <p className="text-xs text-teal-100 mt-0.5 leading-tight">예약 확정</p>
           </div>
+          <div className="bg-white/15 rounded-xl px-3 py-3 text-center">
+            <p className="text-2xl font-bold text-white">{total}</p>
+            <p className="text-xs text-teal-100 mt-0.5 leading-tight">누적 신청</p>
+          </div>
+        </div>
+
+        {/* 버튼 */}
+        <div className="grid grid-cols-3 gap-2">
+          <Link
+            href="/jeju"
+            className="flex flex-col items-center gap-1.5 bg-white text-teal-700 rounded-xl py-3 font-semibold text-xs hover:bg-teal-50 transition-colors shadow-sm"
+          >
+            <Home size={20} />
+            예약하기
+          </Link>
+          <Link
+            href="/jeju/my"
+            className="flex flex-col items-center gap-1.5 bg-white/20 text-white rounded-xl py-3 font-medium text-xs hover:bg-white/30 transition-colors border border-white/20"
+          >
+            <List size={20} />
+            신청 내역
+          </Link>
+          <Link
+            href="/jeju/info"
+            className="flex flex-col items-center gap-1.5 bg-white/20 text-white rounded-xl py-3 font-medium text-xs hover:bg-white/30 transition-colors border border-white/20"
+          >
+            <MapPin size={20} />
+            숙소 정보
+          </Link>
         </div>
       </div>
 
+      {/* 양식 제출 */}
+      {forms.length > 0 && (
+        <div className="panel">
+          <div className="panel-header">
+            <div className="flex items-center gap-2">
+              <FileText size={15} className="text-gray-500" />
+              <span className="panel-title">양식 제출</span>
+            </div>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {forms.map((f) => (
+              <Link
+                key={f.id}
+                href={f.slug ? `/f/${f.slug}` : `/forms/${f.id}`}
+                className="flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[15px] md:text-sm font-medium ${f.submitted ? "text-gray-400" : "text-gray-800"}`}>
+                      {f.title}
+                    </span>
+                    {f.submitted ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                        <CheckCircle2 size={11} /> 제출완료
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        <Clock3 size={11} /> 미제출
+                      </span>
+                    )}
+                  </div>
+                  {f.description && (
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">{f.description}</p>
+                  )}
+                </div>
+                <ChevronRight size={16} className="text-gray-300 shrink-0 ml-2" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 최근 제주 신청 */}
       <div className="panel">
         <div className="panel-header">
-          <span className="panel-title">최근 제주 숙소 신청</span>
-          <Link href="/jeju/my" className="text-sm md:text-xs text-slate-600 hover:underline touch-manipulation">
+          <div className="flex items-center gap-2">
+            <BedDouble size={15} className="text-gray-500" />
+            <span className="panel-title">최근 제주 숙소 신청</span>
+          </div>
+          <Link href="/jeju/my" className="text-sm md:text-xs text-slate-500 hover:underline">
             전체보기
           </Link>
         </div>
         {rows.length === 0 ? (
-          <div className="px-4 py-10 text-center">
+          <div className="px-4 py-8 text-center">
+            <BedDouble size={32} className="mx-auto text-gray-200 mb-3" />
             <p className="text-sm text-gray-500 mb-4">아직 신청 내역이 없습니다.</p>
             <Link href="/jeju" className="btn-primary btn-sm inline-flex items-center gap-2">
               <Calendar size={14} /> 숙소 예약하기
@@ -131,7 +185,7 @@ export default function DashboardExternalJeju({
               <Link
                 key={r.id}
                 href="/jeju/my"
-                className="block px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors"
+                className="block px-4 py-3 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -150,36 +204,7 @@ export default function DashboardExternalJeju({
         )}
       </div>
 
-      {forms.length > 0 && (
-        <div className="panel">
-          <div className="panel-header">
-            <span className="panel-title">양식 제출</span>
-          </div>
-          <div className="divide-y divide-gray-100">
-            {forms.map((f) => (
-              <Link
-                key={f.id}
-                href={f.slug ? `/f/${f.slug}` : `/forms/${f.id}`}
-                className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors touch-manipulation"
-              >
-                <div className="min-w-0 flex items-center gap-2.5">
-                  <div className="min-w-0">
-                    <span className={`text-[15px] md:text-[13px] font-medium ${f.submitted ? "text-gray-500" : "text-gray-800"}`}>{f.title}</span>
-                    {f.description && (
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">{f.description}</p>
-                    )}
-                  </div>
-                  {f.submitted && (
-                    <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">제출완료</span>
-                  )}
-                </div>
-                <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
-
+      {/* 공지 */}
       {notices.length > 0 && (
         <div className="pt-2 border-t border-gray-100">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500">
@@ -193,9 +218,7 @@ export default function DashboardExternalJeju({
               </span>
             ))}
             <span className="text-gray-300">·</span>
-            <Link href="/notices" className="text-gray-400 hover:text-gray-600 shrink-0">
-              더보기
-            </Link>
+            <Link href="/notices" className="text-gray-400 hover:text-gray-600 shrink-0">더보기</Link>
           </div>
         </div>
       )}
