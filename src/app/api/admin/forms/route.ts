@@ -53,8 +53,8 @@ export async function POST(req: Request) {
         create: (Array.isArray(fields) ? fields : []).map((f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({
           sortOrder: i,
           label: f.label ?? "",
-          fieldType: f.fieldType === "select" ? "select" : "text",
-          options: f.fieldType === "select" && Array.isArray(f.options) ? JSON.stringify(f.options) : null,
+          fieldType: (["text","textarea","number","date","select","radio","checkbox"] as string[]).includes(f.fieldType ?? "") ? f.fieldType! : "text",
+          options: (["select","radio","checkbox"] as string[]).includes(f.fieldType ?? "") && Array.isArray(f.options) ? JSON.stringify(f.options) : null,
           required: !!f.required,
         })),
       },
