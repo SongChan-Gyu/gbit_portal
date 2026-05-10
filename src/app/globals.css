@@ -117,10 +117,20 @@
     max-width: 100%;
     -webkit-appearance: none;
     appearance: none;
+    /* 빈 값일 때 WebKit datetime 편집 영역이 접혀 세로가 줄어드는 현상 보정(셀렉트·텍스트와 동일 터치 높이) */
+    min-height: 2.5rem;
+    line-height: 1.25;
+  }
+  @media (max-width: 768px) {
+    .input-date-shell .input.input-date-compact {
+      min-height: 2.75rem;
+    }
   }
   .input-date-shell .input.input-date-compact::-webkit-datetime-edit,
   .input-date-shell .input.input-date-compact::-webkit-datetime-edit-fields-wrapper {
     padding: 0;
+    min-height: 1.25em;
+    line-height: 1.25;
   }
   .input-date-shell .input.input-date-compact::-webkit-calendar-picker-indicator {
     margin-inline-start: auto;
