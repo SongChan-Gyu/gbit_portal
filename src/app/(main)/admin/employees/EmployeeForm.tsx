@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import DatePickerButton from "@/components/ui/DatePickerButton";
 import { todayKstYmd } from "@/lib/dateUtils";
 import { INTERNAL_STAFF_FIXED_TEMP_PASSWORD } from "@/lib/employeeCompanyStaffNo";
+import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
 
 interface Team { id:string; name:string; }
 interface Employee {
@@ -59,7 +60,11 @@ function stripEmployeeForForm(raw: Record<string, unknown>): Partial<Employee> {
     dutyDept: (dutyDept as string | null) ?? null,
     role: role as string,
     employeeType: employeeType as string,
-    hireDate: hireDate instanceof Date ? hireDate.toISOString().slice(0, 10) : String(hireDate ?? "").slice(0, 10),
+    hireDate: (() => {
+      const d = hireDate instanceof Date ? hireDate.toISOString().slice(0, 10) : String(hireDate ?? "").slice(0, 10);
+      // EXTERNAL 기본 더미 입사일(2000-01-01)은 빈 값으로 처리
+      return employeeType === "EXTERNAL" && d === EXTERNAL_DEFAULT_HIRE_YMD ? "" : d;
+    })(),
     birthDate: birthDate
       ? birthDate instanceof Date
         ? birthDate.toISOString().slice(0, 10)
@@ -263,7 +268,7 @@ export default function EmployeeForm({
           </label>
           <DatePickerButton value={form.hireDate??""} onChange={(d)=>set("hireDate",d)} />
           {form.employeeType === "EXTERNAL" && (
-            <p className="text-xs text-gray-500 mt-1">비우고 저장하면 시스템 기본 입사일로 저장됩니다.</p>
+            <p className="text-xs text-gray-500 mt-1">외부개발자는 입사일을 비워도 됩니다. (휴가 미관리)</p>
           )}
         </div>
         <div>
@@ -285,11 +290,17 @@ export default function EmployeeForm({
             placeholder="010-0000-0000" />
         </div>
         <div>
-          <label className="label">이메일</label>
-          <input type="email" className="input" value={form.email??""} onChange={(e)=>set("email",e.target.value)} />
+          <label className="label">이메일 *</label>
+          <input
+            type="email"
+            className="input"
+            value={form.email ?? ""}
+            onChange={(e) => set("email", e.target.value)}
+            required
+            placeholder="example@email.com"
+          />
           <p className="text-xs text-gray-500 mt-1 leading-snug">
-            주소가 있으면 <strong>초대·비밀번호 찾기·아이디 찾기</strong> 등 시스템 메일을 이 주소로 보냅니다. 별도
-            &quot;허용&quot; 스위치는 없으며, 저장 시 주소 유무에 맞춰 내부 플래그만 맞춰 둡니다.
+            <strong>아이디·비밀번호 찾기</strong> 및 초대 메일 발송에 사용됩니다. 필수 입력.
           </p>
         </div>
       </div>
