@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import prisma from "@/lib/db";
 import RegisterForm from "./RegisterForm";
 import { User, Calendar, Building2, Briefcase, Clock } from "lucide-react";
-import { formatYMD } from "@/lib/dateUtils";
+import { formatYMD, kstYmd } from "@/lib/dateUtils";
 import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
 
 export default async function RegisterPage({ params }: { params: Promise<{ token: string }> }) {
@@ -75,7 +75,7 @@ export default async function RegisterPage({ params }: { params: Promise<{ token
                 { icon: Building2, label: "팀", value: emp.team?.name ?? "-" },
                 { icon: Briefcase, label: "직위", value: emp.position },
                 // 외부개발자 더미 입사일(2000-01-01)은 표시하지 않음
-                emp.employeeType !== "EXTERNAL" || formatYMD(emp.hireDate) !== EXTERNAL_DEFAULT_HIRE_YMD
+                emp.employeeType !== "EXTERNAL" || kstYmd(emp.hireDate) !== EXTERNAL_DEFAULT_HIRE_YMD
                   ? { icon: Calendar, label: "입사일", value: formatYMD(emp.hireDate) }
                   : null,
                 { icon: User, label: "사원번호", value: emp.empNo },
