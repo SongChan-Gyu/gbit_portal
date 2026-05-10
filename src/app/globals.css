@@ -94,11 +94,24 @@
 
   /* ─── 입력 */
   .input {
-    @apply w-full border border-gray-300 rounded px-2.5 py-2 text-[13px]
+    @apply block w-full min-w-0 max-w-full border border-gray-300 rounded px-2.5 py-2 text-[13px]
       bg-white placeholder-gray-400
       focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
       disabled:bg-gray-50 disabled:text-gray-400
       transition-colors;
+  }
+  /*
+   * 네이티브 date/time 등은 UA intrinsic min-width로 셀렉트·텍스트보다 시각적으로 넓어질 수 있음.
+   * min-inline-size:0 + 고정 필드 박스로 컨테이너 폭에 맞춤(field-sizing는 Chromium 기준).
+   */
+  input.input[type="date"],
+  input.input[type="datetime-local"],
+  input.input[type="time"],
+  input.input[type="month"],
+  input.input[type="week"] {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    field-sizing: fixed;
   }
   .label { @apply block text-xs font-medium text-gray-600 mb-1; }
 
