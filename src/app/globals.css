@@ -117,13 +117,22 @@
     max-width: 100%;
     -webkit-appearance: none;
     appearance: none;
-    /* 높이는 일반 .input 의 padding·font에 맡김 (고정 min-height 제거 → 텍스트보다 길어지지 않음) */
     line-height: normal;
+    /*
+     * 빈 date 는 WebKit 내부 높이 0으로 접힘. 고정 rem 은 텍스트보다 길거나 짧음.
+     * 일반 .input 과 동일: 세로 padding(py-2=1rem) + 1줄(1.25em) + border(2px), box-border 기준.
+     */
+    min-height: calc(2px + 1rem + 1.25em);
   }
-  /* 빈 값일 때에만 내부 박스가 0 높이로 접히는 것 방지 — 바깥 min-height 와 중첩하지 않음 */
+  @media (max-width: 768px) {
+    .input-date-shell .input.input-date-compact {
+      min-height: calc(2px + 1.25rem + 1.25em); /* py-2.5 → 1.25rem */
+    }
+  }
   .input-date-shell .input.input-date-compact::-webkit-datetime-edit-fields-wrapper {
     padding: 0;
-    min-height: 1em;
+    display: flex;
+    align-items: center;
   }
   .input-date-shell .input.input-date-compact::-webkit-datetime-edit {
     padding: 0;
