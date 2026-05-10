@@ -290,17 +290,16 @@ export default function EmployeeForm({
             placeholder="010-0000-0000" />
         </div>
         <div>
-          <label className="label">이메일 *</label>
+          <label className="label">이메일</label>
           <input
             type="email"
             className="input"
             value={form.email ?? ""}
             onChange={(e) => set("email", e.target.value)}
-            required
             placeholder="example@email.com"
           />
           <p className="text-xs text-gray-500 mt-1 leading-snug">
-            <strong>아이디·비밀번호 찾기</strong> 및 초대 메일 발송에 사용됩니다. 필수 입력.
+            <strong>아이디·비밀번호 찾기</strong> 및 초대 메일 발송에 사용됩니다.
           </p>
         </div>
       </div>
