@@ -101,17 +101,29 @@
       transition-colors;
   }
   /*
-   * 네이티브 date/time 등은 UA intrinsic min-width로 셀렉트·텍스트보다 시각적으로 넓어질 수 있음.
-   * min-inline-size:0 + 고정 필드 박스로 컨테이너 폭에 맞춤(field-sizing는 Chromium 기준).
+   * 네이티브 date/time (특히 iOS Safari): UA intrinsic 폭으로 셀렉트·텍스트보다 넓게 보일 수 있음.
+   * `.input-date-shell` + `.input-date-compact`로 flex 수축 + appearance/dt-edit 리셋.
    */
-  input.input[type="date"],
-  input.input[type="datetime-local"],
-  input.input[type="time"],
-  input.input[type="month"],
-  input.input[type="week"] {
-    min-inline-size: 0;
-    max-inline-size: 100%;
-    field-sizing: fixed;
+  .input-date-shell {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+  .input-date-shell .input.input-date-compact {
+    flex: 1 1 0%;
+    width: auto;
+    min-width: 0;
+    max-width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  .input-date-shell .input.input-date-compact::-webkit-datetime-edit,
+  .input-date-shell .input.input-date-compact::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  .input-date-shell .input.input-date-compact::-webkit-calendar-picker-indicator {
+    margin-inline-start: auto;
   }
   .label { @apply block text-xs font-medium text-gray-600 mb-1; }
 

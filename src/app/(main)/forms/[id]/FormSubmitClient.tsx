@@ -54,14 +54,16 @@ function renderField(
       );
     case "date":
       return (
-        <input
-          type="date"
-          className="input w-full"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={f.required}
-          disabled={disabled}
-        />
+        <div className="input-date-shell">
+          <input
+            type="date"
+            className="input input-date-compact"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            required={f.required}
+            disabled={disabled}
+          />
+        </div>
       );
     case "select":
       return (
