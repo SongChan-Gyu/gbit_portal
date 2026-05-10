@@ -34,8 +34,17 @@ function PasswordStrength({ password }: { password: string }) {
   );
 }
 
-export default function RegisterForm({ token, employeeId }: { token: string; employeeId: string }) {
+export default function RegisterForm({
+  token,
+  employeeId,
+  existingEmail = "",
+}: {
+  token: string;
+  employeeId: string;
+  existingEmail?: string;
+}) {
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState(existingEmail);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -82,11 +91,12 @@ export default function RegisterForm({ token, employeeId }: { token: string; emp
     if (!usernameChecked) { setError("아이디 중복 확인을 먼저 해주세요."); return; }
     if (password.length < 8) { setError("비밀번호는 8자 이상이어야 합니다."); return; }
     if (password !== confirm) { setError("비밀번호가 일치하지 않습니다."); return; }
+    if (!email.trim()) { setError("이메일 주소를 입력해 주세요."); return; }
     setLoading(true); setError("");
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, username, password }),
+      body: JSON.stringify({ token, username, password, email: email.trim() }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error ?? "등록 실패"); setLoading(false); return; }
@@ -97,6 +107,21 @@ export default function RegisterForm({ token, employeeId }: { token: string; emp
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* 이메일 */}
+      <div>
+        <label className="label">이메일 <span className="text-red-400">*</span></label>
+        <input
+          type="email"
+          className="input w-full"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="example@email.com"
+          required
+          autoComplete="email"
+        />
+        <p className="text-xs text-gray-400 mt-1">아이디·비밀번호 찾기에 사용됩니다.</p>
+      </div>
+
       {/* 아이디 */}
       <div>
         <label className="label">아이디 <span className="text-red-400">*</span></label>

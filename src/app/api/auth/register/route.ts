@@ -1,12 +1,17 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import bcrypt from "bcryptjs";
+import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 
 export async function POST(req: Request) {
-  const { token, username, password } = await req.json();
+  const { token, username, password, email } = await req.json();
 
   if (!token || !username || !password)
     return NextResponse.json({ error: "필수 항목 누락" }, { status: 400 });
+
+  const emailNorm = String(email ?? "").trim();
+  if (!emailNorm)
+    return NextResponse.json({ error: "이메일 주소를 입력해 주세요." }, { status: 400 });
 
   if (username.length < 3)
     return NextResponse.json({ error: "아이디는 3자 이상이어야 합니다." }, { status: 400 });
@@ -56,10 +61,14 @@ export async function POST(req: Request) {
       data: { usedAt: new Date() },
     });
 
-    // 사원 상태 ACTIVE로 변경
+    // 사원 상태 ACTIVE + 이메일 업데이트
     await tx.employee.update({
       where: { id: invite.employeeId },
-      data: { status: "ACTIVE" },
+      data: {
+        status: "ACTIVE",
+        email: emailNorm,
+        emailEnabled: emailEnabledSyncedToAddress(emailNorm),
+      },
     });
   });
 

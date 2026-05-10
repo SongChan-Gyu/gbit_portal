@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import RegisterForm from "./RegisterForm";
 import { User, Calendar, Building2, Briefcase, Clock } from "lucide-react";
 import { formatYMD } from "@/lib/dateUtils";
+import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
 
 export default async function RegisterPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -73,9 +74,12 @@ export default async function RegisterPage({ params }: { params: Promise<{ token
               {[
                 { icon: Building2, label: "팀", value: emp.team?.name ?? "-" },
                 { icon: Briefcase, label: "직위", value: emp.position },
-                { icon: Calendar, label: "입사일", value: formatYMD(emp.hireDate) },
+                // 외부개발자 더미 입사일(2000-01-01)은 표시하지 않음
+                emp.employeeType !== "EXTERNAL" || formatYMD(emp.hireDate) !== EXTERNAL_DEFAULT_HIRE_YMD
+                  ? { icon: Calendar, label: "입사일", value: formatYMD(emp.hireDate) }
+                  : null,
                 { icon: User, label: "사원번호", value: emp.empNo },
-              ].map(({ icon: Icon, label, value }) => (
+              ].filter(Boolean).map(({ icon: Icon, label, value }: any) => (
                 <div key={label} className="flex items-center gap-1.5 text-gray-600">
                   <Icon size={11} className="text-gray-400 shrink-0" />
                   <span className="text-gray-400">{label}</span>
@@ -92,7 +96,7 @@ export default async function RegisterPage({ params }: { params: Promise<{ token
           </div>
 
           {/* 등록 폼 */}
-          <RegisterForm token={token} employeeId={emp.id} />
+          <RegisterForm token={token} employeeId={emp.id} existingEmail={emp.email ?? ""} />
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-4">
