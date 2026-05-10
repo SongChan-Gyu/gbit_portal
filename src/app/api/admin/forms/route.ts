@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requireAdmin, requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit, getIp } from "@/lib/audit";
 
@@ -8,7 +8,7 @@ import { writeAudit, getIp } from "@/lib/audit";
 export async function GET() {
   const session = await auth();
   const u = session?.user as any;
-  const guard = requirePMOrAdmin(u); if (guard) return guard;
+  const guard = requireSettingsAccess(u); if (guard) return guard;
 
   const list = await prisma.form.findMany({
     orderBy: { updatedAt: "desc" },
@@ -24,7 +24,7 @@ export async function GET() {
 export async function POST(req: Request) {
   const session = await auth();
   const u = session?.user as any;
-  const guard = requirePMOrAdmin(u); if (guard) return guard;
+  const guard = requireSettingsAccess(u); if (guard) return guard;
 
   const body = await req.json().catch(() => ({}));
   const { title, slug, description, isActive, fields, showInMenu, audience } = body;

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Home, List, MapPin, Calendar } from "lucide-react";
+import { Home, List, MapPin, Calendar, ChevronRight } from "lucide-react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
 
 export type ExternalJejuRow = {
@@ -38,6 +38,8 @@ function dateLine(start: string, end: string) {
     : `${formatMDWithDayFromYMD(start)} ~ ${formatMDWithDayFromYMD(end)}`;
 }
 
+type FormItem = { id: string; title: string; slug: string | null; description: string | null; submitted?: boolean };
+
 export default function DashboardExternalJeju({
   employeeName,
   teamName,
@@ -47,6 +49,7 @@ export default function DashboardExternalJeju({
   approved,
   total,
   notices,
+  forms = [],
 }: {
   employeeName: string;
   teamName: string | null;
@@ -56,6 +59,7 @@ export default function DashboardExternalJeju({
   approved: number;
   total: number;
   notices: { id: string; title: string }[];
+  forms?: FormItem[];
 }) {
   return (
     <div className="space-y-4">
@@ -71,7 +75,7 @@ export default function DashboardExternalJeju({
         </div>
         <div className="panel-body">
           <p className="text-sm text-gray-600 mb-4">
-            휴가·연차 기능은 사용 대상이 아닙니다. 아래에서 <strong className="text-gray-800">제주도 숙소 예약</strong>만 이용하실 수 있습니다.
+            휴가·연차 기능은 사용 대상이 아닙니다. 아래에서 <strong className="text-gray-800">제주도 숙소 예약</strong>을 이용하실 수 있습니다.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="stat-card">
@@ -145,6 +149,36 @@ export default function DashboardExternalJeju({
           </div>
         )}
       </div>
+
+      {forms.length > 0 && (
+        <div className="panel">
+          <div className="panel-header">
+            <span className="panel-title">양식 제출</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {forms.map((f) => (
+              <Link
+                key={f.id}
+                href={f.slug ? `/f/${f.slug}` : `/forms/${f.id}`}
+                className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors touch-manipulation"
+              >
+                <div className="min-w-0 flex items-center gap-2.5">
+                  <div className="min-w-0">
+                    <span className={`text-[15px] md:text-[13px] font-medium ${f.submitted ? "text-gray-500" : "text-gray-800"}`}>{f.title}</span>
+                    {f.description && (
+                      <p className="text-xs text-gray-400 mt-0.5 truncate">{f.description}</p>
+                    )}
+                  </div>
+                  {f.submitted && (
+                    <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">제출완료</span>
+                  )}
+                </div>
+                <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {notices.length > 0 && (
         <div className="pt-2 border-t border-gray-100">

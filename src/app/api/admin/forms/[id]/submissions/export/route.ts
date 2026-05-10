@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requireAdmin, requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { todayKstYmd } from "@/lib/dateUtils";
 import * as XLSX from "xlsx";
@@ -11,7 +11,7 @@ export async function GET(
 ) {
   const session = await auth();
   const u = session?.user as any;
-  const guard = requirePMOrAdmin(u); if (guard) return guard;
+  const guard = requireSettingsAccess(u); if (guard) return guard;
   const formId = (await ctx.params).id;
   const form = await prisma.form.findUnique({
     where: { id: formId },

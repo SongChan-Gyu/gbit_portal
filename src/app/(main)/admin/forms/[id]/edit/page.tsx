@@ -9,7 +9,7 @@ export const metadata = { title: "양식 수정 | GBIT Portal" };
 export default async function EditFormPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const user = session?.user as any;
-  if (!["PM", "ADMIN"].includes(user?.role ?? "")) redirect("/dashboard");
+  if (!["PM", "ADMIN"].includes(user?.role ?? "") && !user?.isSettingsAdmin) redirect("/dashboard");
 
   const { id } = await params;
   const form = await prisma.form.findUnique({

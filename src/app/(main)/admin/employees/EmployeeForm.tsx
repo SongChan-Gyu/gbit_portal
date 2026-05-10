@@ -11,6 +11,7 @@ interface Employee {
   dutyDept:string|null; role:string; employeeType:string; hireDate:string; birthDate:string|null;
   phone:string; email:string|null; status:string;
   alimtalkEnabled: boolean;
+  isSettingsAdmin: boolean;
   /** 회사 사번(로그인 ID). 외부 등은 비움 */
   companyStaffNo?: string | null;
 }
@@ -68,6 +69,7 @@ function stripEmployeeForForm(raw: Record<string, unknown>): Partial<Employee> {
     email: (email as string | null) ?? null,
     status: status as string,
     alimtalkEnabled: !!(alimtalkEnabled as boolean),
+    isSettingsAdmin: !!(raw.isSettingsAdmin as boolean),
   };
 }
 
@@ -75,11 +77,14 @@ export default function EmployeeForm({
   teams,
   employee,
   hasLinkedAccount = false,
+  isAdmin = false,
 }: {
   teams: Team[];
   employee?: Record<string, unknown>;
   /** 수정 시 계정(User)이 연결되어 있는지 */
   hasLinkedAccount?: boolean;
+  /** true면 isSettingsAdmin 토글 노출 (ADMIN만 전달) */
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const today = todayKstYmd();
@@ -103,6 +108,7 @@ export default function EmployeeForm({
       hireDate: today,
       dutyDept:"",
       alimtalkEnabled: false,
+      isSettingsAdmin: false,
       companyStaffNo: "",
     };
   });
@@ -116,6 +122,9 @@ export default function EmployeeForm({
   }
   function setAlimtalk(v: boolean) {
     setForm((p) => ({ ...p, alimtalkEnabled: v }));
+  }
+  function setSettingsAdmin(v: boolean) {
+    setForm((p) => ({ ...p, isSettingsAdmin: v }));
   }
 
   async function submit(e: React.FormEvent) {
@@ -297,6 +306,24 @@ export default function EmployeeForm({
         </label>
         <p className="text-xs text-gray-500">기본은 꺼짐. 이후 본인이 내 정보에서 변경 가능.</p>
       </div>
+
+      {isAdmin && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <p className="text-sm font-semibold text-amber-900">설정 관리자 권한 (ADMIN 전용)</p>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={!!form.isSettingsAdmin}
+              onChange={(e) => setSettingsAdmin(e.target.checked)}
+            />
+            <span className="text-sm text-amber-800">설정 메뉴 접근 허용</span>
+          </label>
+          <p className="text-xs text-amber-700 leading-snug">
+            활성화 시 <strong>역할 변경 없이</strong> 휴가 유형 설정·휴가 부여·현황·유동 양식 관리 메뉴에 접근할 수 있습니다.
+            결재선·인사 관리 등 다른 권한에는 영향 없음.
+          </p>
+        </div>
+      )}
 
       {isEdit && (
         <div>

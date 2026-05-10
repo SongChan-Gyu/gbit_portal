@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, GripVertical } from "lucide-react";
 
 export type FormFieldDef = {
   id?: string;
   label: string;
-  fieldType: "text" | "select";
+  fieldType: "text" | "textarea" | "number" | "date" | "select" | "radio" | "checkbox";
   options?: string[];
   required: boolean;
 };
@@ -21,6 +21,18 @@ export type FormDef = {
   audience: "ALL" | "INTERNAL" | "EXTERNAL";
   fields: FormFieldDef[];
 };
+
+const FIELD_TYPE_OPTIONS: { value: FormFieldDef["fieldType"]; label: string; desc: string }[] = [
+  { value: "text",     label: "텍스트 (단문)",   desc: "한 줄 자유 입력" },
+  { value: "textarea", label: "텍스트 (장문)",   desc: "여러 줄 자유 입력" },
+  { value: "number",   label: "숫자",            desc: "숫자만 입력" },
+  { value: "date",     label: "날짜",            desc: "날짜 선택" },
+  { value: "select",   label: "드롭다운 선택",   desc: "목록에서 하나 선택" },
+  { value: "radio",    label: "라디오 (단일선택)", desc: "항목 중 하나 선택" },
+  { value: "checkbox", label: "체크박스 (복수선택)", desc: "항목 중 여러 개 선택" },
+];
+
+const OPTIONS_TYPES: FormFieldDef["fieldType"][] = ["select", "radio", "checkbox"];
 
 const emptyField = (): FormFieldDef => ({
   label: "",
@@ -59,7 +71,7 @@ export default function FormBuilder({
         audience: (initial.audience as FormDef["audience"]) ?? "ALL",
         fields: initial.fields.map((f) => ({
           ...f,
-          options: f.fieldType === "select" ? (f.options ?? []) : undefined,
+          options: OPTIONS_TYPES.includes(f.fieldType) ? (f.options ?? [""]) : undefined,
         })),
       });
     }
@@ -93,6 +105,17 @@ export default function FormBuilder({
     if (norm) setForm((p) => ({ ...p, slug: norm }));
   };
 
+  function handleFieldTypeChange(index: number, newType: FormFieldDef["fieldType"]) {
+    const needsOptions = OPTIONS_TYPES.includes(newType);
+    const hadOptions = OPTIONS_TYPES.includes(form.fields[index].fieldType);
+    setField(index, {
+      fieldType: newType,
+      options: needsOptions
+        ? (hadOptions ? form.fields[index].options : [""])
+        : undefined,
+    });
+  }
+
   async function save() {
     setError("");
     if (!form.title.trim()) {
@@ -109,7 +132,9 @@ export default function FormBuilder({
       fields: form.fields.map((f) => ({
         label: f.label.trim(),
         fieldType: f.fieldType,
-        options: f.fieldType === "select" ? (f.options ?? []).filter(Boolean) : undefined,
+        options: OPTIONS_TYPES.includes(f.fieldType)
+          ? (f.options ?? []).filter(Boolean)
+          : undefined,
         required: f.required,
       })),
     };
@@ -140,6 +165,7 @@ export default function FormBuilder({
         </div>
       )}
 
+      {/* 기본 정보 */}
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
         <h2 className="text-sm font-semibold text-gray-700">기본 정보</h2>
         <div>
@@ -154,7 +180,9 @@ export default function FormBuilder({
         </div>
         <div>
           <label className="label">URL 경로 (공개 링크, 선택)</label>
-          <p className="text-xs text-gray-500 mb-1">영문 소문자·숫자·하이픈만. 예: health-check-2025. 비우면 /f/ 공개 링크 없이 포털 내부 메뉴로만 사용됩니다.</p>
+          <p className="text-xs text-gray-500 mb-1">
+            영문 소문자·숫자·하이픈만. 예: health-check-2025. 비우면 포털 내부 메뉴로만 사용됩니다.
+          </p>
           <input
             className="input w-full font-mono"
             value={form.slug}
@@ -208,6 +236,7 @@ export default function FormBuilder({
         )}
       </div>
 
+      {/* 질문/필드 */}
       <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">질문/필드</h2>
@@ -219,75 +248,84 @@ export default function FormBuilder({
             <Plus className="w-4 h-4" /> 필드 추가
           </button>
         </div>
-        <p className="text-xs text-gray-500">
-          텍스트: 자유 입력. 콤보: 선택 항목을 한 줄에 하나씩 입력하세요.
-        </p>
         <div className="rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800">
-          아래는 이 양식 전용 질문입니다. 제출자 정보(이름·연락처·이메일)는 별도 수집하지 않습니다.
+          이 양식 전용 질문입니다. 제출자 정보(이름·연락처·이메일)는 별도 수집하지 않습니다.
         </div>
 
         {form.fields.length === 0 ? (
-          <p className="text-sm text-gray-500 py-4">필드를 추가하면 제출 시 해당 항목을 받을 수 있습니다.</p>
+          <p className="text-sm text-gray-500 py-4">
+            「필드 추가」를 눌러 질문을 추가하세요.
+          </p>
         ) : (
-          <ul className="space-y-4">
+          <ul className="space-y-3">
             {form.fields.map((f, i) => (
-              <li key={i} className="border border-gray-100 rounded-lg p-4 bg-gray-50/50">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 space-y-2">
-                    <input
-                      className="input w-full"
-                      value={f.label}
-                      onChange={(e) => setField(i, { label: e.target.value })}
-                      placeholder="질문/필드명"
-                    />
-                    <div className="flex flex-wrap gap-4 items-center">
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name={"type-" + i}
-                          checked={f.fieldType === "text"}
-                          onChange={() => setField(i, { fieldType: "text", options: undefined })}
-                        />
-                        <span className="text-sm">텍스트</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="radio"
-                          name={"type-" + i}
-                          checked={f.fieldType === "select"}
-                          onChange={() => setField(i, { fieldType: "select", options: f.options ?? [""] })}
-                        />
-                        <span className="text-sm">콤보(선택)</span>
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={f.required}
-                          onChange={(e) => setField(i, { required: e.target.checked })}
-                        />
-                        <span className="text-sm">필수</span>
-                      </label>
+              <li key={i} className="border border-gray-200 rounded-xl p-4 bg-white">
+                <div className="flex items-start gap-2">
+                  <GripVertical className="w-4 h-4 text-gray-300 mt-2.5 shrink-0" />
+                  <div className="flex-1 space-y-3">
+                    {/* 질문명 + 필드 타입 */}
+                    <div className="flex gap-2">
+                      <input
+                        className="input flex-1"
+                        value={f.label}
+                        onChange={(e) => setField(i, { label: e.target.value })}
+                        placeholder="질문/필드명"
+                      />
+                      <select
+                        className="input w-44 shrink-0"
+                        value={f.fieldType}
+                        onChange={(e) =>
+                          handleFieldTypeChange(i, e.target.value as FormFieldDef["fieldType"])
+                        }
+                      >
+                        {FIELD_TYPE_OPTIONS.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
-                    {f.fieldType === "select" && (
+
+                    {/* 필드 타입 설명 */}
+                    <p className="text-xs text-gray-400">
+                      {FIELD_TYPE_OPTIONS.find((t) => t.value === f.fieldType)?.desc}
+                    </p>
+
+                    {/* 옵션 입력 (select / radio / checkbox) */}
+                    {OPTIONS_TYPES.includes(f.fieldType) && (
                       <div>
-                        <span className="text-xs text-gray-500">선택 항목 (한 줄에 하나)</span>
+                        <label className="text-xs text-gray-500 mb-1 block">
+                          선택 항목 (한 줄에 하나씩)
+                        </label>
                         <textarea
-                          className="input w-full min-h-[60px] text-sm font-mono"
+                          className="input w-full min-h-[72px] text-sm font-mono"
                           value={(f.options ?? []).join("\n")}
                           onChange={(e) =>
                             setField(i, {
                               options: e.target.value.split(/\n/).map((s) => s.trim()),
                             })
                           }
-                          placeholder="본인\n가족"
+                          placeholder={"항목1\n항목2\n항목3"}
                         />
                       </div>
                     )}
+
+                    {/* 필수 여부 */}
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={f.required}
+                        onChange={(e) => setField(i, { required: e.target.checked })}
+                        className="w-4 h-4 accent-blue-600"
+                      />
+                      <span className="text-sm text-gray-600">필수 항목</span>
+                    </label>
                   </div>
+
                   <button
                     type="button"
                     onClick={() => removeField(i)}
-                    className="text-gray-400 hover:text-red-600 p-1"
+                    className="text-gray-300 hover:text-red-500 p-1 mt-1 shrink-0 transition-colors"
                     title="삭제"
                   >
                     <Trash2 className="w-4 h-4" />

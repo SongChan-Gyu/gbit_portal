@@ -57,14 +57,14 @@ export async function GET(req: Request) {
   if (welfare) {
     const byDate: Record<string, { name: string; empNo: string; requestId: string }[]> = {};
     const welfareOccupiedSet = new Set<string>();
-    const statusByDate: Record<string, "예약됨" | "신청됨"> = {};
+    const statusByDate: Record<string, "예약됨" | "신청중"> = {};
     for (const r of activeRequests) {
       const startY = kstYmd(new Date(r.startDate));
       const endY = kstYmd(new Date(r.endDate));
       for (const key of eachYmdInHalfOpenRange(startY, endY)) {
         welfareOccupiedSet.add(key);
         if (r.status === "APPROVED") statusByDate[key] = "예약됨";
-        else if (!statusByDate[key]) statusByDate[key] = "신청됨";
+        else if (!statusByDate[key]) statusByDate[key] = "신청중";
         /* 복지부 달력에는 승인된 건만 이름 표시 (PENDING은 '예약됨'으로만) */
         if (r.status !== "APPROVED") continue;
         if (!byDate[key]) byDate[key] = [];
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
   }
 
   const occupiedDates: string[] = [];
-  const statusByDate: Record<string, "예약됨" | "신청됨"> = {};
+  const statusByDate: Record<string, "예약됨" | "신청중"> = {};
   const set = new Set<string>();
   for (const d of blockedDates) {
     if (d >= fromStr && d <= toStr) {
@@ -98,7 +98,7 @@ export async function GET(req: Request) {
         occupiedDates.push(key);
       }
       if (r.status === "APPROVED") statusByDate[key] = "예약됨";
-      else if (!statusByDate[key]) statusByDate[key] = "신청됨";
+      else if (!statusByDate[key]) statusByDate[key] = "신청중";
     }
   }
   occupiedDates.sort();

@@ -26,7 +26,7 @@ export default async function LeaveManagementPage({
 }: { searchParams: Promise<{ tab?: string; fy?: string; empId?: string }> }) {
   const session = await auth();
   const user = session!.user as any;
-  if (!["PM","ADMIN"].includes(user.role)) redirect("/dashboard");
+  if (!["PM","ADMIN"].includes(user.role) && !user.isSettingsAdmin) redirect("/dashboard");
 
   const { tab: tabRaw, fy: fyRaw, empId } = await searchParams;
   const tab = tabRaw ?? "overview";
@@ -254,7 +254,7 @@ export default async function LeaveManagementPage({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th className="whitespace-nowrap">직원</th>
+                  <th className="whitespace-nowrap sticky left-0 z-10 bg-gray-50 shadow-[1px_0_0_0_#e5e7eb]">직원</th>
                   <th className="whitespace-nowrap">팀</th>
                   <th className="whitespace-nowrap" title="해당 귀속연도 할당 합계">자산 부여</th>
                   <th className="whitespace-nowrap" title="할당에서 차감된 일수">자산 사용</th>
@@ -263,9 +263,10 @@ export default async function LeaveManagementPage({
                     <th
                       key={col.key}
                       className="whitespace-nowrap text-xs max-w-[6.5rem] align-bottom"
-                      title={col.label}
+                      title={`${col.label} (잔여/부여)`}
                     >
                       <span className="line-clamp-2">{col.label}</span>
+                      <span className="block text-[10px] font-normal text-gray-400">잔여/부여</span>
                     </th>
                   ))}
                   <th className="whitespace-nowrap" title="사유형 승인 일수(귀속 구간 비율)">사유형 사용</th>
@@ -281,7 +282,7 @@ export default async function LeaveManagementPage({
                   const byKey = overviewPerEmployeeMaps[idx];
                   return (
                     <tr key={emp.id}>
-                      <td className="font-medium whitespace-nowrap">
+                      <td className="font-medium whitespace-nowrap sticky left-0 z-10 bg-white shadow-[1px_0_0_0_#e5e7eb]">
                         {emp.name}
                         {emp.status !== "ACTIVE" ? (
                           <span

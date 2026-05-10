@@ -2,16 +2,53 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 
-/** POST: 폼 제출 (ID 또는 slug로 조회, 로그인 사용자 자동 연동) */
+function resolveFormWhere(slug: string) {
+  const isCuid = /^c[a-z0-9]{20,}$/.test(slug);
+  return isCuid ? { id: slug, isActive: true } : { slug, isActive: true };
+}
+
+/**
+ * GET: 현재 로그인 사용자의 이 양식 최근 제출 조회
+ * 미로그인 또는 제출 없으면 { submitted: false }
+ */
+export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
+  const { slug } = await ctx.params;
+  const session = await auth();
+  const employeeId = (session?.user as any)?.employeeId ?? null;
+  if (!employeeId) return NextResponse.json({ submitted: false });
+
+  const form = await prisma.form.findFirst({
+    where: resolveFormWhere(slug),
+    select: { id: true, fields: { orderBy: { sortOrder: "asc" }, select: { id: true, label: true } } },
+  });
+  if (!form) return NextResponse.json({ submitted: false });
+
+  const existing = await prisma.formSubmission.findFirst({
+    where: { formId: form.id, employeeId },
+    orderBy: { createdAt: "desc" },
+    include: { answers: { select: { formFieldId: true, value: true } } },
+  });
+  if (!existing) return NextResponse.json({ submitted: false });
+
+  const answerMap: Record<string, string> = {};
+  for (const a of existing.answers) answerMap[a.formFieldId] = a.value;
+
+  return NextResponse.json({
+    submitted: true,
+    submittedAt: existing.createdAt.toISOString(),
+    answers: answerMap,
+  });
+}
+
+/**
+ * POST: 폼 제출 (로그인 사용자는 기존 제출 덮어쓰기)
+ * - employeeId가 있고 기존 제출이 있으면 삭제 후 재생성 (최신 1건 유지)
+ */
 export async function POST(req: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
 
-  // slug가 cuid 형식이면 id로 조회, 아니면 slug로 조회
-  const isCuid = /^c[a-z0-9]{20,}$/.test(slug);
   const form = await prisma.form.findFirst({
-    where: isCuid
-      ? { id: slug, isActive: true }
-      : { slug, isActive: true },
+    where: resolveFormWhere(slug),
     include: { fields: { orderBy: { sortOrder: "asc" } } },
   });
   if (!form)
@@ -20,7 +57,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   const body = await req.json().catch(() => ({}));
   const { submitterName, submitterEmail, submitterPhone, answers } = body;
 
-  // 로그인 세션에서 이름 자동 취득
   const session = await auth();
   const sessionUser = session?.user as any;
   const resolvedName = String(submitterName ?? sessionUser?.name ?? "").trim();
@@ -32,8 +68,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   if (requiredMissing.length > 0)
     return NextResponse.json(
       { error: `필수 항목을 입력해 주세요: ${requiredMissing.map((f) => f.label).join(", ")}` },
-      { status: 400 }
+      { status: 400 },
     );
+
+  // 로그인 사용자의 기존 제출 삭제 (cascade로 answers 함께 삭제)
+  if (resolvedEmployeeId) {
+    await prisma.formSubmission.deleteMany({
+      where: { formId: form.id, employeeId: resolvedEmployeeId },
+    });
+  }
 
   const submission = await prisma.formSubmission.create({
     data: {

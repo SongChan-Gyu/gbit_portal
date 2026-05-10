@@ -9,7 +9,7 @@ export const metadata = { title: "휴가 유형 설정 | GBIT Portal" };
 export default async function LeaveSettingsPage() {
   const session = await auth();
   const user = session!.user as any;
-  if (!["PM","ADMIN"].includes(user.role)) redirect("/dashboard");
+  if (!["PM","ADMIN"].includes(user.role) && !user.isSettingsAdmin) redirect("/dashboard");
 
   const leaveTypes = await prisma.leaveType.findMany({ orderBy: { sortOrder: "asc" } });
 

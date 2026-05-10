@@ -113,6 +113,15 @@ export default function JejuApproveClient() {
     line: null,
   });
 
+  // 입금 안내 알림톡 모달
+  const [depositReminder, setDepositReminder] = useState<{
+    jejuId: string;
+    employeeName: string;
+    period: string;
+  } | null>(null);
+  const [depositReminderInfo, setDepositReminderInfo] = useState("");
+  const [depositReminderBusy, setDepositReminderBusy] = useState(false);
+
   const loadAll = async () => {
     const res = await fetch("/api/jeju/requests");
     if (res.ok) setAllList(await res.json());
@@ -191,6 +200,36 @@ export default function JejuApproveClient() {
     } finally {
       setDepositBusy(false);
     }
+  }
+
+  async function sendDepositReminder() {
+    if (!depositReminder) return;
+    if (!depositReminderInfo.trim()) return;
+    setDepositReminderBusy(true);
+    try {
+      const res = await fetch("/api/jeju/admin/deposit-reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jejuId: depositReminder.jejuId, depositInfo: depositReminderInfo }),
+      });
+      if (res.ok) {
+        setDepositReminder(null);
+        setDepositReminderInfo("");
+        alert("입금 안내 알림톡을 발송했습니다.");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        alert(d.error || "발송 실패");
+      }
+    } finally {
+      setDepositReminderBusy(false);
+    }
+  }
+
+  function openDepositReminder(r: ListRequest) {
+    const period = `${r.startDate} ~ ${r.endDate} (${r.nights}박)`;
+    const defaultInfo = depositNote.line ? `입금 금액: 확인 필요\n계좌: ${depositNote.line}` : "";
+    setDepositReminderInfo(defaultInfo);
+    setDepositReminder({ jejuId: r.id, employeeName: r.employeeName, period });
   }
 
   async function cancelApproveRequest(id: string, action: "APPROVE" | "REJECT") {
@@ -398,19 +437,28 @@ export default function JejuApproveClient() {
                     {r.step1ApprovedAt ? ` (${r.step1ApprovedAt.slice(0, 10)})` : ""}
                   </p>
                   {r.canStep2Approve && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDepositConfirm({
-                          id: r.id,
-                          action: "CONFIRM",
-                          summary: `${r.employeeName} · ${r.guestName} · ${dateLine(r.startDate, r.endDate)}`,
-                        })
-                      }
-                      className="w-full min-h-[48px] rounded-xl border border-blue-700 bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 touch-manipulation"
-                    >
-                      입금확인 완료
-                    </button>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => openDepositReminder(r)}
+                        className="w-full min-h-[44px] rounded-xl border border-blue-300 bg-white text-blue-700 text-sm font-medium hover:bg-blue-50 touch-manipulation flex items-center justify-center gap-1.5"
+                      >
+                        💬 입금 안내 알림톡
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDepositConfirm({
+                            id: r.id,
+                            action: "CONFIRM",
+                            summary: `${r.employeeName} · ${r.guestName} · ${dateLine(r.startDate, r.endDate)}`,
+                          })
+                        }
+                        className="w-full min-h-[48px] rounded-xl border border-blue-700 bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 touch-manipulation"
+                      >
+                        입금확인 완료
+                      </button>
+                    </div>
                   )}
                   {!r.canStep2Approve && (
                     <p className="text-xs text-blue-600 text-center py-2">PM만 입금확인 가능합니다.</p>
@@ -713,6 +761,62 @@ export default function JejuApproveClient() {
                 }`}
               >
                 {depositBusy ? "처리 중…" : "확인 후 처리"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* 입금 안내 알림톡 모달 */}
+      {depositReminder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-gray-200 p-5 space-y-4">
+            <h3 className="text-base font-bold text-gray-900">💬 입금 안내 알림톡</h3>
+            <p className="text-sm text-gray-600">
+              <strong>{depositReminder.employeeName}</strong>님에게 입금 안내 알림톡을 발송합니다.
+            </p>
+            <div className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100 text-xs text-slate-700 space-y-0.5">
+              <p>· 이용기간: {depositReminder.period}</p>
+            </div>
+            <div>
+              <label className="label mb-1">입금 안내 내용 (계좌번호·금액 등)</label>
+              <textarea
+                rows={4}
+                className="input w-full text-sm resize-none"
+                value={depositReminderInfo}
+                onChange={(e) => setDepositReminderInfo(e.target.value)}
+                placeholder={"예) 입금 금액: 100,000원\n계좌: 신한 110-123-456789 / 예금주 GBIT"}
+              />
+            </div>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 text-xs text-yellow-800 leading-relaxed">
+              <p className="font-medium mb-1">📱 카카오 알림톡 미리보기</p>
+              <pre className="whitespace-pre-wrap font-sans">
+{`안녕하세요, ${depositReminder.employeeName}님.
+
+제주도 숙소 예약 관련 입금 안내드립니다.
+
+🏝️ 이용 기간: ${depositReminder.period}
+💰 입금 안내: ${depositReminderInfo.trim() || "(입력해 주세요)"}
+
+위 정보로 입금 부탁드립니다.
+입금 확인 후 예약이 최종 확정됩니다.`}
+              </pre>
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <button
+                type="button"
+                disabled={depositReminderBusy}
+                onClick={() => { setDepositReminder(null); setDepositReminderInfo(""); }}
+                className="min-h-[48px] rounded-xl border border-slate-300 bg-white text-slate-800 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                disabled={depositReminderBusy || !depositReminderInfo.trim()}
+                onClick={() => void sendDepositReminder()}
+                className="min-h-[48px] rounded-xl border border-blue-700 bg-blue-700 text-white text-sm font-semibold hover:bg-blue-800 disabled:opacity-50"
+              >
+                {depositReminderBusy ? "발송 중…" : "알림톡 발송"}
               </button>
             </div>
           </div>

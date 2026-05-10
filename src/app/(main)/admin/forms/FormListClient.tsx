@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Pencil, FileText, Trash2, Copy, ExternalLink } from "lucide-react";
+import { Pencil, FileText, Trash2, Copy, ExternalLink, Send } from "lucide-react";
 
 type FormWithCount = {
   id: string;
@@ -88,6 +88,12 @@ export default function FormListClient({ forms }: { forms: FormWithCount[] }) {
                 </button>
               </>
             )}
+            <Link
+              href={`/admin/forms/${f.id}/alimtalk`}
+              className="inline-flex items-center gap-1 text-sm text-green-700 hover:text-green-900"
+            >
+              <Send className="w-4 h-4" /> 알림 발송
+            </Link>
             <Link
               href={`/admin/forms/${f.id}/submissions`}
               className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"

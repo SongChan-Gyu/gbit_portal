@@ -27,6 +27,7 @@ type EmployeePatchBody = {
   email?: string | null;
   status: string;
   alimtalkEnabled?: boolean;
+  isSettingsAdmin?: boolean;
   companyStaffNo?: string | null;
   /** 회사사번 변경 시에만 의미 있음. true면 고정 임시 비밀번호(9자, 사번과 무관)로 초기화 + 다음 로그인 시 변경 강제 */
   resetPasswordOnCompanyStaffNoChange?: boolean;
@@ -51,6 +52,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     email,
     status,
     alimtalkEnabled,
+    isSettingsAdmin,
     companyStaffNo: companyStaffNoRaw,
     resetPasswordOnCompanyStaffNoChange: resetPwdRaw,
   } = (await req.json()) as EmployeePatchBody;
@@ -117,6 +119,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
           status,
           emailEnabled: emailEnabledSyncedToAddress(nextEmail),
           ...(alimtalkEnabled != null ? { alimtalkEnabled: !!alimtalkEnabled } : {}),
+          // isSettingsAdmin은 ADMIN만 변경 가능
+          ...(isSettingsAdmin != null && user.role === "ADMIN" ? { isSettingsAdmin: !!isSettingsAdmin } : {}),
           ...(companyStaffNo !== undefined ? { companyStaffNo } : {}),
         },
       });

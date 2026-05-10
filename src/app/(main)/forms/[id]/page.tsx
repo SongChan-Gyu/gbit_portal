@@ -33,6 +33,23 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
     required: f.required,
   }));
 
+  // 기존 제출 이력 조회
+  const prevSub = user.employeeId
+    ? await prisma.formSubmission.findFirst({
+        where: { formId: form.id, employeeId: user.employeeId },
+        orderBy: { createdAt: "desc" },
+        include: { answers: { select: { formFieldId: true, value: true } } },
+      })
+    : null;
+
+  const prevSubmission = prevSub
+    ? {
+        submitted: true as const,
+        submittedAt: prevSub.createdAt.toISOString(),
+        answers: Object.fromEntries(prevSub.answers.map((a) => [a.formFieldId, a.value])),
+      }
+    : { submitted: false as const };
+
   return (
     <div className="py-2">
       <FormSubmitClient
@@ -42,6 +59,7 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
           description: form.description ?? null,
           fields,
         }}
+        prevSubmission={prevSubmission}
       />
     </div>
   );

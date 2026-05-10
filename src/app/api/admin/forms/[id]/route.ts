@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requireAdmin, requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit, getIp } from "@/lib/audit";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const u = session?.user as any;
-  const guard = requirePMOrAdmin(u); if (guard) return guard;
+  const guard = requireSettingsAccess(u); if (guard) return guard;
   const { id } = await ctx.params;
   const form = await prisma.form.findUnique({
     where: { id },
@@ -20,7 +20,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const u = session?.user as any;
-  const guard = requirePMOrAdmin(u); if (guard) return guard;
+  const guard = requireSettingsAccess(u); if (guard) return guard;
   const { id } = await ctx.params;
   const form = await prisma.form.findUnique({ where: { id } });
   if (!form) return NextResponse.json({ error: "폼을 찾을 수 없습니다." }, { status: 404 });
@@ -79,7 +79,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
   const u = session?.user as any;
-  const guard = requirePMOrAdmin(u); if (guard) return guard;
+  const guard = requireSettingsAccess(u); if (guard) return guard;
   const { id } = await ctx.params;
   const form = await prisma.form.findUnique({ where: { id }, select: { title: true, slug: true } });
   await prisma.form.delete({ where: { id } }).catch(() => null);

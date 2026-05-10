@@ -46,6 +46,7 @@ export type OverviewColumnDef = { key: string; label: string };
 /** DB 메타에 없을 때 표시용 (스케줄러 전용 소스 등) */
 const OVERVIEW_FALLBACK_SOURCE_LABELS: Record<string, string> = {
   BIRTHDAY_HALF: "생일반차",
+  CARRYOVER: "이월연차",
 };
 
 /** 정수는 소수점 없이(3), 0.5 등만 소수 한 자리 */
@@ -105,7 +106,7 @@ export function formatOverviewCell(agg: OverviewAgg | undefined): { line: string
   const rem = total - used;
   const title = `부여 ${formatLeaveDayDisplay(total)} / 사용 ${formatLeaveDayDisplay(used)} / 잔여 ${formatLeaveDayDisplay(rem)}`;
   return {
-    line: `${formatLeaveDayDisplay(total)}/${formatLeaveDayDisplay(used)}`,
+    line: `${formatLeaveDayDisplay(rem)}/${formatLeaveDayDisplay(total)}`,
     title,
   };
 }

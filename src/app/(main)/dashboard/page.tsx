@@ -79,10 +79,33 @@ export default async function DashboardPage({
   });
 
   if (isExternal && user.employeeId) {
-    const myJeju = await prisma.jejuAccommodation.findMany({
-      where: { employeeId: user.employeeId },
-      orderBy: { updatedAt: "desc" },
-    });
+    const [myJeju, externalForms] = await Promise.all([
+      prisma.jejuAccommodation.findMany({
+        where: { employeeId: user.employeeId },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.form.findMany({
+        where: {
+          isActive: true,
+          showInMenu: true,
+          audience: { in: ["ALL", "EXTERNAL"] },
+        },
+        select: { id: true, title: true, slug: true, description: true },
+        orderBy: { createdAt: "asc" },
+      }),
+    ]);
+    const externalSubmittedFormIds = new Set(
+      (
+        await prisma.formSubmission.findMany({
+          where: {
+            employeeId: user.employeeId,
+            formId: { in: externalForms.map((f) => f.id) },
+          },
+          select: { formId: true },
+          distinct: ["formId"],
+        })
+      ).map((s) => s.formId),
+    );
     const inProgress = myJeju.filter((r) =>
       ["PENDING", "STEP1_APPROVED", "CANCEL_REQUESTED", "CANCEL_STEP1_APPROVED"].includes(r.status),
     ).length;
@@ -106,6 +129,7 @@ export default async function DashboardPage({
         approved={approved}
         total={myJeju.length}
         notices={recentNotices}
+        forms={externalForms.map((f) => ({ ...f, submitted: externalSubmittedFormIds.has(f.id) }))}
       />
     );
   }
@@ -139,6 +163,31 @@ export default async function DashboardPage({
     stamps = res[2] as number;
     recentRequests = res[3] as any[];
   }
+
+  // 유동양식: 대상에 해당하는 활성 양식
+  const dashboardForms = await prisma.form.findMany({
+    where: {
+      isActive: true,
+      showInMenu: true,
+      audience: { in: isExternal ? ["ALL", "EXTERNAL"] : ["ALL", "INTERNAL"] },
+    },
+    select: { id: true, title: true, slug: true, description: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  // 현재 사용자가 제출한 양식 ID 목록
+  const submittedFormIds = new Set(
+    (
+      await prisma.formSubmission.findMany({
+        where: {
+          employeeId: user.employeeId,
+          formId: { in: dashboardForms.map((f) => f.id) },
+        },
+        select: { formId: true },
+        distinct: ["formId"],
+      })
+    ).map((s) => s.formId),
+  );
 
   const welfare = isWelfareDept(employee);
   const [jejuApplyPendingCount, jejuCancelPendingCount] = welfare
@@ -513,6 +562,40 @@ export default async function DashboardPage({
               holidayYmds={teamMonthData.holidayYmds}
               todayStr={kstToday}
             />
+          </div>
+        </div>
+      )}
+
+      {/* 유동양식 */}
+      {dashboardForms.length > 0 && (
+        <div className="panel">
+          <div className="panel-header">
+            <span className="panel-title">양식 제출</span>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {dashboardForms.map((f) => {
+              const done = submittedFormIds.has(f.id);
+              return (
+                <Link
+                  key={f.id}
+                  href={f.slug ? `/f/${f.slug}` : `/forms/${f.id}`}
+                  className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors touch-manipulation"
+                >
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <div className="min-w-0">
+                      <span className={`text-[15px] md:text-[13px] font-medium ${done ? "text-gray-500" : "text-gray-800"}`}>{f.title}</span>
+                      {f.description && (
+                        <p className="text-xs text-gray-400 mt-0.5 truncate">{f.description}</p>
+                      )}
+                    </div>
+                    {done && (
+                      <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">제출완료</span>
+                    )}
+                  </div>
+                  <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

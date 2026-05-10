@@ -9,7 +9,7 @@ export const metadata = { title: "양식 관리 | GBIT Portal" };
 export default async function AdminFormsPage() {
   const session = await auth();
   const user = session?.user as any;
-  if (!["PM", "ADMIN"].includes(user?.role ?? "")) redirect("/dashboard");
+  if (!["PM", "ADMIN"].includes(user?.role ?? "") && !user?.isSettingsAdmin) redirect("/dashboard");
 
   const forms = await prisma.form.findMany({
     orderBy: { updatedAt: "desc" },

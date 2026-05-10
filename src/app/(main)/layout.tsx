@@ -24,7 +24,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   // 외부개발자: 휴가/스탬프/근태 미관리, 제주 숙소만 사용
   const employee = await prisma.employee.findUnique({
     where: { id: user.employeeId },
-    select: { dutyDept: true, employeeType: true },
+    select: { dutyDept: true, employeeType: true, isSettingsAdmin: true },
   });
   const isExternal = employee?.employeeType === "EXTERNAL";
   if (isExternal) {
@@ -32,6 +32,14 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   } else if (isWelfareDept(employee)) {
     if (!allowedMenuKeys.includes("jeju_admin")) allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
     if (!allowedMenuKeys.includes("jeju_approve")) allowedMenuKeys = [...allowedMenuKeys, "jeju_approve"];
+  }
+
+  // 설정 관리자: 역할 변경 없이 설정 메뉴만 추가 노출
+  if (employee?.isSettingsAdmin && !["PM", "ADMIN"].includes(user.role)) {
+    const settingsKeys = ["admin_leave_settings", "admin_leave_mgmt", "admin_forms"];
+    for (const k of settingsKeys) {
+      if (!allowedMenuKeys.includes(k)) allowedMenuKeys = [...allowedMenuKeys, k];
+    }
   }
 
   // 포털 메뉴 노출 양식: showInMenu=true, isActive=true, audience 매칭

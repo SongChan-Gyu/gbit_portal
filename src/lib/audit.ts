@@ -21,6 +21,7 @@ export type AuditAction =
   | "APPROVED" | "REJECTED" | "CANCELLED" | "RESTORED"
   | "GRANTED" | "ADJUSTED" | "DEACTIVATED"
   | "LOGIN" | "INVITE_SENT" | "REGISTERED"
+  | "ALIMTALK_SENT"
   | "SCHEDULER_RUN";
 
 export interface AuditOptions {

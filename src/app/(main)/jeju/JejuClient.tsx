@@ -217,7 +217,7 @@ export default function JejuClient({
     const blockedOrPast = blockedSet.has(dateStr) || dateStr > windowEndYmd;
     if (blockedOrPast) return "예약불가";
     if (Array.isArray(detail) && detail.length > 0) return detail.length > 1 ? `${detail[0].name} 외` : detail[0].name;
-    return occupied.statusByDate?.[dateStr] ?? "신청됨";
+    return occupied.statusByDate?.[dateStr] ?? "신청중";
   }
 
   async function submitApply(e: React.FormEvent) {
@@ -340,6 +340,8 @@ export default function JejuClient({
               const isChkOut = dateStr === checkOutDate;
               const clickable = !unavailable || validOut;
               const detail = occupied.welfare && occupied.byDate?.[dateStr];
+              const dateStatus = occupied.statusByDate?.[dateStr] as string | undefined;
+              const isPending = unavailable && dateStatus === "신청중";
               const isRedDay = isRedCalendarDay(dateStr, holidaySet);
               return (
                 <button
@@ -351,8 +353,8 @@ export default function JejuClient({
                     isChkIn ? "bg-blue-600 text-white border-2 border-blue-700 font-semibold" :
                     isChkOut ? "bg-sky-600 text-white border-2 border-sky-700 font-semibold" :
                     validOut ? "bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100 cursor-pointer" :
-                    unavailable
-                      ? "bg-rose-50 text-rose-700 border border-rose-200 cursor-default"
+                    isPending ? "bg-blue-50 text-blue-700 border border-blue-200 cursor-default" :
+                    unavailable ? "bg-rose-50 text-rose-700 border border-rose-200 cursor-default"
                       : "bg-gray-50 text-gray-700 hover:bg-blue-50 hover:border-blue-200 border border-transparent cursor-pointer"
                   }`}
                   title={

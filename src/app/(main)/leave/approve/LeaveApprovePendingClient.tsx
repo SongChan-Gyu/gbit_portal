@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { formatMDWithDay, formatYMD } from "@/lib/dateUtils";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 import ApproveActions from "./ApproveActions";
 import CancelApproveActions from "./CancelApproveActions";
+import { CheckCircle2 } from "lucide-react";
 
 type SerializedReq = {
   id: string;
@@ -102,6 +104,7 @@ export default function LeaveApprovePendingClient({
   actionable: PendingApprovalRow[];
   cancelActionable: PendingApprovalRow[];
 }) {
+  const router = useRouter();
   const queue = useMemo(
     () => [
       ...actionable.map((a) => ({ row: a, kind: "leave" as const })),
@@ -110,7 +113,12 @@ export default function LeaveApprovePendingClient({
     [actionable, cancelActionable],
   );
 
+  const leaveIds = useMemo(() => actionable.map((a) => a.id), [actionable]);
+
   const [selectedId, setSelectedId] = useState<string | null>(() => queue[0]?.row.id ?? null);
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<string | null>(null);
 
   useEffect(() => {
     if (queue.length === 0) {
@@ -127,67 +135,161 @@ export default function LeaveApprovePendingClient({
     return found ?? null;
   }, [queue, selectedId]);
 
+  const allLeaveChecked = leaveIds.length > 0 && leaveIds.every((id) => checkedIds.has(id));
+
+  const toggleCheck = useCallback((id: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = () => {
+    if (allLeaveChecked) {
+      setCheckedIds(new Set());
+    } else {
+      setCheckedIds(new Set(leaveIds));
+    }
+  };
+
+  const bulkApprove = async () => {
+    const ids = [...checkedIds].filter((id) => leaveIds.includes(id));
+    if (ids.length === 0) return;
+    if (!confirm(`선택한 ${ids.length}건을 모두 승인하시겠습니까?`)) return;
+    setBulkLoading(true);
+    setBulkResult(null);
+    let ok = 0;
+    let fail = 0;
+    for (const approvalId of ids) {
+      const res = await fetch("/api/leave/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approvalId, action: "APPROVE", comment: "" }),
+      });
+      if (res.ok) ok++;
+      else fail++;
+    }
+    setBulkLoading(false);
+    setCheckedIds(new Set());
+    setBulkResult(`${ok}건 승인 완료${fail > 0 ? ` · ${fail}건 실패` : ""}`);
+    router.refresh();
+  };
+
   if (queue.length === 0) return null;
 
   return (
-    <div className="md:grid md:grid-cols-5 md:gap-5 md:items-start">
-      {/* 리스트: 보기만 (버튼 없음) */}
-      <div className="md:col-span-2">
-        <p className="text-xs font-semibold text-gray-500 mb-2">
-          결재 대기 <span className="text-slate-700">{queue.length}</span>건
+    <div className="space-y-3">
+      {/* 일괄 승인 바 */}
+      {leaveIds.length > 0 && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-2.5 flex items-center gap-3">
+          {/* 전체 선택 체크박스 */}
+          <label className="flex items-center gap-2 cursor-pointer select-none shrink-0 touch-manipulation min-h-[44px] min-w-[44px] justify-center">
+            <input
+              type="checkbox"
+              checked={allLeaveChecked}
+              onChange={toggleAll}
+              className="w-5 h-5 rounded border-gray-300 accent-emerald-600 cursor-pointer"
+            />
+          </label>
+          <span className="text-sm text-emerald-800 flex-1">
+            {checkedIds.size > 0
+              ? <><span className="font-bold">{checkedIds.size}건</span> 선택됨</>
+              : <span className="text-emerald-700">전체 선택</span>
+            }
+          </span>
+          {checkedIds.size > 0 && (
+            <button
+              type="button"
+              disabled={bulkLoading}
+              onClick={bulkApprove}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 disabled:opacity-50 touch-manipulation min-h-[44px] shrink-0"
+            >
+              <CheckCircle2 size={16} />
+              {bulkLoading ? "처리 중..." : `${checkedIds.size}건 일괄 승인`}
+            </button>
+          )}
+        </div>
+      )}
+      {bulkResult && (
+        <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+          {bulkResult}
         </p>
-        <ul className="rounded-xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100 shadow-sm md:max-h-[min(70vh,520px)] md:overflow-y-auto">
-          {queue.map(({ row: ap, kind }) => {
-            const req = ap.leaveRequest;
-            const active = ap.id === selectedId;
-            return (
-              <li key={ap.id}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(ap.id)}
-                  className={`w-full text-left py-2.5 px-3 transition-colors touch-manipulation min-h-[52px] ${
-                    active
-                      ? "bg-slate-50 ring-1 ring-inset ring-slate-200/80"
-                      : "hover:bg-gray-50 active:bg-gray-100"
-                  }`}
-                >
-                  <div className="flex justify-between items-start gap-2">
-                    <div className="min-w-0 flex-1">
-                      <span className="font-semibold text-gray-900 text-[15px] leading-tight block">
-                        {req.employee.name}
-                      </span>
-                      <p className="text-[13px] text-gray-600 mt-0.5 leading-snug">
-                        {summaryLine(req)}
-                      </p>
-                      {kind === "cancel" && (
-                        <span className="inline-block mt-1 text-[10px] font-medium text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded">
-                          취소 신청
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[11px] text-gray-500 shrink-0 tabular-nums pt-0.5">
-                      [{ap.step}단계]
-                    </span>
-                  </div>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <p className="mt-2 text-[11px] text-gray-400 md:hidden">
-          목록은 확인용입니다. 선택하면 아래에서 승인·반려할 수 있습니다.
-        </p>
-      </div>
+      )}
 
-      {/* 상세: 의견 + 승인/반려 */}
-      <div className="mt-4 md:mt-0 md:col-span-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:sticky md:top-4">
-        {selected ? (
-          <PendingDetail ap={selected.row} kind={selected.kind} />
-        ) : (
-          <p className="text-sm text-gray-400 text-center py-10">
-            왼쪽 목록에서 건을 선택하면 상세에서 처리할 수 있습니다.
+      <div className="md:grid md:grid-cols-5 md:gap-5 md:items-start">
+        {/* 리스트 */}
+        <div className="md:col-span-2">
+          <p className="text-xs font-semibold text-gray-500 mb-2">
+            결재 대기 <span className="text-slate-700">{queue.length}</span>건
           </p>
-        )}
+          <ul className="rounded-xl border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100 shadow-sm md:max-h-[min(70vh,520px)] md:overflow-y-auto">
+            {queue.map(({ row: ap, kind }) => {
+              const req = ap.leaveRequest;
+              const active = ap.id === selectedId;
+              const isLeave = kind === "leave";
+              const checked = checkedIds.has(ap.id);
+              return (
+                <li key={ap.id} className="flex items-stretch">
+                  {/* 체크박스 (휴가 결재만) */}
+                  {isLeave ? (
+                    <label className="flex items-center justify-center px-3 cursor-pointer touch-manipulation min-w-[52px] border-r border-gray-100 bg-gray-50/60 hover:bg-emerald-50/50">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCheck(ap.id)}
+                        className="w-5 h-5 rounded border-gray-300 accent-emerald-600 cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </label>
+                  ) : (
+                    <div className="min-w-[52px] border-r border-gray-100 bg-amber-50/40 flex items-center justify-center">
+                      <span className="text-[9px] text-amber-600 font-medium px-1 text-center leading-tight">취소</span>
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(ap.id)}
+                    className={`flex-1 text-left py-2.5 px-3 transition-colors touch-manipulation min-h-[56px] ${
+                      active
+                        ? "bg-slate-50 ring-1 ring-inset ring-slate-200/80"
+                        : "hover:bg-gray-50 active:bg-gray-100"
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <span className="font-semibold text-gray-900 text-[15px] leading-tight block">
+                          {req.employee.name}
+                        </span>
+                        <p className="text-[13px] text-gray-600 mt-0.5 leading-snug">
+                          {summaryLine(req)}
+                        </p>
+                      </div>
+                      <span className="text-[11px] text-gray-500 shrink-0 tabular-nums pt-0.5">
+                        [{ap.step}단계]
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-[11px] text-gray-400 md:hidden">
+            체크 후 일괄 승인하거나, 항목을 선택해 개별 처리할 수 있습니다.
+          </p>
+        </div>
+
+        {/* 상세: 의견 + 승인/반려 */}
+        <div className="mt-4 md:mt-0 md:col-span-3 rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:sticky md:top-4">
+          {selected ? (
+            <PendingDetail ap={selected.row} kind={selected.kind} />
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-10">
+              왼쪽 목록에서 건을 선택하면 상세에서 처리할 수 있습니다.
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -114,6 +114,10 @@ function directsendNotesForPortalTemplateV1(
       return [g("신청자명"), g("이용기간"), g("입금자명"), g("처리단계"), ""];
     case "EXTERNAL_INVITE":
       return [g("이름"), g("가입링크"), g("만료일"), "", ""];
+    case "FORM_REMINDER":
+      return [g("이름"), g("양식명"), g("링크"), "", ""];
+    case "JEJU_DEPOSIT_REMINDER":
+      return [g("이름"), g("이용기간"), g("입금안내"), "", ""];
     default:
       return ["", "", "", "", ""];
   }
@@ -191,6 +195,10 @@ function directsendNotesForPortalTemplateV2(
       ];
     case "EXTERNAL_INVITE":
       return [g("이름"), g("가입링크"), g("만료일"), "", ""];
+    case "FORM_REMINDER":
+      return [g("이름"), g("양식명"), g("링크"), "", alimtalkPortalPathUrl(g("링크경로") || "/dashboard")];
+    case "JEJU_DEPOSIT_REMINDER":
+      return [g("이름"), g("이용기간"), g("입금안내"), "", alimtalkPortalPathUrl("/jeju/my")];
     default:
       return ["", "", "", "", ""];
   }
@@ -370,6 +378,47 @@ export async function sendJejuApplicantAlimtalk(
   params: Record<string, string>,
 ) {
   await sendAlimtalk(prisma, employeeId, phone, templateCode, params);
+}
+
+/**
+ * 유동양식 제출 요청 알림톡 (FORM_REMINDER)
+ * note1=이름, note2=양식명, note3=링크, note5(v2)=포털URL
+ */
+export async function sendFormReminderAlimtalk(
+  prisma: DB,
+  employeeId: string,
+  phone: string,
+  name: string,
+  formTitle: string,
+  formUrl: string,
+) {
+  await sendAlimtalk(prisma, employeeId, phone, "FORM_REMINDER", {
+    수신자명: name,
+    이름: name,
+    양식명: formTitle,
+    링크: formUrl,
+    링크경로: formUrl,
+  });
+}
+
+/**
+ * 제주도 입금 안내 알림톡 (JEJU_DEPOSIT_REMINDER)
+ * note1=이름, note2=이용기간, note3=입금안내(계좌+금액 포함 문자열)
+ */
+export async function sendJejuDepositReminderAlimtalk(
+  prisma: DB,
+  employeeId: string,
+  phone: string,
+  name: string,
+  period: string,
+  depositInfo: string,
+) {
+  await sendAlimtalk(prisma, employeeId, phone, "JEJU_DEPOSIT_REMINDER", {
+    수신자명: name,
+    이름: name,
+    이용기간: period,
+    입금안내: depositInfo,
+  });
 }
 
 /**

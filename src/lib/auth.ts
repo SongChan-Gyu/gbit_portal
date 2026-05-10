@@ -33,6 +33,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             id: emp.user.id, name: emp.name, email: emp.email ?? "",
             employeeId: emp.id, role: emp.role, teamId: emp.teamId, position: emp.position,
             mustChangePassword: !!emp.user.mustChangePassword,
+            isSettingsAdmin: !!(emp as any).isSettingsAdmin,
           };
         }
 
@@ -79,6 +80,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           employeeId: loginUser.employee.id, role: loginUser.employee.role,
           teamId: loginUser.employee.teamId, position: loginUser.employee.position,
           mustChangePassword: !!loginUser.mustChangePassword,
+          isSettingsAdmin: !!(loginUser.employee as any).isSettingsAdmin,
         };
       },
     }),
@@ -94,6 +96,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         token.teamId     = (user as any).teamId;
         token.position   = (user as any).position;
         token.mustChangePassword = !!(user as { mustChangePassword?: boolean }).mustChangePassword;
+        token.isSettingsAdmin = !!(user as any).isSettingsAdmin;
       }
       return token;
     },
@@ -105,6 +108,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         (session.user as any).teamId     = token.teamId;
         (session.user as any).position   = token.position;
         (session.user as any).mustChangePassword = !!token.mustChangePassword;
+        (session.user as any).isSettingsAdmin = !!token.isSettingsAdmin;
       }
       return session;
     },

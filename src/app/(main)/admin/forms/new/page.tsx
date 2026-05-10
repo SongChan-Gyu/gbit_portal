@@ -8,7 +8,7 @@ export const metadata = { title: "양식 만들기 | GBIT Portal" };
 export default async function NewFormPage() {
   const session = await auth();
   const user = session?.user as any;
-  if (!["PM", "ADMIN"].includes(user?.role ?? "")) redirect("/dashboard");
+  if (!["PM", "ADMIN"].includes(user?.role ?? "") && !user?.isSettingsAdmin) redirect("/dashboard");
 
   return (
     <div className="max-w-2xl">

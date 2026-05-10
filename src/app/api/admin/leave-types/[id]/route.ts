@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requireAdmin, requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { deriveLegacyHalfFlags } from "@/lib/leaveTimeSlot";
 
@@ -9,7 +9,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
   const { id } = await params;
   const session = await auth();
   const u = session?.user as any;
-  const guard = requirePMOrAdmin(u); if (guard) return guard;
+  const guard = requireSettingsAccess(u); if (guard) return guard;
 
   const body = await req.json();
   let allowsFullDay = body.allowsFullDay as boolean | undefined;

@@ -41,6 +41,7 @@ model Employee {
   email        String?
   emailEnabled Boolean  @default(false) // 이메일 주소가 있으면 true로 저장(동기). 시스템 메일 차단용 아님.
   alimtalkEnabled Boolean @default(false) // 카카오 알림톡 사용 여부 (사원별). 기본 미사용.
+  isSettingsAdmin Boolean @default(false) // 설정 메뉴(휴가설정·양식관리 등) 접근 허용 (결재선·역할 변경 없음)
   status       String       @default("PENDING") // PENDING/INVITED/ACTIVE/INACTIVE
   role         String       @default("STAFF")   // STAFF/TEAM_LEAD/PM/ADMIN
 
