@@ -36,7 +36,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   // 설정 관리자: 역할 변경 없이 설정 메뉴만 추가 노출
   if (employee?.isSettingsAdmin && !["PM", "ADMIN"].includes(user.role)) {
-    const settingsKeys = ["admin_leave_settings", "admin_leave_mgmt", "admin_forms"];
+    const settingsKeys = ["admin_leave_settings", "admin_leave_mgmt", "admin_forms", "admin_form_target_groups"];
     for (const k of settingsKeys) {
       if (!allowedMenuKeys.includes(k)) allowedMenuKeys = [...allowedMenuKeys, k];
     }
@@ -50,6 +50,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       OR: [
         { audience: "ALL" },
         { audience: isExternal ? "EXTERNAL" : "INTERNAL" },
+        {
+          audience: "GROUP",
+          targetGroup: { members: { some: { employeeId: user.employeeId } } },
+        },
       ],
     },
     select: { id: true, title: true },

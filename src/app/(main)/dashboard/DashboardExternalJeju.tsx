@@ -38,7 +38,7 @@ function dateLine(start: string, end: string) {
     : `${formatMDWithDayFromYMD(start)} ~ ${formatMDWithDayFromYMD(end)}`;
 }
 
-type FormItem = { id: string; title: string; slug: string | null; description: string | null; submitted?: boolean };
+type FormItem = { id: string; title: string; slug: string | null; description: string | null; submitted?: boolean; isAnonymous?: boolean };
 
 export default function DashboardExternalJeju({
   employeeName,
@@ -127,6 +127,11 @@ export default function DashboardExternalJeju({
                     <span className={`text-[15px] md:text-sm font-medium ${f.submitted ? "text-gray-400" : "text-gray-800"}`}>
                       {f.title}
                     </span>
+                    {f.isAnonymous && (
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
+                        익명
+                      </span>
+                    )}
                     {f.submitted ? (
                       <span className="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
                         <CheckCircle2 size={11} /> 제출완료

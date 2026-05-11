@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Pencil, FileText, Trash2, Copy, ExternalLink, Send } from "lucide-react";
+import { audienceLabel } from "@/lib/formAccess";
 
 type FormWithCount = {
   id: string;
@@ -13,6 +14,8 @@ type FormWithCount = {
   isActive: boolean;
   showInMenu: boolean;
   audience: string;
+  isAnonymous: boolean;
+  targetGroup: { name: string } | null;
   _count: { submissions: number };
   fields: { id: string; label: string }[];
 };
@@ -50,16 +53,22 @@ export default function FormListClient({ forms }: { forms: FormWithCount[] }) {
           className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm flex flex-col sm:flex-row sm:items-center gap-3"
         >
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-gray-800">{f.title}</span>
               {!f.isActive && (
                 <span className="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-600">비활성</span>
               )}
+              {f.isAnonymous && (
+                <span className="text-xs px-2 py-0.5 rounded bg-violet-100 text-violet-800">익명</span>
+              )}
             </div>
-            <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-1.5">
+            <p className="text-xs text-gray-500 mt-0.5 flex flex-wrap gap-x-1.5 gap-y-0.5">
               {f.slug ? <span>/f/{f.slug}</span> : <span className="text-orange-500">공개링크없음</span>}
               <span>· 필드 {f.fields.length}개 · 제출 {f._count.submissions}건</span>
-              {f.showInMenu && <span className="text-blue-600">· 메뉴노출 ({f.audience === "ALL" ? "전체" : f.audience === "EXTERNAL" ? "외부" : "내부"})</span>}
+              <span>
+                · 대상 {audienceLabel(f.audience, f.targetGroup?.name ?? null)}
+              </span>
+              {f.showInMenu && <span className="text-blue-600">· 메뉴 노출</span>}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">

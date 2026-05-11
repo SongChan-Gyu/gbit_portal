@@ -27,9 +27,17 @@ export async function POST(req: Request) {
   const guard = requireSettingsAccess(u); if (guard) return guard;
 
   const body = await req.json().catch(() => ({}));
-  const { title, slug, description, isActive, fields, showInMenu, audience } = body;
+  const { title, slug, description, isActive, fields, showInMenu, audience, targetGroupId, isAnonymous } = body;
   if (!title)
     return NextResponse.json({ error: "제목은 필수입니다." }, { status: 400 });
+
+  const aud = String(audience ?? "ALL");
+  let tgid: string | null = null;
+  if (aud === "GROUP") {
+    tgid = targetGroupId ? String(targetGroupId) : null;
+    if (!tgid)
+      return NextResponse.json({ error: "대상 그룹을 선택해 주세요." }, { status: 400 });
+  }
 
   const slugRaw = slug ? String(slug).trim().replace(/\s+/g, "-").toLowerCase() : null;
   if (slugRaw && !/^[a-z0-9-]+$/.test(slugRaw))
@@ -48,7 +56,9 @@ export async function POST(req: Request) {
       description: description ?? null,
       isActive: isActive !== false,
       showInMenu: !!showInMenu,
-      audience: audience ?? "ALL",
+      audience: aud,
+      targetGroupId: tgid,
+      isAnonymous: !!isAnonymous,
       fields: {
         create: (Array.isArray(fields) ? fields : []).map((f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({
           sortOrder: i,

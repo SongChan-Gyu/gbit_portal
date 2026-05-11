@@ -16,6 +16,7 @@ type FormData = {
   title: string;
   description: string | null;
   fields: Field[];
+  isAnonymous?: boolean;
 };
 
 type PrevSubmission =
@@ -230,6 +231,12 @@ export default function FormSubmitClient({
           <h1 className="text-[17px] font-bold text-gray-900 mb-0.5">{form.title}</h1>
           {form.description && (
             <p className="text-sm text-gray-500 mb-4 whitespace-pre-wrap leading-relaxed">{form.description}</p>
+          )}
+          {form.isAnonymous && (
+            <div className="mb-4 rounded-xl border border-violet-200 bg-violet-50/80 px-3 py-2.5 text-sm text-violet-900">
+              <span className="font-semibold">익명 양식</span>
+              <span className="text-violet-800/90"> — 제출자 이름은 집계·목록에서 익명으로 표시됩니다.</span>
+            </div>
           )}
 
           {/* 기제출 배너 */}

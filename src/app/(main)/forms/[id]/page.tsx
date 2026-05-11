@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import FormSubmitClient from "./FormSubmitClient";
+import { employeeCanAccessForm } from "@/lib/formAccess";
 
 export default async function InternalFormPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -19,11 +20,13 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
   const employee = user.employeeId
     ? await prisma.employee.findUnique({ where: { id: user.employeeId }, select: { employeeType: true } })
     : null;
-  const isExternal = employee?.employeeType === "EXTERNAL";
 
-  // audience 체크
-  if (form.audience === "EXTERNAL" && !isExternal) notFound();
-  if (form.audience === "INTERNAL" && isExternal) notFound();
+  const can = await employeeCanAccessForm(prisma, user.employeeId ?? null, employee?.employeeType, {
+    id: form.id,
+    audience: form.audience,
+    targetGroupId: form.targetGroupId,
+  });
+  if (!can) notFound();
 
   const fields = form.fields.map((f) => ({
     id: f.id,
@@ -58,6 +61,7 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
           title: form.title,
           description: form.description ?? null,
           fields,
+          isAnonymous: form.isAnonymous,
         }}
         prevSubmission={prevSubmission}
       />

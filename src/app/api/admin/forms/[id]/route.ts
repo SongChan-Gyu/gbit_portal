@@ -25,7 +25,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const form = await prisma.form.findUnique({ where: { id } });
   if (!form) return NextResponse.json({ error: "폼을 찾을 수 없습니다." }, { status: 404 });
   const body = await req.json().catch(() => ({}));
-  const { title, slug, description, isActive, fields, showInMenu, audience } = body;
+  const { title, slug, description, isActive, fields, showInMenu, audience, targetGroupId, isAnonymous } = body;
   const slugRaw = slug != null ? String(slug).trim().replace(/\s+/g, "-").toLowerCase() : undefined;
   const slugNorm = slugRaw || null; // 빈 문자열 → null (공개 링크 없음)
   if (slugNorm && !/^[a-z0-9-]+$/.test(slugNorm))
@@ -35,6 +35,27 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     if (existing) return NextResponse.json({ error: "이미 사용 중인 URL 경로입니다." }, { status: 400 });
   }
   const before = form ? { title: form.title, slug: form.slug } : undefined;
+
+  let audienceData: { audience?: string; targetGroupId?: string | null } = {};
+  if (audience != null) {
+    const aud = String(audience);
+    if (aud === "GROUP") {
+      const gid = targetGroupId != null ? String(targetGroupId) : null;
+      if (!gid)
+        return NextResponse.json({ error: "대상 그룹을 선택해 주세요." }, { status: 400 });
+      audienceData = { audience: aud, targetGroupId: gid };
+    } else {
+      audienceData = { audience: aud, targetGroupId: null };
+    }
+  } else if (targetGroupId !== undefined) {
+    if (form.audience === "GROUP") {
+      const gid = targetGroupId != null ? String(targetGroupId) : null;
+      if (!gid)
+        return NextResponse.json({ error: "대상 그룹을 선택해 주세요." }, { status: 400 });
+      audienceData = { targetGroupId: gid };
+    }
+  }
+
   await prisma.$transaction(async (tx) => {
     await tx.formField.deleteMany({ where: { formId: id } });
     await tx.form.update({
@@ -45,7 +66,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
         ...(description !== undefined && { description: description || null }),
         ...(isActive !== undefined && { isActive: !!isActive }),
         ...(showInMenu !== undefined && { showInMenu: !!showInMenu }),
-        ...(audience != null && { audience: String(audience) }),
+        ...audienceData,
+        ...(isAnonymous !== undefined && { isAnonymous: !!isAnonymous }),
         fields: {
           create: (Array.isArray(fields) ? fields : []).map(
             (f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({

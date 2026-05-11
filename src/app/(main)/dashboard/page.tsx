@@ -22,6 +22,7 @@ import { redirect } from "next/navigation";
 import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
 import { leaveRequestStatusMeta } from "@/lib/statusMeta";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { formVisibleToUserOrClause } from "@/lib/formAccess";
 
 function requestTitle(req: any): string {
   const labels: string[] = req.items
@@ -88,9 +89,9 @@ export default async function DashboardPage({
         where: {
           isActive: true,
           showInMenu: true,
-          audience: { in: ["ALL", "EXTERNAL"] },
+          ...formVisibleToUserOrClause(user.employeeId, true),
         },
-        select: { id: true, title: true, slug: true, description: true },
+        select: { id: true, title: true, slug: true, description: true, isAnonymous: true },
         orderBy: { createdAt: "asc" },
       }),
     ]);
@@ -169,9 +170,9 @@ export default async function DashboardPage({
     where: {
       isActive: true,
       showInMenu: true,
-      audience: { in: isExternal ? ["ALL", "EXTERNAL"] : ["ALL", "INTERNAL"] },
+      ...formVisibleToUserOrClause(user.employeeId, !!isExternal),
     },
-    select: { id: true, title: true, slug: true, description: true },
+    select: { id: true, title: true, slug: true, description: true, isAnonymous: true },
     orderBy: { createdAt: "asc" },
   });
 
@@ -583,7 +584,14 @@ export default async function DashboardPage({
                 >
                   <div className="min-w-0 flex items-center gap-2.5">
                     <div className="min-w-0">
-                      <span className={`text-[15px] md:text-[13px] font-medium ${done ? "text-gray-500" : "text-gray-800"}`}>{f.title}</span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[15px] md:text-[13px] font-medium ${done ? "text-gray-500" : "text-gray-800"}`}>{f.title}</span>
+                        {f.isAnonymous && (
+                          <span className="shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-50 text-violet-700 border border-violet-100">
+                            익명
+                          </span>
+                        )}
+                      </div>
                       {f.description && (
                         <p className="text-xs text-gray-400 mt-0.5 truncate">{f.description}</p>
                       )}

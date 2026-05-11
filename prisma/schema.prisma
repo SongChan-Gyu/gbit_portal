@@ -63,6 +63,13 @@ model Employee {
   jejuDepositConfirmedBy JejuAccommodation[] @relation("JejuDepositConfirmer")
   notices           Notice[]
 
+  improvementPosts       ImprovementPost[]       @relation("ImprovementPostAuthor")
+  improvementComments  ImprovementComment[]
+  improvementPostsClosed ImprovementPost[]      @relation("ImprovementPostClosedBy")
+  supportTickets         SupportTicket[]         @relation("SupportTicketRequester")
+  supportTicketMessages  SupportTicketMessage[]
+  formTargetGroupMembers FormTargetGroupMember[]
+
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 }
@@ -544,12 +551,43 @@ model Form {
   isActive    Boolean   @default(true)
   // 포털 메뉴 노출 설정
   showInMenu  Boolean   @default(false)
-  audience    String    @default("ALL")  // ALL | INTERNAL | EXTERNAL
+  audience    String    @default("ALL")  // ALL | INTERNAL | EXTERNAL | GROUP
+  /// audience=GROUP 일 때만 사용
+  targetGroupId String?
+  targetGroup   FormTargetGroup? @relation(fields: [targetGroupId], references: [id], onDelete: SetNull)
+  /// true면 제출 목록·내보내기에서 제출자를 '익명'으로 표시 (1인 1표·직원 연결은 DB에 유지)
+  isAnonymous Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   fields      FormField[]
   submissions FormSubmission[]
+}
+
+/// 유동양식 대상 직원 그룹 (예: 휴가샵 대상)
+model FormTargetGroup {
+  id        String   @id @default(cuid())
+  name      String
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members FormTargetGroupMember[]
+  forms   Form[]
+
+  @@index([sortOrder])
+}
+
+model FormTargetGroupMember {
+  id         String          @id @default(cuid())
+  groupId    String
+  group      FormTargetGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+
+  @@unique([groupId, employeeId])
+  @@index([employeeId])
 }
 
 model FormField {
@@ -612,6 +650,74 @@ model Notice {
   updatedAt DateTime @updatedAt
 
   @@index([createdAt])
+}
+
+// ─────────────────────────────────────────
+// 내부 직원 전용: 개선·협의 게시판 (댓글·대댓글, 종료)
+// ─────────────────────────────────────────
+model ImprovementPost {
+  id         String    @id @default(cuid())
+  authorId   String
+  author     Employee  @relation("ImprovementPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  title      String
+  body       String    @db.Text
+  status     String    @default("OPEN") // OPEN | CLOSED
+  closedAt   DateTime?
+  closedById String?
+  closedBy   Employee? @relation("ImprovementPostClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  comments   ImprovementComment[]
+
+  @@index([status, updatedAt])
+  @@index([authorId])
+}
+
+model ImprovementComment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      ImprovementPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentId  String?
+  parent    ImprovementComment?  @relation("ImprovementThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   ImprovementComment[] @relation("ImprovementThread")
+  authorId  String
+  author    Employee @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId])
+  @@index([parentId])
+}
+
+// ─────────────────────────────────────────
+// 내부 직원 전용: 1:1 문의 티켓
+// ─────────────────────────────────────────
+model SupportTicket {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation("SupportTicketRequester", fields: [employeeId], references: [id], onDelete: Cascade)
+  subject    String
+  status     String   @default("OPEN") // OPEN | CLOSED
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  messages   SupportTicketMessage[]
+
+  @@index([employeeId, updatedAt])
+  @@index([status])
+}
+
+model SupportTicketMessage {
+  id           String        @id @default(cuid())
+  ticketId     String
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       Employee      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  body         String        @db.Text
+  isStaffReply Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+
+  @@index([ticketId, createdAt])
 }
 
 // ─────────────────────────────────────────

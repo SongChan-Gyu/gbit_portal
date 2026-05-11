@@ -51,6 +51,11 @@ export default async function FormSubmissionsPage({ params }: { params: Promise<
           </Link>
           <h1 className="page-title mt-2">{form.title} · 제출 목록</h1>
           <p className="text-sm text-gray-500 mt-0.5">총 {rows.length}건</p>
+          {form.isAnonymous && (
+            <p className="text-xs text-violet-800 bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 mt-2">
+              익명 양식입니다. 제출자 이름·연락처는 표시 정책에 따라 비식별 처리됩니다.
+            </p>
+          )}
         </div>
         <a
           href={`/api/admin/forms/${id}/submissions/export`}
@@ -64,6 +69,7 @@ export default async function FormSubmissionsPage({ params }: { params: Promise<
         formTitle={form.title}
         fields={form.fields.map((f) => f.label)}
         rows={rows}
+        isAnonymousForm={form.isAnonymous}
       />
     </div>
   );

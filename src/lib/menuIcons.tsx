@@ -19,6 +19,8 @@ import {
   Wrench,
   UserRoundCog,
   Home,
+  MessagesSquare,
+  MessageCircleQuestion,
 } from "lucide-react";
 
 /** 메뉴 키에 매핑이 없을 때 사용 (사이드바 등) */
@@ -35,6 +37,9 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   leave_policy: BookOpen,
   attendance: ClipboardList,
   stamp: Stamp,
+  collab: MessagesSquare,
+  improvement_board: MessagesSquare,
+  support_inbox: MessageCircleQuestion,
   jeju: Home,
   admin: Settings2,
   admin_organization: Users,

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import prisma from "@/lib/db";
 import { canAccessSettings } from "@/lib/authGuard";
+import { employeesForFormAlimtalk, audienceLabel } from "@/lib/formAccess";
 import FormAlimtalkClient from "./FormAlimtalkClient";
 
 export const metadata = { title: "양식 알림 발송 | GBIT Portal" };
@@ -15,33 +16,23 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
   const { id } = await params;
   const form = await prisma.form.findUnique({
     where: { id },
-    select: { id: true, title: true, slug: true, audience: true, isActive: true },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      audience: true,
+      targetGroupId: true,
+      isActive: true,
+      targetGroup: { select: { name: true } },
+    },
   });
   if (!form) redirect("/admin/forms");
 
   const audience = form.audience ?? "ALL";
 
-  // 대상 직원 조회 (audience에 따라 필터)
-  const typeFilter: string[] =
-    audience === "INTERNAL" ? ["FULL", "FREE"] :
-    audience === "EXTERNAL" ? ["EXTERNAL"] :
-    ["FULL", "FREE", "EXTERNAL"];
-
-  const employees = await prisma.employee.findMany({
-    where: {
-      employeeType: { in: typeFilter },
-      status: { in: ["ACTIVE", "INVITED"] },
-    },
-    select: {
-      id: true,
-      name: true,
-      phone: true,
-      employeeType: true,
-      alimtalkEnabled: true,
-      team: { select: { name: true } },
-      position: true,
-    },
-    orderBy: [{ employeeType: "asc" }, { name: "asc" }],
+  const employees = await employeesForFormAlimtalk(prisma, {
+    audience,
+    targetGroupId: form.targetGroupId,
   });
 
   // 이 양식에 대한 최근 발송 로그 (FORM_REMINDER)
@@ -56,7 +47,7 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
     process.env.NEXTAUTH_URL?.trim().replace(/\/$/, "") ||
     process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
     "https://www.gbitportal.co.kr";
-  const formUrl = form.slug ? `${origin}/forms/${form.slug}` : `${origin}/forms/${id}`;
+  const formUrl = form.slug ? `${origin}/f/${form.slug}` : `${origin}/forms/${id}`;
 
   // 이 양식 발송 이력
   const lastSentByEmployee: Record<string, string> = {};
@@ -85,7 +76,7 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
         </Link>
         <h1 className="page-title mt-2">{form.title} · 알림 발송</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          대상: {audience === "ALL" ? "전체" : audience === "INTERNAL" ? "내부직원" : "외부개발자"} ·{" "}
+          대상: {audienceLabel(audience, form.targetGroup?.name ?? null)} ·{" "}
           {form.isActive ? "활성" : "비활성"} · {formUrl}
         </p>
       </div>

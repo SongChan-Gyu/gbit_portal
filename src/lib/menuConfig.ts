@@ -49,6 +49,16 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     ],
   },
   {
+    key: "collab",
+    label: "소통",
+    icon: "💬",
+    section: "main",
+    children: [
+      { key: "improvement_board", label: "개선·협의 게시판", href: "/improvement" },
+      { key: "support_inbox", label: "1:1 문의", href: "/support" },
+    ],
+  },
+  {
     key: "admin",
     label: "관리",
     icon: "⚙️",
@@ -58,6 +68,7 @@ export const MENU_GROUPS: MenuGroupDef[] = [
       { key: "admin_leave_settings", label: "휴가 유형 설정", href: "/admin/leave-settings" },
       { key: "admin_leave_mgmt", label: "휴가 부여·현황", href: "/admin/leave-management" },
       { key: "admin_forms", label: "유동 양식 관리", href: "/admin/forms" },
+      { key: "admin_form_target_groups", label: "유동 양식 대상 그룹", href: "/admin/form-target-groups" },
       { key: "admin_notices", label: "공지사항 관리", href: "/admin/notices" },
       { key: "admin_system", label: "시스템 설정", href: "/admin/system" },
     ],
@@ -89,12 +100,14 @@ export const ALL_MENU_KEYS = collectAllKeys();
 export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
   STAFF: [
     "dashboard", "me", "notices",
+    "improvement_board", "support_inbox",
     "leave_apply", "leave_my", "leave_approve", "leave_policy",
     "attendance", "stamp",
     "jeju", "jeju_my", "jeju_info",
   ],
   TEAM_LEAD: [
     "dashboard", "me", "notices",
+    "improvement_board", "support_inbox",
     "leave_apply", "leave_my", "leave_approve", "leave_policy",
     "attendance", "stamp",
     "jeju", "jeju_my", "jeju_info",

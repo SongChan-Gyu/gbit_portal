@@ -35,9 +35,9 @@ export async function GET(
     const dateStr = s.createdAt.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
     rows.push([
       dateStr,
-      s.submitterName ?? "",
-      s.submitterEmail ?? "",
-      s.submitterPhone ?? "",
+      form.isAnonymous ? "익명" : s.submitterName ?? "",
+      form.isAnonymous ? "" : s.submitterEmail ?? "",
+      form.isAnonymous ? "" : s.submitterPhone ?? "",
       ...form.fields.map((f) => byField[f.id] ?? ""),
     ]);
   }

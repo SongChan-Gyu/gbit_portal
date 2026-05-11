@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import prisma from "@/lib/db";
-import FormBuilder from "../../FormBuilder";
+import FormBuilder, { type FormFieldDef } from "../../FormBuilder";
 
 export const metadata = { title: "양식 수정 | GBIT Portal" };
 
@@ -24,11 +24,13 @@ export default async function EditFormPage({ params }: { params: Promise<{ id: s
     description: form.description ?? "",
     isActive: form.isActive,
     showInMenu: form.showInMenu,
-    audience: (form.audience ?? "ALL") as "ALL" | "INTERNAL" | "EXTERNAL",
+    audience: (form.audience ?? "ALL") as "ALL" | "INTERNAL" | "EXTERNAL" | "GROUP",
+    targetGroupId: form.targetGroupId ?? null,
+    isAnonymous: form.isAnonymous ?? false,
     fields: form.fields.map((f) => ({
       id: f.id,
       label: f.label,
-      fieldType: f.fieldType as "text" | "select",
+      fieldType: f.fieldType as FormFieldDef["fieldType"],
       options: f.options ? (JSON.parse(f.options) as string[]) : undefined,
       required: f.required,
     })),

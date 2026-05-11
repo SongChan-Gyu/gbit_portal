@@ -4,6 +4,7 @@ import { requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { sendFormReminderAlimtalk } from "@/lib/kakao";
 import { writeAudit, getIp } from "@/lib/audit";
+import { employeesForFormAlimtalk } from "@/lib/formAccess";
 
 /**
  * POST /api/admin/forms/[id]/send-alimtalk
@@ -26,8 +27,21 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const form = await prisma.form.findUnique({ where: { id: formId } });
   if (!form) return NextResponse.json({ error: "양식을 찾을 수 없습니다." }, { status: 404 });
 
+  const allowedList = await employeesForFormAlimtalk(prisma, {
+    audience: form.audience ?? "ALL",
+    targetGroupId: form.targetGroupId,
+  });
+  const allowedIds = new Set(allowedList.map((e) => e.id));
+  const filteredIds = employeeIds.filter((id) => allowedIds.has(id));
+  if (filteredIds.length !== employeeIds.length) {
+    return NextResponse.json(
+      { error: "이 양식의 발송 대상이 아닌 직원이 포함되어 있습니다. 목록에서만 선택해 주세요." },
+      { status: 400 },
+    );
+  }
+
   const employees = await prisma.employee.findMany({
-    where: { id: { in: employeeIds }, status: { in: ["ACTIVE", "INVITED"] } },
+    where: { id: { in: filteredIds }, status: { in: ["ACTIVE", "INVITED"] } },
     select: { id: true, name: true, phone: true, alimtalkEnabled: true },
   });
 
@@ -36,9 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
     "https://www.gbitportal.co.kr";
 
-  const formUrl = form.slug
-    ? `${origin}/forms/${form.slug}`
-    : `${origin}/forms/${formId}`;
+  const formUrl = form.slug ? `${origin}/f/${form.slug}` : `${origin}/forms/${formId}`;
 
   const results: { name: string; status: string }[] = [];
 

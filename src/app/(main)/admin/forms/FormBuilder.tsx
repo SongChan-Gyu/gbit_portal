@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, GripVertical } from "lucide-react";
+import { Plus, Trash2, GripVertical, UsersRound } from "lucide-react";
 
 export type FormFieldDef = {
   id?: string;
@@ -18,9 +19,13 @@ export type FormDef = {
   description: string;
   isActive: boolean;
   showInMenu: boolean;
-  audience: "ALL" | "INTERNAL" | "EXTERNAL";
+  audience: "ALL" | "INTERNAL" | "EXTERNAL" | "GROUP";
+  targetGroupId: string | null;
+  isAnonymous: boolean;
   fields: FormFieldDef[];
 };
+
+type TargetGroupOpt = { id: string; name: string };
 
 const FIELD_TYPE_OPTIONS: { value: FormFieldDef["fieldType"]; label: string; desc: string }[] = [
   { value: "text",     label: "텍스트 (단문)",   desc: "한 줄 자유 입력" },
@@ -57,18 +62,37 @@ export default function FormBuilder({
     isActive: true,
     showInMenu: false,
     audience: "ALL",
+    targetGroupId: null,
+    isAnonymous: false,
     fields: [],
   });
+  const [targetGroups, setTargetGroups] = useState<TargetGroupOpt[]>([]);
+
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const res = await fetch("/api/admin/form-target-groups");
+      if (!res.ok || cancel) return;
+      const list = (await res.json()) as TargetGroupOpt[];
+      if (!cancel) setTargetGroups(list);
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (initial) {
+      const aud = (initial.audience as FormDef["audience"]) ?? "ALL";
       setForm({
         title: initial.title,
         slug: initial.slug ?? "",
         description: initial.description ?? "",
         isActive: initial.isActive,
         showInMenu: initial.showInMenu ?? false,
-        audience: (initial.audience as FormDef["audience"]) ?? "ALL",
+        audience: aud,
+        targetGroupId: initial.targetGroupId ?? null,
+        isAnonymous: initial.isAnonymous ?? false,
         fields: initial.fields.map((f) => ({
           ...f,
           options: OPTIONS_TYPES.includes(f.fieldType) ? (f.options ?? [""]) : undefined,
@@ -122,13 +146,24 @@ export default function FormBuilder({
       setError("제목을 입력하세요.");
       return;
     }
+    if (form.audience === "GROUP") {
+      if (!form.targetGroupId) {
+        setError('대상을 "지정 그룹"으로 둘 때는 그룹을 선택하세요.');
+        return;
+      }
+    }
+    const audiencePayload = form.audience;
+    const targetGroupPayload = form.audience === "GROUP" ? form.targetGroupId : null;
+
     const payload = {
       title: form.title.trim(),
       slug: form.slug.trim().replace(/\s+/g, "-").toLowerCase() || null,
       description: form.description.trim() || null,
       isActive: form.isActive,
       showInMenu: form.showInMenu,
-      audience: form.audience,
+      audience: audiencePayload,
+      targetGroupId: targetGroupPayload,
+      isAnonymous: form.isAnonymous,
       fields: form.fields.map((f) => ({
         label: f.label.trim(),
         fieldType: f.fieldType,
@@ -220,20 +255,73 @@ export default function FormBuilder({
             <span className="text-sm text-gray-700">포털 사이드바 메뉴에 노출</span>
           </label>
         </div>
-        {form.showInMenu && (
-          <div>
-            <label className="label">메뉴 노출 대상</label>
-            <select
-              className="input w-full"
-              value={form.audience}
-              onChange={(e) => set("audience", e.target.value as FormDef["audience"])}
+
+        <div className="rounded-lg border border-gray-100 bg-gray-50/80 p-3 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <label className="label mb-0">제출·접근 허용 대상</label>
+            <Link
+              href="/admin/form-target-groups"
+              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
             >
-              <option value="ALL">전체 (내부직원 + 외부개발자)</option>
-              <option value="INTERNAL">내부직원만</option>
-              <option value="EXTERNAL">외부개발자만</option>
-            </select>
+              <UsersRound className="w-3.5 h-3.5" />
+              대상 그룹 관리
+            </Link>
           </div>
-        )}
+          <p className="text-xs text-gray-500 -mt-1">
+            공개 링크·내부 메뉴·알림톡 발송 대상 모두 이 설정과 동일하게 적용됩니다. (메뉴 노출 여부와는 별개입니다.)
+          </p>
+          <select
+            className="input w-full"
+            value={form.audience}
+            onChange={(e) => {
+              const v = e.target.value as FormDef["audience"];
+              setForm((p) => ({
+                ...p,
+                audience: v,
+                targetGroupId: v === "GROUP" ? p.targetGroupId : null,
+              }));
+            }}
+          >
+            <option value="ALL">전체 (내부직원 + 외부개발자)</option>
+            <option value="INTERNAL">내부직원만</option>
+            <option value="EXTERNAL">외부개발자만</option>
+            <option value="GROUP">지정 그룹 (직접 만든 사원 목록)</option>
+          </select>
+          {form.audience === "GROUP" && (
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">연결할 그룹</label>
+              <select
+                className="input w-full"
+                value={form.targetGroupId ?? ""}
+                onChange={(e) => set("targetGroupId", e.target.value || null)}
+              >
+                <option value="">그룹을 선택하세요</option>
+                {targetGroups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+              {targetGroups.length === 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  등록된 그룹이 없습니다. 「대상 그룹 관리」에서 먼저 만드세요.
+                </p>
+              )}
+            </div>
+          )}
+          <label className="flex items-start gap-2 pt-1">
+            <input
+              type="checkbox"
+              checked={form.isAnonymous}
+              onChange={(e) => set("isAnonymous", e.target.checked)}
+              className="mt-0.5 accent-violet-600"
+            />
+            <span className="text-sm text-gray-700">
+              <span className="font-medium text-violet-900">익명 제출</span>
+              <span className="text-gray-600"> — 투표·민감 설문 등. 제출자 이름은 목록·엑셀에 「익명」으로만 표시되고 연락처는 저장하지 않습니다.</span>
+            </span>
+          </label>
+        </div>
       </div>
 
       {/* 질문/필드 */}

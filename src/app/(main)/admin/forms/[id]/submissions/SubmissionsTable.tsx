@@ -13,9 +13,15 @@ type SubmissionsTableProps = {
   formTitle: string;
   fields: string[];
   rows: Row[];
+  isAnonymousForm?: boolean;
 };
 
-export default function SubmissionsTable({ formTitle, fields, rows }: SubmissionsTableProps) {
+export default function SubmissionsTable({
+  formTitle,
+  fields,
+  rows,
+  isAnonymousForm,
+}: SubmissionsTableProps) {
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-500">
@@ -44,9 +50,15 @@ export default function SubmissionsTable({ formTitle, fields, rows }: Submission
               <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
                 {new Date(r.createdAt).toLocaleString("ko-KR")}
               </td>
-              <td className="px-4 py-3 text-sm font-medium text-gray-800">{r.submitterName}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{r.submitterEmail}</td>
-              <td className="px-4 py-3 text-sm text-gray-600">{r.submitterPhone}</td>
+              <td className="px-4 py-3 text-sm font-medium text-gray-800">
+                {isAnonymousForm || r.submitterName === "익명" ? (
+                  <span className="text-violet-800 font-semibold">익명</span>
+                ) : (
+                  r.submitterName
+                )}
+              </td>
+              <td className="px-4 py-3 text-sm text-gray-600">{isAnonymousForm ? "—" : r.submitterEmail}</td>
+              <td className="px-4 py-3 text-sm text-gray-600">{isAnonymousForm ? "—" : r.submitterPhone}</td>
               {fields.map((f) => (
                 <td key={f} className="px-4 py-3 text-sm text-gray-700 max-w-[200px] truncate" title={r.labelValues[f] ?? ""}>
                   {r.labelValues[f] ?? "-"}
