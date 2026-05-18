@@ -51,9 +51,21 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
   async function grant(employeeId: string) {
     const raw = counts[employeeId] ?? "1";
     const n = parseInt(raw, 10);
-    if (!Number.isFinite(n) || n < 1) {
-      alert("부여할 칸 수는 1 이상의 정수로 입력해 주세요.");
+    if (!Number.isFinite(n) || n === 0 || n < -30 || n > 30) {
+      alert("칸 수는 -30~30 사이 정수로 입력해 주세요. (0 불가, 음수는 차감)");
       return;
+    }
+    if (n < 0) {
+      const row = rows.find((r) => r.id === employeeId);
+      const after = (row?.stampCouponCount ?? 0) + n;
+      if (
+        !confirm(
+          `${Math.abs(n)}칸을 차감합니다. (미사용 칸만, 최근 부여분부터)\n` +
+            `현재 ${row?.stampCouponCount ?? "?"}칸 → 예상 ${after < 0 ? 0 : after}칸\n\n계속할까요?`,
+        )
+      ) {
+        return;
+      }
     }
     setLoadingId(employeeId);
     try {
@@ -182,7 +194,9 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
         </p>
         <p className="text-xs text-amber-900/85">
           부여한 칸은 장(8칸)에 쌓이며, 4칸·8칸 단위로 힐링데이·오후 인정 권한이 열립니다. 한 번에 최대 30칸까지
-          부여할 수 있습니다. 「힐링 가능 장」은 해당 장에서 힐링을 <strong>아직 쓰지 않은</strong> 경우만 셉니다.
+          부여·차감할 수 있습니다. 잘못 부여했을 때는 <strong>음수(예: -2)</strong>를 입력하고 「부여」를 누르면 미사용
+          칸이 최근 부여 순으로 차감됩니다. 「힐링 가능 장」은 해당 장에서 힐링을 <strong>아직 쓰지 않은</strong> 경우만
+          셉니다.
         </p>
       </div>
 
@@ -239,12 +253,13 @@ export default function StampGrantTab({ rows }: { rows: StampGrantRow[] }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <input
                       type="number"
-                      min={1}
+                      min={-30}
                       max={30}
                       className="input w-20 text-sm tabular-nums py-1.5"
                       value={counts[r.id] ?? "1"}
                       onChange={(e) => setCounts((prev) => ({ ...prev, [r.id]: e.target.value }))}
                       disabled={loadingId === r.id}
+                      title="양수: 부여, 음수: 차감 (예: -2)"
                     />
                     <span className="text-xs text-gray-500">칸</span>
                     <button

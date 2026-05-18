@@ -71,6 +71,48 @@ export async function appendStampCouponToCard(
   return { stampId: stamp.id, stampCardId: cardId };
 }
 
+/** 관리자 수동 차감 — 미사용 칸을 최근 부여 순(역순)으로 제거 */
+export async function revokeStampCoupons(
+  tx: DBTx,
+  employeeId: string,
+  count: number,
+): Promise<{ removedIds: string[] }> {
+  if (count < 1) throw new Error("REVOKE_COUNT_INVALID");
+
+  const toRemove = await tx.stampCoupon.findMany({
+    where: { employeeId, isUsed: false },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: count,
+    select: { id: true, stampCardId: true },
+  });
+
+  if (toRemove.length < count) {
+    throw new Error(`REVOKABLE_INSUFFICIENT:${toRemove.length}`);
+  }
+
+  const affectedCardIds = [
+    ...new Set(toRemove.map((s) => s.stampCardId).filter((id): id is string => Boolean(id))),
+  ];
+
+  await tx.stampCoupon.deleteMany({
+    where: { id: { in: toRemove.map((s) => s.id) } },
+  });
+
+  for (const cardId of affectedCardIds) {
+    const remaining = await tx.stampCoupon.count({ where: { stampCardId: cardId } });
+    if (remaining === 0) {
+      await tx.stampCard.delete({ where: { id: cardId } });
+      continue;
+    }
+    await tx.stampCard.update({
+      where: { id: cardId },
+      data: { filledCount: remaining },
+    });
+  }
+
+  return { removedIds: toRemove.map((s) => s.id) };
+}
+
 export async function findHealingStampCard(
   tx: DBTx,
   employeeId: string,
