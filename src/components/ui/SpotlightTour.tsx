@@ -34,15 +34,11 @@ type Props = {
 
 const MARGIN = 12;
 const GAP = 10;
-const CARD_MIN = 200;
-const CARD_MAX = 340;
+const CARD_MIN = 160;
+const CARD_MAX = 520;
 
 function viewportHeight() {
   return window.visualViewport?.height ?? window.innerHeight;
-}
-
-function preferredCardHeight(vh: number) {
-  return Math.min(CARD_MAX, Math.max(CARD_MIN, Math.round(vh * 0.38)));
 }
 
 function getContentTopAnchor(): number {
@@ -80,10 +76,16 @@ function measureTarget(selector: string, padding: number, maxH?: number): Rect |
 }
 
 function scrollElementTopTo(el: Element, viewportTop: number) {
-  const delta = el.getBoundingClientRect().top - viewportTop;
-  if (Math.abs(delta) < 2) return;
   const scrollParent = getScrollParent(el);
-  scrollParent.scrollBy({ top: delta, behavior: "instant" });
+  const delta = el.getBoundingClientRect().top - viewportTop;
+  if (Math.abs(delta) < 1) return;
+  scrollParent.scrollTop += delta;
+}
+
+function settleScroll(el: Element, viewportTop: number, passes = 4) {
+  for (let i = 0; i < passes; i += 1) {
+    scrollElementTopTo(el, viewportTop);
+  }
 }
 
 function clipHighlightToViewport(highlight: Rect, vh: number): Rect {
@@ -101,7 +103,6 @@ function clipHighlightToViewport(highlight: Rect, vh: number): Rect {
 function placeCard(
   highlight: Rect,
   preferred: "above" | "below",
-  cardMaxH: number,
   topAnchor: number,
   vh: number,
 ): { top: number; height: number; position: "above" | "below" } {
@@ -110,58 +111,34 @@ function placeCard(
   const spaceBelow = bottomLimit - (highlight.top + highlight.height) - GAP;
 
   let position = preferred;
-  if (position === "below" && cardMaxH > spaceBelow && spaceAbove > spaceBelow) {
+  if (position === "below" && spaceBelow < CARD_MIN && spaceAbove >= CARD_MIN) {
     position = "above";
-  } else if (position === "above" && cardMaxH > spaceAbove && spaceBelow > spaceAbove) {
+  } else if (position === "above" && spaceAbove < CARD_MIN && spaceBelow >= CARD_MIN) {
+    position = "below";
+  } else if (position === "below" && spaceBelow < spaceAbove) {
+    position = "above";
+  } else if (position === "above" && spaceAbove < spaceBelow) {
     position = "below";
   }
 
-  const fit = (pos: "above" | "below") => {
-    if (pos === "below") {
-      const top = highlight.top + highlight.height + GAP;
-      const height = Math.min(cardMaxH, bottomLimit - top);
-      return { top, height, ok: height >= CARD_MIN && top + height <= bottomLimit + 0.5 };
-    }
-    const height = Math.min(cardMaxH, highlight.top - topAnchor - GAP);
-    const top = Math.max(topAnchor, highlight.top - GAP - height);
-    const overlap = top + height + GAP > highlight.top;
-    return { top, height, ok: height >= CARD_MIN && !overlap };
-  };
-
-  let layout = fit(position);
-  if (!layout.ok) {
-    const alt = fit(position === "above" ? "below" : "above");
-    if (alt.ok || alt.height > layout.height) {
-      position = position === "above" ? "below" : "above";
-      layout = alt;
-    }
-  }
-
-  let { top, height } = layout;
-  height = Math.max(CARD_MIN, Math.min(cardMaxH, height));
-
   if (position === "above") {
-    top = Math.max(topAnchor, highlight.top - GAP - height);
-    if (top + height + GAP > highlight.top) {
-      height = Math.max(CARD_MIN, highlight.top - GAP - top);
-    }
-  } else {
-    top = highlight.top + highlight.height + GAP;
-    height = Math.min(height, bottomLimit - top);
+    const height = Math.max(CARD_MIN, Math.min(CARD_MAX, spaceAbove));
+    return { top: topAnchor, height, position };
   }
 
-  return { top, height, position };
+  const top = highlight.top + highlight.height + GAP;
+  const height = Math.max(CARD_MIN, Math.min(CARD_MAX, bottomLimit - top));
+  return { top, height, position: "below" };
 }
 
-function buildLayout(cfg: SpotlightTourStep, cardMaxH: number): TourLayout | null {
+function buildLayout(cfg: SpotlightTourStep, topAnchor: number): TourLayout | null {
   const raw = measureTarget(cfg.target, cfg.padding ?? 8, cfg.maxHighlightH);
   if (!raw) return null;
 
   const vh = viewportHeight();
-  const topAnchor = getContentTopAnchor();
   const highlight = clipHighlightToViewport(raw, vh);
   const preferred = cfg.cardPosition ?? "above";
-  const card = placeCard(highlight, preferred, cardMaxH, topAnchor, vh);
+  const card = placeCard(highlight, preferred, topAnchor, vh);
 
   return {
     card: { top: card.top, height: card.height },
@@ -293,6 +270,7 @@ export default function SpotlightTour({
   const stepsRef = useRef(steps);
   const lockingRef = useRef(false);
   const scrollParentRef = useRef<HTMLElement | null>(null);
+  const layoutRef = useRef<TourLayout | null>(null);
 
   stepsRef.current = steps;
   const current = steps[step] ?? steps[0];
@@ -318,38 +296,44 @@ export default function SpotlightTour({
       scrollParent.scrollTop = 0;
     }
 
-    const vh = viewportHeight();
-    const cardMaxH = preferredCardHeight(vh);
-    const position = cfg.cardPosition ?? "above";
     const topAnchor = getContentTopAnchor();
-    const targetTop = position === "below" ? topAnchor : topAnchor + cardMaxH + GAP;
 
-    if (!cfg.naturalPosition) {
-      scrollElementTopTo(el, targetTop);
-    }
-
-    const finalize = () => {
+    const finalize = (pass = 0) => {
       if (!cfg.naturalPosition) {
-        scrollElementTopTo(el, targetTop);
+        const cardReserve = pass === 0 ? CARD_MIN : (layoutRef.current?.card.height ?? CARD_MIN);
+        settleScroll(el, topAnchor + cardReserve + GAP);
       }
-      const next = buildLayout(cfg, cardMaxH);
-      if (next) {
-        setLayout(next);
+
+      const next = buildLayout(cfg, topAnchor);
+      if (!next) {
         lockingRef.current = false;
+        if (attempt < 8) layoutStep(stepIndex, attempt + 1);
         return;
       }
-      lockingRef.current = false;
-      if (attempt < 8) layoutStep(stepIndex, attempt + 1);
+
+      layoutRef.current = next;
+      const measuredTop = el.getBoundingClientRect().top;
+      const expectedTop = cfg.naturalPosition ? measuredTop : topAnchor + next.card.height + GAP;
+      const drift = cfg.naturalPosition ? 0 : Math.abs(measuredTop - expectedTop);
+
+      if (!cfg.naturalPosition && pass < 2 && drift > 4) {
+        requestAnimationFrame(() => finalize(pass + 1));
+        return;
+      }
+
+      setLayout(next);
+      window.setTimeout(() => {
+        lockingRef.current = false;
+      }, 120);
     };
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(finalize);
-    });
+    requestAnimationFrame(() => finalize(0));
   }, [open]);
 
   useEffect(() => {
     if (!open) {
       setLayout(null);
+      layoutRef.current = null;
       scrollParentRef.current = null;
       return;
     }
