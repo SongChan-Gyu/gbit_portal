@@ -38,10 +38,14 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
+          OUT="$(mktemp)"
+          trap 'rm -f "$OUT"' EXIT
           curl -fsS -X POST "${APP_URL}/api/cron/monthly-accrual" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            -d '{}' | head -c 4000
+            -d '{}' -o "$OUT"
+          head -c 4000 "$OUT"
+          echo ""
 
       - name: Call /api/cron/tenure-check
         env:
@@ -50,10 +54,14 @@ jobs:
         run: |
           set -euo pipefail
           TODAY_KST="$(TZ=Asia/Seoul date +%F)"
+          OUT="$(mktemp)"
+          trap 'rm -f "$OUT"' EXIT
           curl -fsS -X POST "${APP_URL}/api/cron/tenure-check" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            -d "{\"date\":\"${TODAY_KST}\",\"window\":0}" | head -c 4000
+            -d "{\"date\":\"${TODAY_KST}\",\"window\":0}" -o "$OUT"
+          head -c 4000 "$OUT"
+          echo ""
 
       - name: Call /api/cron/birthday-half
         env:
@@ -62,10 +70,14 @@ jobs:
         run: |
           set -euo pipefail
           TODAY_KST="$(TZ=Asia/Seoul date +%F)"
+          OUT="$(mktemp)"
+          trap 'rm -f "$OUT"' EXIT
           curl -fsS -X POST "${APP_URL}/api/cron/birthday-half" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            -d "{\"date\":\"${TODAY_KST}\"}" | head -c 4000
+            -d "{\"date\":\"${TODAY_KST}\"}" -o "$OUT"
+          head -c 4000 "$OUT"
+          echo ""
 
       - name: Call /api/cron/jeju-deposit-deadline
         env:
@@ -73,8 +85,11 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
+          OUT="$(mktemp)"
+          trap 'rm -f "$OUT"' EXIT
           curl -fsS -X POST "${APP_URL}/api/cron/jeju-deposit-deadline" \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${CRON_SECRET}" \
-            -d '{}' | head -c 4000
-
+            -d '{}' -o "$OUT"
+          head -c 4000 "$OUT"
+          echo ""
