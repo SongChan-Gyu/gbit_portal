@@ -23,14 +23,23 @@ export async function POST(req: Request) {
   const guard = requirePMOrAdmin(u); if (guard) return guard;
 
   const body = await req.json().catch(() => ({}));
-  const { title, content } = body;
+  const { title, content, audience, employeeGroupId } = body;
   if (!title || typeof content !== "string")
     return NextResponse.json({ error: "제목과 내용은 필수입니다." }, { status: 400 });
+
+  const aud = String(audience ?? "ALL");
+  let gid: string | null = null;
+  if (aud === "GROUP") {
+    gid = employeeGroupId ? String(employeeGroupId) : null;
+    if (!gid) return NextResponse.json({ error: "지정 그룹을 선택하세요." }, { status: 400 });
+  }
 
   const notice = await prisma.notice.create({
     data: {
       title: String(title).trim(),
       content: content,
+      audience: aud,
+      employeeGroupId: gid,
       authorId: u.employeeId,
     },
     include: { author: { select: { name: true } } },

@@ -27,6 +27,8 @@ export default async function EditNoticePage({ params }: { params: Promise<{ id:
         noticeId={notice.id}
         initialTitle={notice.title}
         initialContent={notice.content}
+        initialAudience={notice.audience as "ALL" | "INTERNAL" | "EXTERNAL" | "GROUP"}
+        initialEmployeeGroupId={notice.employeeGroupId}
       />
     </div>
   );

@@ -68,7 +68,10 @@ model Employee {
   improvementPostsClosed ImprovementPost[]      @relation("ImprovementPostClosedBy")
   supportTickets         SupportTicket[]         @relation("SupportTicketRequester")
   supportTicketMessages  SupportTicketMessage[]
-  formTargetGroupMembers FormTargetGroupMember[]
+  employeeGroupMembers       EmployeeGroupMember[]
+  loginAnnouncementsAuthored LoginAnnouncement[]       @relation("LoginAnnouncementAuthor")
+  loginAnnouncementDismissals LoginAnnouncementDismiss[]
+  userFeatureTours           UserFeatureTour[]
 
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -553,10 +556,12 @@ model Form {
   showInMenu  Boolean   @default(false)
   audience    String    @default("ALL")  // ALL | INTERNAL | EXTERNAL | GROUP
   /// audience=GROUP 일 때만 사용
-  targetGroupId String?
-  targetGroup   FormTargetGroup? @relation(fields: [targetGroupId], references: [id], onDelete: SetNull)
+  employeeGroupId String?       @map("targetGroupId")
+  employeeGroup   EmployeeGroup? @relation(fields: [employeeGroupId], references: [id], onDelete: SetNull)
   /// true면 제출 목록·내보내기에서 제출자를 '익명'으로 표시 (1인 1표·직원 연결은 DB에 유지)
   isAnonymous Boolean   @default(false)
+  /// 제출 유효기간 (알림톡·관리 안내용, null이면 별도 공지)
+  submitDeadline DateTime?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -564,30 +569,34 @@ model Form {
   submissions FormSubmission[]
 }
 
-/// 유동양식 대상 직원 그룹 (예: 휴가샵 대상)
-model FormTargetGroup {
+/// 직원 그룹 (유동양식·공지·로그인 팝업 대상 공통)
+model EmployeeGroup {
   id        String   @id @default(cuid())
   name      String
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  members FormTargetGroupMember[]
-  forms   Form[]
+  members             EmployeeGroupMember[]
+  forms               Form[]
+  notices             Notice[]
+  loginAnnouncements  LoginAnnouncement[]
 
   @@index([sortOrder])
+  @@map("FormTargetGroup")
 }
 
-model FormTargetGroupMember {
-  id         String          @id @default(cuid())
+model EmployeeGroupMember {
+  id         String        @id @default(cuid())
   groupId    String
-  group      FormTargetGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group      EmployeeGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   employeeId String
-  employee   Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  createdAt  DateTime        @default(now())
+  employee   Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  createdAt  DateTime      @default(now())
 
   @@unique([groupId, employeeId])
   @@index([employeeId])
+  @@map("FormTargetGroupMember")
 }
 
 model FormField {
@@ -641,15 +650,75 @@ model FormSubmissionAnswer {
 // 공지사항 (PM/ADMIN만 작성, 리치 텍스트, 댓글 없음)
 // ─────────────────────────────────────────
 model Notice {
-  id        String   @id @default(cuid())
-  title     String
-  content   String   @db.LongText  // HTML
-  authorId  String
-  author    Employee @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String   @id @default(cuid())
+  title           String
+  content         String   @db.LongText  // HTML
+  audience        String   @default("ALL") // ALL | INTERNAL | EXTERNAL | GROUP
+  employeeGroupId String?
+  employeeGroup   EmployeeGroup? @relation(fields: [employeeGroupId], references: [id], onDelete: SetNull)
+  authorId        String
+  author          Employee @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  loginAnnouncements LoginAnnouncement[]
 
   @@index([createdAt])
+  @@index([audience])
+}
+
+/// 로그인 후 노출 공지 팝업
+model LoginAnnouncement {
+  id              String    @id @default(cuid())
+  title           String
+  body            String    @db.Text
+  audience        String    @default("INTERNAL")
+  employeeGroupId String?
+  employeeGroup   EmployeeGroup? @relation(fields: [employeeGroupId], references: [id], onDelete: SetNull)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  priority        Int       @default(0)
+  detailMode      String    @default("NONE") // NONE | NOTICE
+  noticeId        String?
+  notice          Notice?   @relation(fields: [noticeId], references: [id], onDelete: SetNull)
+  isActive        Boolean   @default(true)
+  authorId        String
+  author          Employee  @relation("LoginAnnouncementAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  dismissals      LoginAnnouncementDismiss[]
+
+  @@index([isActive, priority])
+  @@index([startsAt, endsAt])
+}
+
+model LoginAnnouncementDismiss {
+  id             String            @id @default(cuid())
+  announcementId String
+  announcement   LoginAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employee       Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  dismissType    String            // CLOSE | WEEK
+  dismissedUntil DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@unique([announcementId, employeeId])
+  @@index([employeeId])
+}
+
+/// 화면별 최초 1회 기능 안내 (POC: leave_apply)
+model UserFeatureTour {
+  id          String    @id @default(cuid())
+  employeeId  String
+  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  tourKey     String
+  completedAt DateTime?
+  skippedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@unique([employeeId, tourKey])
+  @@index([tourKey])
 }
 
 // ─────────────────────────────────────────

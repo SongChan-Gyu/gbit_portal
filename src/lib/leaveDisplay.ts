@@ -1,7 +1,8 @@
 import { resolveItemTimeSlot, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
+import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
 
-type LeaveTypeLike = {
+export type LeaveTypeLike = {
   code?: string | null;
   name: string;
   color?: string | null;
@@ -18,6 +19,29 @@ function slotSuffixKo(slot: LeaveTimeSlot, kind: "half" | "plain") {
   if (slot === "AM") return kind === "half" ? "(오전반차)" : "(오전)";
   if (slot === "PM") return kind === "half" ? "(오후반차)" : "(오후)";
   return "";
+}
+
+/** 0.5일·반차 등 — 오전/오후 구분 포함 일수 표기 */
+export function formatLeaveItemDaysLabel(
+  item: { days: number; timeSlot?: string | null },
+  leaveType: LeaveTypeLike,
+): string {
+  const slot = resolveItemTimeSlot(item, leaveTypeWithPolicy(leaveType));
+  const dayPart = `${formatLeaveDayDisplay(Number(item.days))}일`;
+  if (slot === "AM") return `오전 ${dayPart}`;
+  if (slot === "PM") return `오후 ${dayPart}`;
+  return dayPart;
+}
+
+/** 신청 1건 요약 일수 (단일 항목이면 반차 구분 포함) */
+export function formatLeaveRequestDaysLabel(
+  items: Array<{ days: number; timeSlot?: string | null; leaveType: LeaveTypeLike }>,
+  totalDays: number,
+): string {
+  if (items.length === 1) {
+    return formatLeaveItemDaysLabel(items[0]!, items[0]!.leaveType);
+  }
+  return `${formatLeaveDayDisplay(totalDays)}일`;
 }
 
 /**
@@ -51,7 +75,11 @@ export function mergedLeaveTypeLabel(
     return { mergedName: `생일반차${slotSuffixKo(slot, "plain")}`, mergedColor: leaveType.color ?? null };
   }
 
-  // fallback: 기존 이름 유지 (근속/포상/병가/경조/스탬프 등)
-  return { mergedName: leaveType.name, mergedColor: leaveType.color ?? null };
+  // fallback: 기존 이름 + 시간대(반차·하프데이 등)
+  const suffix = slotSuffixKo(slot, "plain");
+  return {
+    mergedName: suffix ? `${leaveType.name}${suffix}` : leaveType.name,
+    mergedColor: leaveType.color ?? null,
+  };
 }
 

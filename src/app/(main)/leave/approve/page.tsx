@@ -2,16 +2,31 @@ import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import AdminCancelButton from "./AdminCancelButton";
+import { requestHasPmHalfMonth } from "@/lib/halfdayPolicy";
 import LeaveApprovePendingClient from "./LeaveApprovePendingClient";
 import StampApproveClient from "@/app/(main)/stamp/approve/StampApproveClient";
 import { serializeDates } from "@/lib/serialize";
 import { formatMDWithDay } from "@/lib/dateUtils";
-import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { mergedLeaveTypeLabel, formatLeaveRequestDaysLabel } from "@/lib/leaveDisplay";
 import { summarizeLeaveApprovals } from "@/lib/leaveApprovalDisplay";
 import { leaveApprovalStatusMeta, leaveApproveEntryKindMeta, leaveCancelApprovalStatusMeta, leaveRequestStatusMeta } from "@/lib/statusMeta";
 import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 import { AFTERNOON_STAMP_THRESHOLD, HEALING_STAMP_THRESHOLD } from "@/lib/stampCard";
+
+function reqDaysLabel(req: {
+  totalDays: number;
+  items: Array<{ days: number; timeSlot?: string | null; leaveType: unknown }>;
+}) {
+  return formatLeaveRequestDaysLabel(
+    req.items.map((i) => ({
+      days: Number(i.days),
+      timeSlot: i.timeSlot ?? null,
+      leaveType: i.leaveType as Parameters<typeof formatLeaveRequestDaysLabel>[0][0]["leaveType"],
+    })),
+    req.totalDays,
+  );
+}
 
 const APPROVER_ROLES = ["TEAM_LEAD", "PM", "ADMIN"] as const;
 const APPROVE_MAIN_TABS = [
@@ -321,7 +336,7 @@ export default async function ApprovePage({
                 <p className="text-xs text-gray-500 mt-1">
                   {formatMDWithDay(req.startDate)}
                   {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
-                  <span className="ml-1 font-semibold text-slate-700">{req.totalDays}일</span>
+                  <span className="ml-1 font-semibold text-slate-700">{reqDaysLabel(req)}</span>
                 </p>
                 <p className="text-xs text-gray-500 mt-1 leading-snug">{summarizeLeaveApprovals(req.approvals as any)}</p>
               </div>
@@ -347,7 +362,7 @@ export default async function ApprovePage({
                     <td className="request-list-td period whitespace-nowrap text-[15px] md:text-xs">
                       {formatMDWithDay(req.startDate)}
                       {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
-                      <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
+                      <span className="font-semibold text-slate-700 ml-1">· {reqDaysLabel(req)}</span>
                     </td>
                     <td className="request-list-td status">
                       {(() => {
@@ -414,11 +429,15 @@ export default async function ApprovePage({
                     <p className="text-sm text-gray-600 mt-1">
                       {req.items.map((i) => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")} · {formatMDWithDay(req.startDate)}
                       {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
-                      <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
+                      <span className="font-semibold text-slate-700 ml-0.5">{reqDaysLabel(req)}</span>
                     </p>
                     <div className="mt-2">
                       {(req.status === "APPROVED" || req.status === "PENDING") && (
-                        <AdminCancelButton requestId={req.id} />
+                        <AdminCancelButton
+                          requestId={req.id}
+                          disabled={requestHasPmHalfMonth(req.items)}
+                          disabledReason="하프데이는 취소 불가"
+                        />
                       )}
                     </div>
                   </div>
@@ -448,7 +467,7 @@ export default async function ApprovePage({
                         {formatMDWithDay(req.startDate)}
                         {req.startDate.toDateString() !== req.endDate.toDateString() &&
                           ` ~ ${formatMDWithDay(req.endDate)}`}
-                        <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
+                        <span className="font-semibold text-slate-700 ml-1">· {reqDaysLabel(req)}</span>
                       </td>
                       <td className="request-list-td status">
                         {(() => {
@@ -458,7 +477,11 @@ export default async function ApprovePage({
                       </td>
                       <td className="request-list-td action">
                         {(req.status === "APPROVED" || req.status === "PENDING") && (
-                          <AdminCancelButton requestId={req.id} />
+                          <AdminCancelButton
+                          requestId={req.id}
+                          disabled={requestHasPmHalfMonth(req.items)}
+                          disabledReason="하프데이는 취소 불가"
+                        />
                         )}
                       </td>
                     </tr>
@@ -508,7 +531,7 @@ export default async function ApprovePage({
                       <p className="text-sm text-gray-600 mt-1">
                         {req.items.map(i => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")} · {formatMDWithDay(req.startDate)}
                         {req.startDate.toDateString()!==req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
-                        <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
+                        <span className="font-semibold text-slate-700 ml-0.5">{reqDaysLabel(req)}</span>
                       </p>
                     </div>
                   );
@@ -531,7 +554,7 @@ export default async function ApprovePage({
                       <p className="text-sm text-gray-600 mt-1">
                         {req.items.map(i => mergedLeaveTypeLabel(i.leaveType as any, { timeSlot: i.timeSlot ?? null }).mergedName).join("+")} · {formatMDWithDay(req.startDate)}
                         {req.startDate.toDateString()!==req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
-                        <span className="font-semibold text-slate-700 ml-0.5">{req.totalDays}일</span>
+                        <span className="font-semibold text-slate-700 ml-0.5">{reqDaysLabel(req)}</span>
                       </p>
                     </div>
                   );
@@ -564,7 +587,7 @@ export default async function ApprovePage({
                           {formatMDWithDay(req.startDate)}
                           {req.startDate.toDateString()!==req.endDate.toDateString() &&
                             ` ~ ${formatMDWithDay(req.endDate)}`}
-                          <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
+                          <span className="font-semibold text-slate-700 ml-1">· {reqDaysLabel(req)}</span>
                         </td>
                         <td className="request-list-td status">
                           {(() => {
@@ -586,7 +609,7 @@ export default async function ApprovePage({
                           {formatMDWithDay(req.startDate)}
                           {req.startDate.toDateString()!==req.endDate.toDateString() &&
                             ` ~ ${formatMDWithDay(req.endDate)}`}
-                          <span className="font-semibold text-slate-700 ml-1">· {req.totalDays}일</span>
+                          <span className="font-semibold text-slate-700 ml-1">· {reqDaysLabel(req)}</span>
                         </td>
                         <td className="request-list-td status">
                           {(() => {

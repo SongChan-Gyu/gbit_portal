@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import prisma from "@/lib/db";
 import FormBuilder, { type FormFieldDef } from "../../FormBuilder";
+import { formSubmitDeadlineToInputValue } from "@/lib/formSubmitDeadline";
 
 export const metadata = { title: "양식 수정 | GBIT Portal" };
 
@@ -25,8 +26,9 @@ export default async function EditFormPage({ params }: { params: Promise<{ id: s
     isActive: form.isActive,
     showInMenu: form.showInMenu,
     audience: (form.audience ?? "ALL") as "ALL" | "INTERNAL" | "EXTERNAL" | "GROUP",
-    targetGroupId: form.targetGroupId ?? null,
+    targetGroupId: form.employeeGroupId ?? null,
     isAnonymous: form.isAnonymous ?? false,
+    submitDeadline: formSubmitDeadlineToInputValue(form.submitDeadline),
     fields: form.fields.map((f) => ({
       id: f.id,
       label: f.label,

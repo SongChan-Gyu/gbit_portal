@@ -11,7 +11,16 @@ import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
 import { buildHolidayDisplaySet, isRedCalendarDay, CALENDAR_HOLIDAY_COLOR } from "@/lib/calendarHolidayDisplay";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
-import { isHealingHalfReplaceCode, isHalfdayMonthlySharedPoolCode } from "@/lib/healingLeaveCodes";
+import { isHealingHalfReplaceCode } from "@/lib/healingLeaveCodes";
+import {
+  PM_HALF_MONTH_CODE,
+  anyHalfDayMonthAvailable,
+  canApplyHalfDayInMonth,
+  firstWednesdayYmdOfMonth,
+  halfdayApplicationDeadlineError,
+  isPastHalfdayApplicationDeadlineForMonth,
+  monthKeyFromYmd,
+} from "@/lib/halfdayPolicy";
 
 // ── 타입 ──────────────────────────────────────────────────────
 interface LT {
@@ -69,7 +78,6 @@ function rowUsesSingleDayOnly(it: LeaveItem, lt: LT | undefined): boolean {
   return pol.allowsHalfDay && !pol.allowsFullDay;
 }
 
-const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
 const HIDDEN_LT_CODES = new Set(["DEPT_BONUS", "POOL_TENURE_BONUS"]);
 
 // ── 휴가 그룹 정의 ────────────────────────────────────────────
@@ -147,8 +155,8 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     key: "halfday", label: "하프데이", meta: "",
     color: "#0284c7", borderClass: "border-sky-500",
     subs: [
-      { label: "하프데이", code: "PM_HALF_MONTH", desc: "수요일 오후" },
-      { label: "힐링데이(하프대체)", code: "HEALING_DAY_HALF_REPLACE", desc: "0일 · 영업일 요일 무관" },
+      { label: "하프데이", code: PM_HALF_MONTH_CODE, desc: "수요일 오후 · 해당월 첫째 주 수요일까지 신청" },
+      { label: "힐링데이(하프대체)", code: "HEALING_DAY_HALF_REPLACE", desc: "승인된 하프데이 필요 · 0일" },
     ],
   },
   {
@@ -158,6 +166,14 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     color: "#dc2626",
     borderClass: "border-red-500",
     subs: [{ label: "신청", code: "SICK" }],
+  },
+  {
+    key: "dutyDept",
+    label: "직무부서휴가",
+    meta: "운영·교육·복지부 부여",
+    color: "#8b5cf6",
+    borderClass: "border-violet-500",
+    subs: [{ label: "신청", code: "DUTY_DEPT" }],
   },
   {
     key: "award", label: "포상휴가", meta: "",
@@ -190,7 +206,7 @@ LEAVE_GROUPS_BASE.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP_BASE[s.co
 
 /** UI: 자산형(소모 가능 부여) vs 사유형 — 섹션 분리 */
 const BASE_ASSET_GROUP_KEYS = new Set([
-  "annual", "care", "holidayExt", "stamp", "halfday", "award", "birthday", "tenure",
+  "annual", "care", "holidayExt", "stamp", "halfday", "dutyDept", "award", "birthday", "tenure",
 ]);
 const BASE_REASON_GROUP_KEYS = new Set(["condolence", "public", "recognition", "sick"]);
 
@@ -271,6 +287,10 @@ export default function LeaveApplyForm({
   afternoonStampSlots,
   healingStampSlots,
   halfDayUsed,
+  halfDayUsedByMonth,
+  approvedHalfMonthKeys,
+  healingHalfReplaceUsedByMonth,
+  approvedHealingHalfReplaceMonthKeys,
   holidays,
 }: {
   leaveTypes: LT[];
@@ -278,7 +298,12 @@ export default function LeaveApplyForm({
   totalStamps: number;
   afternoonStampSlots: number;
   healingStampSlots: number;
-  halfDayUsed: number;
+  /** 이번 달 하프데이(PM_HALF) 신청·승인·대기 건수 — 미사용(페이지 KPI만) */
+  halfDayUsed?: number;
+  halfDayUsedByMonth: Record<string, number>;
+  approvedHalfMonthKeys: string[];
+  healingHalfReplaceUsedByMonth: Record<string, number>;
+  approvedHealingHalfReplaceMonthKeys: string[];
   holidays: string[];
 }) {
   const router = useRouter();
@@ -360,12 +385,45 @@ export default function LeaveApplyForm({
     return m;
   }, [allocations, applicationYmdRange.min, applicationYmdRange.max]);
 
+  /** 부여 잔여가 있으면 신청일 미입력·다른 달 신청 시에도 휴가 종류 노출 (직무부서·근속 등) */
+  const hasActivePoolRemaining = (sourceCode: string) =>
+    allocations.some((a) => a.sourceCode === sourceCode && Math.max(0, a.totalDays - a.usedDays) > 0);
+
+  const approvedHalfMonthSet = useMemo(
+    () => new Set(approvedHalfMonthKeys),
+    [approvedHalfMonthKeys],
+  );
+
+  const approvedHealingHalfReplaceMonthSet = useMemo(
+    () => new Set(approvedHealingHalfReplaceMonthKeys),
+    [approvedHealingHalfReplaceMonthKeys],
+  );
+
+  const canApplyHealingHalfReplaceInMonth = (monthKey: string) =>
+    approvedHalfMonthSet.has(monthKey) && (healingHalfReplaceUsedByMonth[monthKey] ?? 0) < 1;
+
   const isSelectableCode = (code: string) => {
     const lt = ltByCode[code];
     if (!lt) return false;
+    if (code === "DUTY_DEPT" || lt.allocationSourceCode === "DUTY_DEPT") {
+      return hasActivePoolRemaining("DUTY_DEPT");
+    }
+    if (isHealingHalfReplaceCode(code)) {
+      return approvedHalfMonthKeys.some((mk) => canApplyHealingHalfReplaceInMonth(mk));
+    }
+    if (code === PM_HALF_MONTH_CODE) {
+      return anyHalfDayMonthAvailable(
+        todayYmd,
+        halfDayUsedByMonth,
+        approvedHealingHalfReplaceMonthSet,
+      );
+    }
     // 근속 마일스톤: 해당 휴가코드 풀 잔여가 있을 때만 선택지 노출
     if ((lt.applyGroupKey ?? "").trim().toLowerCase() === "tenure") {
-      return (poolRemainingBySource[code] ?? 0) > 0;
+      return hasActivePoolRemaining(code) || (poolRemainingBySource[code] ?? 0) > 0;
+    }
+    if (lt.allocationSourceCode === "AWARD") {
+      return hasActivePoolRemaining("AWARD") || (poolRemainingBySource["AWARD"] ?? 0) > 0;
     }
     return true;
   };
@@ -445,7 +503,7 @@ export default function LeaveApplyForm({
         return { ...g, meta: groupMeta, subs };
       })
       .filter((g) => g.subs.length > 0);
-  }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource, applicationYmdRange.min, applicationYmdRange.max]);
+  }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource, approvedHalfMonthKeys, healingHalfReplaceUsedByMonth, approvedHealingHalfReplaceMonthKeys, allocations, applicationYmdRange.min, applicationYmdRange.max, todayYmd, halfDayUsedByMonth]);
   const leaveGroupsAsset = useMemo(
     () => visibleLeaveGroups.filter((g) => BASE_ASSET_GROUP_KEYS.has(g.key) || g.key.startsWith("custom-asset:")),
     [visibleLeaveGroups],
@@ -619,6 +677,21 @@ export default function LeaveApplyForm({
           setError("하프데이는 수요일을 선택해 주세요.");
           return;
         }
+        if (lt?.code === PM_HALF_MONTH_CODE && isPastHalfdayApplicationDeadlineForMonth(dateStr)) {
+          setError(halfdayApplicationDeadlineError(dateStr));
+          return;
+        }
+        if (lt?.code === PM_HALF_MONTH_CODE) {
+          const mk = monthKeyFromYmd(dateStr);
+          if (!canApplyHalfDayInMonth(mk, halfDayUsedByMonth, approvedHealingHalfReplaceMonthSet)) {
+            setError(
+              approvedHealingHalfReplaceMonthSet.has(mk)
+                ? "해당 월에 힐링데이(하프대체)가 승인되어 하프데이를 신청할 수 없습니다."
+                : "해당 월 하프데이는 이미 신청·사용 중입니다.",
+            );
+            return;
+          }
+        }
         if (isHealingHalfReplaceCode(lt?.code) && isHolidayOrWeekendYmd(dateStr, holidaySetForCalendar)) {
           setError("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
           return;
@@ -696,9 +769,35 @@ export default function LeaveApplyForm({
           return;
         }
       }
-      if (lt && isHalfdayMonthlySharedPoolCode(lt.code) && halfDayUsed >= 1) {
-        setError("하프데이·힐링데이(하프대체)는 같은 달에 합쳐서 1회만 사용할 수 있습니다.");
-        return;
+      if (lt?.code === PM_HALF_MONTH_CODE) {
+        const mk = monthKeyFromYmd(it.startDate);
+        if (!canApplyHalfDayInMonth(mk, halfDayUsedByMonth, approvedHealingHalfReplaceMonthSet)) {
+          if (approvedHealingHalfReplaceMonthSet.has(mk)) {
+            setError("해당 월에 힐링데이(하프대체)가 승인되어 하프데이를 신청할 수 없습니다.");
+          } else {
+            setError("해당 월 하프데이는 이미 신청·사용 중입니다.");
+          }
+          return;
+        }
+        const ymd = it.startDate.slice(0, 10);
+        if (isPastHalfdayApplicationDeadlineForMonth(ymd)) {
+          setError(halfdayApplicationDeadlineError(ymd));
+          return;
+        }
+      }
+      if (lt && isHealingHalfReplaceCode(lt.code)) {
+        const mk = monthKeyFromYmd(it.startDate);
+        if (!approvedHalfMonthSet.has(mk)) {
+          const [y, mo] = mk.split("-");
+          setError(
+            `${y}년 ${Number(mo)}월에 승인된 하프데이가 있을 때만 힐링데이(하프대체)를 신청할 수 있습니다.`,
+          );
+          return;
+        }
+        if ((healingHalfReplaceUsedByMonth[mk] ?? 0) >= 1) {
+          setError("힐링데이(하프대체)는 같은 달에 1회만 신청할 수 있습니다.");
+          return;
+        }
       }
     }
     let annualNeed = 0;
@@ -790,6 +889,10 @@ export default function LeaveApplyForm({
           : 0;
         const polUi     = lt ? leaveTypeWithPolicy(lt) : null;
         const isAnnualDeduct = lt?.deductFromBalance ?? false;
+        const showDualTimeSlot = !!(item.leaveTypeId && lt && polUi?.allowsFullDay && polUi?.allowsHalfDay);
+        const showHalfOnlySlot = !!(item.leaveTypeId && lt && polUi?.allowsHalfDay && !polUi?.allowsFullDay && polUi?.halfDayAmPm === "BOTH");
+        const showGroupSubs = !!(item._groupKey && grp && grp.subs.length > 1 && !showDualTimeSlot);
+        const showAnyUnitStep = showDualTimeSlot || showHalfOnlySlot || showGroupSubs;
 
         return (
           <div key={idx} className="panel overflow-visible">
@@ -828,7 +931,7 @@ export default function LeaveApplyForm({
                   <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                     01. 휴가 종류
                   </p>
-                  <div>
+                  <div {...(idx === 0 ? { "data-tour": "leave-type-asset" } : {})}>
                     <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
                       <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" aria-hidden />
                       자산형 (연차·돌봄·이벤트 등 부여 일수)
@@ -856,7 +959,7 @@ export default function LeaveApplyForm({
                       })}
                     </div>
                   </div>
-                  <div>
+                  <div {...(idx === 0 ? { "data-tour": "leave-type-reason" } : {})}>
                     <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5">
                       <span className="inline-block w-2 h-2 rounded-full bg-amber-400" aria-hidden />
                       사유형 (공가·병가·인정 등)
@@ -898,9 +1001,18 @@ export default function LeaveApplyForm({
                   </section>
                 )}
 
-                {/* STEP 2: 시간대 (서브 옵션이 여러 개인 경우) */}
+                {/* STEP 2: 신청 단위 */}
+                <div className="space-y-4">
+                {!showAnyUnitStep && idx === 0 && (
+                  <div data-tour="leave-unit" className="rounded-lg bg-gray-50/90 border border-gray-100 px-3 py-2.5">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">02. 신청 단위</p>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                      휴가 유형 선택 후 종일·오전·오후 반차 등 단위를 고릅니다.
+                    </p>
+                  </div>
+                )}
                 {/* 종일+반차 겸용 유형(코드 하나): 신청 시 택일 */}
-                {item.leaveTypeId && lt && polUi?.allowsFullDay && polUi?.allowsHalfDay && (
+                {showDualTimeSlot && (
                   <section>
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       02. 신청 단위
@@ -929,8 +1041,7 @@ export default function LeaveApplyForm({
                   </section>
                 )}
 
-                {/* half-only + AM/PM 선택 (예: 생일반차 통합 타입) */}
-                {item.leaveTypeId && lt && polUi?.allowsHalfDay && !polUi?.allowsFullDay && polUi?.halfDayAmPm === "BOTH" && (
+                {showHalfOnlySlot && (
                   <section>
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       02. 시간대
@@ -963,7 +1074,7 @@ export default function LeaveApplyForm({
                   </section>
                 )}
 
-                {item._groupKey && grp && grp.subs.length > 1 && !(item.leaveTypeId && lt && polUi?.allowsFullDay && polUi?.allowsHalfDay) && (
+                {showGroupSubs && (
                   <section>
                     <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-2">
                       02. 시간대
@@ -996,6 +1107,7 @@ export default function LeaveApplyForm({
                     </div>
                   </section>
                 )}
+                </div>
 
                 {/* 스탬프 > 힐링데이: 02에서 힐링 선택 후에만 안내·날짜 (그룹만 고른 상태에서는 숨김) */}
                 {item._groupKey === "stamp" && item._healingSelected && (
@@ -1024,6 +1136,15 @@ export default function LeaveApplyForm({
                 )}
 
                 {/* STEP 3: 신청 기간 */}
+                <div>
+                {!item.leaveTypeId && idx === 0 && (
+                  <div data-tour="leave-dates" className="rounded-lg bg-gray-50/90 border border-gray-100 px-3 py-2.5">
+                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">03. 신청 기간</p>
+                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
+                      유형·단위 선택 후 달력에서 시작일·종료일(또는 하루)을 고릅니다.
+                    </p>
+                  </div>
+                )}
                 {item.leaveTypeId && (!polUi?.allowsFullDay || !polUi?.allowsHalfDay || ["FULL", "AM", "PM"].includes(item.timeSlot ?? "")) && (() => {
                   const dual = !!(polUi?.allowsFullDay && polUi?.allowsHalfDay);
                   const pol = lt ? leaveTypeWithPolicy(lt) : null;
@@ -1071,15 +1192,17 @@ export default function LeaveApplyForm({
                     </div>
 
                     {/* 일수 카운터 (힐링데이는 스탬프 페이지에서만 사용, 여기서는 연차/반차/하프데이 등) */}
-                    {lt?.code === "PM_HALF_MONTH" && (
+                    {lt?.code === PM_HALF_MONTH_CODE && (
                       <p className="mt-2 text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
-                        하프데이는 <strong>수요일 오후</strong>에만 사용 가능합니다.
+                        하프데이는 <strong>수요일 오후</strong>에만 사용 가능합니다. 해당 월{" "}
+                        <strong>첫째 주 수요일({firstWednesdayYmdOfMonth(new Date().getFullYear(), new Date().getMonth() + 1)})</strong>
+                        까지만 신청할 수 있습니다. <strong>승인 전에는 철회</strong>할 수 있고, 승인 후 취소는 불가합니다.
                       </p>
                     )}
                     {lt && isHealingHalfReplaceCode(lt.code) && (
                       <p className="mt-2 text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
-                        힐링데이(하프대체)는 <strong>영업일이면 요일과 관계없이</strong> 신청할 수 있습니다. 휴가일수는{" "}
-                        <strong>0일(출퇴근 조정)</strong>이며, 하프데이와 같은 달 사용 횟수(1회)를 공유합니다.
+                        힐링데이(하프대체)는 <strong>선택한 날짜가 속한 월</strong>에 승인된 하프데이가 있을 때만 신청할 수 있습니다.
+                        휴가일수는 <strong>0일(출퇴근 조정)</strong>이며, 승인 시 기존 하프데이는 자동 취소됩니다.
                       </p>
                     )}
                     <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 text-sm ${
@@ -1123,6 +1246,7 @@ export default function LeaveApplyForm({
                   </section>
                   );
                 })()}
+                </div>
 
                 {/* 연차 가용 현황 */}
                 {isAnnualDeduct && item.leaveTypeId && (
@@ -1223,7 +1347,7 @@ export default function LeaveApplyForm({
       })}
 
       {/* 항목 추가 버튼 */}
-      <button type="button" onClick={addItem}
+      <button type="button" onClick={addItem} data-tour="leave-add-item"
         className="w-full py-3 border-2 border-dashed border-blue-300 rounded-xl
                    flex items-center justify-center gap-2
                    text-sm font-medium text-blue-500

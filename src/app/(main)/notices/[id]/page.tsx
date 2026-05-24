@@ -4,12 +4,14 @@ import prisma from "@/lib/db";
 import Link from "next/link";
 import { formatYMD } from "@/lib/dateUtils";
 import { sanitizeHtml } from "@/lib/sanitize";
+import { employeeMatchesAudience } from "@/lib/audienceAccess";
 
 export const metadata = { title: "공지사항 | GBIT Portal" };
 
 export default async function NoticeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) redirect("/login");
+  const user = session.user as { employeeId: string };
 
   const { id } = await params;
   const notice = await prisma.notice.findUnique({
@@ -17,6 +19,16 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
     include: { author: { select: { name: true } } },
   });
   if (!notice) notFound();
+
+  const emp = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  const allowed = await employeeMatchesAudience(prisma, user.employeeId, emp?.employeeType, {
+    audience: notice.audience,
+    employeeGroupId: notice.employeeGroupId,
+  });
+  if (!allowed) notFound();
 
   return (
     <div className="max-w-3xl">

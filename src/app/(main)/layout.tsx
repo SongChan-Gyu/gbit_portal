@@ -4,6 +4,7 @@ import { SessionProvider } from "next-auth/react";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import ImpersonationBanner from "@/components/layout/ImpersonationBanner";
+import LoginAnnouncementGate from "@/components/login-announcement/LoginAnnouncementGate";
 import prisma from "@/lib/db";
 import { DEFAULT_PERMISSIONS } from "@/lib/menuConfig";
 import { isWelfareDept } from "@/lib/jeju";
@@ -36,7 +37,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
 
   // 설정 관리자: 역할 변경 없이 설정 메뉴만 추가 노출
   if (employee?.isSettingsAdmin && !["PM", "ADMIN"].includes(user.role)) {
-    const settingsKeys = ["admin_leave_settings", "admin_leave_mgmt", "admin_forms", "admin_form_target_groups"];
+    const settingsKeys = ["admin_leave_settings", "admin_leave_mgmt", "admin_forms", "admin_employee_groups", "admin_login_announcements"];
     for (const k of settingsKeys) {
       if (!allowedMenuKeys.includes(k)) allowedMenuKeys = [...allowedMenuKeys, k];
     }
@@ -52,7 +53,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         { audience: isExternal ? "EXTERNAL" : "INTERNAL" },
         {
           audience: "GROUP",
-          targetGroup: { members: { some: { employeeId: user.employeeId } } },
+          employeeGroup: { members: { some: { employeeId: user.employeeId } } },
         },
       ],
     },
@@ -65,6 +66,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
       {/* 상단: 전환 배너(있을 때) + 본문 영역; 배너는 문서 흐름이라 메뉴를 덮지 않음 */}
       <div className="flex flex-col h-[100dvh] min-h-0 max-w-[100vw] overflow-hidden overflow-x-hidden bg-gray-50">
         <ImpersonationBanner />
+        <LoginAnnouncementGate />
         <div className="flex flex-1 min-h-0 max-w-full overflow-hidden overflow-x-hidden">
           {/* 사이드바 - 데스크톱 */}
           <aside className="hidden md:flex flex-col w-64 lg:w-72 shrink-0 bg-white border-r border-gray-100 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">

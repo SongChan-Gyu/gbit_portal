@@ -9,6 +9,8 @@ export default function MyLeaveRequestFooter({
   status,
   showDetail,
   detailSummaryLabel,
+  allowWithdraw = true,
+  allowCancelRequest = true,
   children,
 }: {
   requestId: string;
@@ -16,6 +18,8 @@ export default function MyLeaveRequestFooter({
   showDetail: boolean;
   /** 예: "신청·결재 상세" | "상세보기" */
   detailSummaryLabel: string;
+  allowWithdraw?: boolean;
+  allowCancelRequest?: boolean;
   children?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -24,17 +28,27 @@ export default function MyLeaveRequestFooter({
     <div className="border-t border-gray-100 bg-gray-50/90 md:bg-gray-50/30">
       <div className="grid grid-cols-2 divide-x divide-gray-100">
         <div className="flex min-h-[48px] items-stretch justify-center">
-          {status === "PENDING" && (
+          {status === "PENDING" && allowWithdraw && (
             <CancelButton
               requestId={requestId}
               className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 bg-transparent hover:bg-red-50 text-sm font-medium"
             />
           )}
-          {status === "APPROVED" && (
+          {status === "PENDING" && !allowWithdraw && (
+            <span className="flex flex-1 items-center justify-center text-xs text-gray-500 px-2 text-center">
+              철회할 수 없습니다
+            </span>
+          )}
+          {status === "APPROVED" && allowCancelRequest && (
             <CancelRequestButton
               requestId={requestId}
               className="flex-1 w-full rounded-none min-h-[48px] justify-center border-0 border-transparent bg-transparent hover:bg-orange-50 text-sm font-medium"
             />
+          )}
+          {status === "APPROVED" && !allowCancelRequest && (
+            <span className="flex flex-1 items-center justify-center text-xs text-gray-500 px-2 text-center">
+              승인된 하프데이는 취소 불가
+            </span>
           )}
           {status === "CANCEL_REQUESTED" && (
             <span className="flex flex-1 items-center justify-center text-xs text-orange-800 bg-orange-50/90 px-2 text-center">

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { formatMDWithDay } from "@/lib/dateUtils";
-import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { mergedLeaveTypeLabel, formatLeaveItemDaysLabel } from "@/lib/leaveDisplay";
 
 type RequestItem = {
   id: string;
@@ -35,7 +35,7 @@ type UsageRow = {
   color: string;
   usedDays: number;
   lastUsedAt: number;
-  entries: Array<{ id: string; period: string; days: number; startAt: number }>;
+  entries: Array<{ id: string; period: string; days: number; startAt: number; daysLabel: string }>;
 };
 
 export default function MyLeaveByTypeTable({ requests }: Props) {
@@ -60,13 +60,25 @@ export default function MyLeaveByTypeTable({ requests }: Props) {
             color: c,
             usedDays: item.days,
             lastUsedAt: ts,
-            entries: [{ id: item.id, period: s, days: item.days, startAt: ts }],
+            entries: [{
+              id: item.id,
+              period: s,
+              days: item.days,
+              startAt: ts,
+              daysLabel: formatLeaveItemDaysLabel(item, item.leaveType as any),
+            }],
           });
           continue;
         }
         prev.usedDays += item.days;
         if (ts > prev.lastUsedAt) prev.lastUsedAt = ts;
-        prev.entries.push({ id: item.id, period: s, days: item.days, startAt: ts });
+        prev.entries.push({
+          id: item.id,
+          period: s,
+          days: item.days,
+          startAt: ts,
+          daysLabel: formatLeaveItemDaysLabel(item, item.leaveType as any),
+        });
       }
     }
     return [...map.values()]
@@ -114,7 +126,7 @@ export default function MyLeaveByTypeTable({ requests }: Props) {
               {row.entries.slice(0, 8).map((e) => (
                 <li key={e.id} className="text-sm text-gray-700 flex items-center justify-between gap-3">
                   <span className="text-gray-500">{e.period}</span>
-                  <span className="tabular-nums font-medium">{e.days.toFixed(1)}일</span>
+                  <span className="tabular-nums font-medium">{e.daysLabel}</span>
                 </li>
               ))}
             </ul>

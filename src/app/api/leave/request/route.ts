@@ -17,8 +17,12 @@ import { calcWorkingDays, getFiscalYearFromStr, listWorkingYmds, splitYmdRangeBy
 import { calcHolidayExtFullDays, isHolidayOrWeekendYmd, isValidHolidayExtDay } from "@/lib/holidayExt";
 import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
 import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
-import { isHealingHalfReplaceCode, isHalfdayMonthlySharedPoolCode } from "@/lib/healingLeaveCodes";
-const PM_HALF_MONTH_CODE = "PM_HALF_MONTH";
+import { isHealingHalfReplaceCode, HEALING_DAY_HALF_REPLACE_CODE } from "@/lib/healingLeaveCodes";
+import {
+  PM_HALF_MONTH_CODE,
+  halfdayApplicationDeadlineError,
+  isPastHalfdayApplicationDeadlineForMonth,
+} from "@/lib/halfdayPolicy";
 
 export async function POST(req: Request) {
   try {
@@ -51,11 +55,10 @@ export async function POST(req: Request) {
     const leaveTypes = await prisma.leaveType.findMany({ where: { id: { in: ltIds } } });
     const ltMap = Object.fromEntries(leaveTypes.map((t) => [t.id, t]));
 
-    const [pmPoolLt, hrPoolLt] = await Promise.all([
-      prisma.leaveType.findUnique({ where: { code: "PM_HALF_MONTH" }, select: { id: true } }),
-      prisma.leaveType.findUnique({ where: { code: "HEALING_DAY_HALF_REPLACE" }, select: { id: true } }),
-    ]);
-    const halfdaySharedPoolIds = [pmPoolLt?.id, hrPoolLt?.id].filter(Boolean) as string[];
+    const pmPoolLt = await prisma.leaveType.findUnique({
+      where: { code: "PM_HALF_MONTH" },
+      select: { id: true },
+    });
 
     /** 공휴일(영업일·연휴연장 계산용) — 신청 입력 일자 기준 */
     const itemYmdsEarly = items.flatMap((i) => [i.startDate.slice(0, 10), i.endDate.slice(0, 10)]);
@@ -221,41 +224,109 @@ export async function POST(req: Request) {
         if (!isWednesdayYMD(ymd)) {
           return NextResponse.json({ error: "하프데이는 수요일에만 신청할 수 있습니다." }, { status: 400 });
         }
+        if (isPastHalfdayApplicationDeadlineForMonth(ymd)) {
+          return NextResponse.json({ error: halfdayApplicationDeadlineError(ymd) }, { status: 400 });
+        }
       }
 
-      if (halfdaySharedPoolIds.length && isHalfdayMonthlySharedPoolCode(lt.code)) {
-        const s = new Date(it.startDate);
-        const cnt = await prisma.leaveRequestItem.count({
+      if (isHealingHalfReplaceCode(lt.code)) {
+        const ymd = it.startDate.slice(0, 10);
+        if (isHolidayOrWeekendYmd(ymd, holidaySet)) {
+          return NextResponse.json(
+            { error: "힐링데이(하프대체)는 영업일만 신청할 수 있습니다." },
+            { status: 400 },
+          );
+        }
+        const [y, mo] = ymd.split("-").map(Number);
+        const monthStart = new Date(y, mo - 1, 1);
+        const monthEnd = new Date(y, mo, 1);
+        const approvedHalf = await prisma.leaveRequestItem.findFirst({
           where: {
-            leaveTypeId: { in: halfdaySharedPoolIds },
+            leaveType: { code: PM_HALF_MONTH_CODE },
+            startDate: { gte: monthStart, lt: monthEnd },
+            leaveRequest: {
+              employeeId: user.employeeId,
+              status: "APPROVED",
+            },
+          },
+        });
+        if (!approvedHalf) {
+          return NextResponse.json(
+            {
+              error:
+                "힐링데이(하프대체)는 해당 월에 승인된 하프데이가 있을 때만 신청할 수 있습니다. 먼저 하프데이를 신청·승인해 주세요.",
+            },
+            { status: 400 },
+          );
+        }
+        const healingCnt = await prisma.leaveRequestItem.count({
+          where: {
+            leaveType: { code: lt.code },
+            startDate: { gte: monthStart, lt: monthEnd },
             leaveRequest: {
               employeeId: user.employeeId,
               status: { notIn: ["CANCELLED", "WITHDRAWN", "REJECTED"] },
-              startDate: {
-                gte: new Date(s.getFullYear(), s.getMonth(), 1),
-                lt: new Date(s.getFullYear(), s.getMonth() + 1, 1),
-              },
+            },
+          },
+        });
+        if (healingCnt >= 1) {
+          return NextResponse.json(
+            { error: "힐링데이(하프대체)는 같은 달에 1회만 신청할 수 있습니다." },
+            { status: 400 },
+          );
+        }
+        continue;
+      }
+
+      if (lt.code === PM_HALF_MONTH_CODE && pmPoolLt?.id) {
+        const ymd = it.startDate.slice(0, 10);
+        const [y, mo] = ymd.split("-").map(Number);
+        const monthStart = new Date(y, mo - 1, 1);
+        const monthEnd = new Date(y, mo, 1);
+        const approvedHealing = await prisma.leaveRequestItem.findFirst({
+          where: {
+            leaveType: { code: HEALING_DAY_HALF_REPLACE_CODE },
+            startDate: { gte: monthStart, lt: monthEnd },
+            leaveRequest: {
+              employeeId: user.employeeId,
+              status: "APPROVED",
+            },
+          },
+        });
+        if (approvedHealing) {
+          return NextResponse.json(
+            { error: "해당 월에 힐링데이(하프대체)가 승인되어 하프데이를 신청할 수 없습니다." },
+            { status: 400 },
+          );
+        }
+        const cnt = await prisma.leaveRequestItem.count({
+          where: {
+            leaveTypeId: pmPoolLt.id,
+            startDate: { gte: monthStart, lt: monthEnd },
+            leaveRequest: {
+              employeeId: user.employeeId,
+              status: { notIn: ["CANCELLED", "WITHDRAWN", "REJECTED"] },
             },
           },
         });
         if (cnt >= 1) {
           return NextResponse.json(
-            { error: "하프데이·힐링데이(하프대체)는 같은 달에 합쳐서 1회만 사용할 수 있습니다." },
+            { error: "해당 월 하프데이는 이미 신청·사용 중입니다." },
             { status: 400 },
           );
         }
       } else if (lt.maxPerMonth) {
-        const s = new Date(it.startDate);
+        const ymd = it.startDate.slice(0, 10);
+        const [y, mo] = ymd.split("-").map(Number);
+        const monthStart = new Date(y, mo - 1, 1);
+        const monthEnd = new Date(y, mo, 1);
         const cnt = await prisma.leaveRequestItem.count({
           where: {
             leaveTypeId: lt.id,
+            startDate: { gte: monthStart, lt: monthEnd },
             leaveRequest: {
               employeeId: user.employeeId,
               status: { notIn: ["CANCELLED", "WITHDRAWN", "REJECTED"] },
-              startDate: {
-                gte: new Date(s.getFullYear(), s.getMonth(), 1),
-                lt: new Date(s.getFullYear(), s.getMonth() + 1, 1),
-              },
             },
           },
         });

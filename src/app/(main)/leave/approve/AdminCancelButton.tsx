@@ -4,12 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { XCircle } from "lucide-react";
 
-export default function AdminCancelButton({ requestId }: { requestId: string }) {
+export default function AdminCancelButton({
+  requestId,
+  disabled,
+  disabledReason,
+}: {
+  requestId: string;
+  disabled?: boolean;
+  disabledReason?: string;
+}) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
 
   async function handleCancel() {
+    if (disabled) return;
     if (!confirm("이 휴가를 관리자 직권으로 취소합니다. 할당(연차 등)이 복원됩니다. 계속하시겠습니까?")) return;
     setLoading(true);
     setErr("");
@@ -26,6 +35,14 @@ export default function AdminCancelButton({ requestId }: { requestId: string }) 
       setErr("요청 중 오류가 발생했습니다.");
     }
     setLoading(false);
+  }
+
+  if (disabled) {
+    return (
+      <span className="text-[10px] text-gray-500" title={disabledReason}>
+        {disabledReason ?? "취소 불가"}
+      </span>
+    );
   }
 
   return (

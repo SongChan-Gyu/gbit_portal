@@ -22,14 +22,28 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const guard = requirePMOrAdmin(u); if (guard) return guard;
   const { id } = await ctx.params;
   const body = await req.json().catch(() => ({}));
-  const { title, content } = body;
+  const { title, content, audience, employeeGroupId } = body;
   if (!title || typeof content !== "string")
     return NextResponse.json({ error: "제목과 내용은 필수입니다." }, { status: 400 });
+
+  const aud = audience != null ? String(audience) : undefined;
+  let gid: string | null | undefined = undefined;
+  if (aud === "GROUP") {
+    gid = employeeGroupId ? String(employeeGroupId) : null;
+    if (!gid) return NextResponse.json({ error: "지정 그룹을 선택하세요." }, { status: 400 });
+  } else if (aud != null) {
+    gid = null;
+  }
 
   const before = await prisma.notice.findUnique({ where: { id }, select: { title: true } });
   const notice = await prisma.notice.update({
     where: { id },
-    data: { title: String(title).trim(), content },
+    data: {
+      title: String(title).trim(),
+      content,
+      ...(aud != null ? { audience: aud } : {}),
+      ...(gid !== undefined ? { employeeGroupId: gid } : {}),
+    },
     include: { author: { select: { name: true } } },
   });
   await writeAudit({

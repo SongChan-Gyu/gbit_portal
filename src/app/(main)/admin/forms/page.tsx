@@ -16,7 +16,7 @@ export default async function AdminFormsPage() {
     include: {
       _count: { select: { submissions: true } },
       fields: { orderBy: { sortOrder: "asc" } },
-      targetGroup: { select: { name: true } },
+      employeeGroup: { select: { name: true } },
     },
   });
 
@@ -31,10 +31,10 @@ export default async function AdminFormsPage() {
         </div>
         <div className="flex flex-wrap gap-2 shrink-0">
           <Link
-            href="/admin/form-target-groups"
+            href="/admin/groups"
             className="text-sm py-2.5 px-4 rounded-lg font-medium border border-indigo-200 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 inline-flex items-center justify-center"
           >
-            대상 그룹
+            그룹 설정
           </Link>
           <Link
             href="/admin/forms/new"

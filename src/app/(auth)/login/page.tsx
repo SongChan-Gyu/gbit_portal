@@ -3,6 +3,7 @@ import { useState, useEffect, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { AlertCircle, Lock, Sparkles, User } from "lucide-react";
+import { clearLoginAnnouncementSessionDismissals } from "@/lib/loginAnnouncementSession";
 
 function LoginForm() {
   const [username, setUsername] = useState("");
@@ -25,6 +26,7 @@ function LoginForm() {
     setLoading(false);
     if (res?.error) setError("아이디 또는 비밀번호가 올바르지 않습니다.");
     else {
+      clearLoginAnnouncementSessionDismissals();
       try {
         const meRes = await fetch("/api/me");
         const me = await meRes.json().catch(() => ({}));

@@ -22,6 +22,7 @@ export type FormDef = {
   audience: "ALL" | "INTERNAL" | "EXTERNAL" | "GROUP";
   targetGroupId: string | null;
   isAnonymous: boolean;
+  submitDeadline: string;
   fields: FormFieldDef[];
 };
 
@@ -64,6 +65,7 @@ export default function FormBuilder({
     audience: "ALL",
     targetGroupId: null,
     isAnonymous: false,
+    submitDeadline: "",
     fields: [],
   });
   const [targetGroups, setTargetGroups] = useState<TargetGroupOpt[]>([]);
@@ -71,7 +73,7 @@ export default function FormBuilder({
   useEffect(() => {
     let cancel = false;
     (async () => {
-      const res = await fetch("/api/admin/form-target-groups");
+      const res = await fetch("/api/admin/groups");
       if (!res.ok || cancel) return;
       const list = (await res.json()) as TargetGroupOpt[];
       if (!cancel) setTargetGroups(list);
@@ -93,6 +95,7 @@ export default function FormBuilder({
         audience: aud,
         targetGroupId: initial.targetGroupId ?? null,
         isAnonymous: initial.isAnonymous ?? false,
+        submitDeadline: initial.submitDeadline ?? "",
         fields: initial.fields.map((f) => ({
           ...f,
           options: OPTIONS_TYPES.includes(f.fieldType) ? (f.options ?? [""]) : undefined,
@@ -164,6 +167,7 @@ export default function FormBuilder({
       audience: audiencePayload,
       targetGroupId: targetGroupPayload,
       isAnonymous: form.isAnonymous,
+      submitDeadline: form.submitDeadline.trim() || null,
       fields: form.fields.map((f) => ({
         label: f.label.trim(),
         fieldType: f.fieldType,
@@ -237,6 +241,18 @@ export default function FormBuilder({
             placeholder="안내 문구"
           />
         </div>
+        <div>
+          <label className="label">제출 유효기간 (알림톡용)</label>
+          <p className="text-xs text-gray-500 mb-1">
+            임직원 대상 알림톡 발송 시 note4에 표시됩니다. 발송 전 반드시 설정해 주세요.
+          </p>
+          <input
+            type="datetime-local"
+            className="input w-full max-w-xs"
+            value={form.submitDeadline}
+            onChange={(e) => set("submitDeadline", e.target.value)}
+          />
+        </div>
         <div className="space-y-3 pt-1">
           <label className="flex items-center gap-2">
             <input
@@ -260,11 +276,11 @@ export default function FormBuilder({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <label className="label mb-0">제출·접근 허용 대상</label>
             <Link
-              href="/admin/form-target-groups"
+              href="/admin/groups"
               className="text-xs font-medium text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1"
             >
               <UsersRound className="w-3.5 h-3.5" />
-              대상 그룹 관리
+              그룹 설정
             </Link>
           </div>
           <p className="text-xs text-gray-500 -mt-1">

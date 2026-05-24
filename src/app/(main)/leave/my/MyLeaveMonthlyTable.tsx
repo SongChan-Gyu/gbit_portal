@@ -1,7 +1,7 @@
 "use client";
 
 import { formatMDWithDay } from "@/lib/dateUtils";
-import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { mergedLeaveTypeLabel, formatLeaveItemDaysLabel } from "@/lib/leaveDisplay";
 
 interface ReqItem {
   leaveTypeName:string; leaveTypeColor:string;
@@ -119,7 +119,22 @@ export default function MyLeaveMonthlyTable({ monthlyUsage, monthLabels, request
                               </>
                             );
                           })()}
-                          <span className="text-gray-500">{it.days}일</span>
+                          <span className="text-gray-500">
+                            {formatLeaveItemDaysLabel(
+                              { days: it.days, timeSlot: it.timeSlot ?? null },
+                              {
+                                name: it.leaveTypeName,
+                                color: it.leaveTypeColor,
+                                applyGroupKey: it.leaveTypeApplyGroupKey ?? null,
+                                isHalf: !!it.isHalf,
+                                isAmOnly: !!it.isAmOnly,
+                                isPmOnly: !!it.isPmOnly,
+                                allowsFullDay: it.allowsFullDay ?? null,
+                                allowsHalfDay: it.allowsHalfDay ?? null,
+                                halfDayAmPm: it.halfDayAmPm ?? null,
+                              },
+                            )}
+                          </span>
                           <span className="text-gray-400 text-[10px]">
                             ({formatMDWithDay(new Date(it.startDate))}
                             {it.startDate !== it.endDate &&

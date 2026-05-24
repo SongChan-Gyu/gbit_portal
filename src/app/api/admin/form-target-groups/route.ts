@@ -10,7 +10,7 @@ export async function GET() {
   const guard = requireSettingsAccess(u);
   if (guard) return guard;
 
-  const groups = await prisma.formTargetGroup.findMany({
+  const groups = await prisma.employeeGroup.findMany({
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: { _count: { select: { members: true, forms: true } } },
   });
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "그룹 이름을 입력해 주세요." }, { status: 400 });
   }
 
-  const g = await prisma.formTargetGroup.create({
+  const g = await prisma.employeeGroup.create({
     data: {
       name: name.slice(0, 120),
       members:

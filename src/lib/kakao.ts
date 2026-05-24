@@ -115,7 +115,7 @@ function directsendNotesForPortalTemplateV1(
     case "EXTERNAL_INVITE":
       return [g("이름"), g("가입링크"), g("만료일"), "", ""];
     case "FORM_REMINDER":
-      return [g("이름"), g("양식명"), g("링크"), "", ""];
+      return [g("이름"), g("양식명"), g("링크"), g("제출유효기간"), ""];
     case "JEJU_DEPOSIT_REMINDER":
       return [g("이름"), g("이용기간"), g("입금안내"), "", ""];
     default:
@@ -196,7 +196,13 @@ function directsendNotesForPortalTemplateV2(
     case "EXTERNAL_INVITE":
       return [g("이름"), g("가입링크"), g("만료일"), "", ""];
     case "FORM_REMINDER":
-      return [g("이름"), g("양식명"), g("링크"), "", alimtalkPortalPathUrl(g("링크경로") || "/dashboard")];
+      return [
+        g("이름"),
+        g("양식명"),
+        g("링크"),
+        g("제출유효기간"),
+        alimtalkPortalPathUrl(g("링크경로") || "/dashboard"),
+      ];
     case "JEJU_DEPOSIT_REMINDER":
       return [g("이름"), g("이용기간"), g("입금안내"), "", alimtalkPortalPathUrl("/jeju/my")];
     default:
@@ -382,7 +388,7 @@ export async function sendJejuApplicantAlimtalk(
 
 /**
  * 유동양식 제출 요청 알림톡 (FORM_REMINDER)
- * note1=이름, note2=양식명, note3=링크, note5(v2)=포털URL
+ * note1=이름, note2=양식명, note3=링크, note4=제출유효기간, note5(v2)=포털URL
  */
 export async function sendFormReminderAlimtalk(
   prisma: DB,
@@ -391,6 +397,7 @@ export async function sendFormReminderAlimtalk(
   name: string,
   formTitle: string,
   formUrl: string,
+  submitDeadlineLabel: string,
 ) {
   await sendAlimtalk(prisma, employeeId, phone, "FORM_REMINDER", {
     수신자명: name,
@@ -398,6 +405,7 @@ export async function sendFormReminderAlimtalk(
     양식명: formTitle,
     링크: formUrl,
     링크경로: formUrl,
+    제출유효기간: submitDeadlineLabel,
   });
 }
 

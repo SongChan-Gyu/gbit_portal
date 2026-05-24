@@ -15,7 +15,7 @@ type FormWithCount = {
   showInMenu: boolean;
   audience: string;
   isAnonymous: boolean;
-  targetGroup: { name: string } | null;
+  employeeGroup: { name: string } | null;
   _count: { submissions: number };
   fields: { id: string; label: string }[];
 };
@@ -66,7 +66,7 @@ export default function FormListClient({ forms }: { forms: FormWithCount[] }) {
               {f.slug ? <span>/f/{f.slug}</span> : <span className="text-orange-500">공개링크없음</span>}
               <span>· 필드 {f.fields.length}개 · 제출 {f._count.submissions}건</span>
               <span>
-                · 대상 {audienceLabel(f.audience, f.targetGroup?.name ?? null)}
+                · 대상 {audienceLabel(f.audience, f.employeeGroup?.name ?? null)}
               </span>
               {f.showInMenu && <span className="text-blue-600">· 메뉴 노출</span>}
             </p>

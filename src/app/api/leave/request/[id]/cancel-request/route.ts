@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
+import { requestHasPmHalfMonth } from "@/lib/halfdayPolicy";
 
 /**
  * POST /api/leave/request/[id]/cancel-request
@@ -31,6 +32,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
   if (request.status !== "APPROVED")
     return NextResponse.json({ error: "승인된 휴가만 취소 신청 가능합니다." }, { status: 400 });
+  if (requestHasPmHalfMonth(request.items))
+    return NextResponse.json({ error: "하프데이는 취소·철회할 수 없습니다." }, { status: 400 });
 
   const applicant = await prisma.employee.findUnique({
     where: { id: request.employeeId },

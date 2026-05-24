@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import Link from "next/link";
 import { formatYMD } from "@/lib/dateUtils";
+import { audienceLabel } from "@/lib/audienceAccess";
 
 export const metadata = { title: "공지사항 관리 | GBIT Portal" };
 
@@ -13,7 +14,10 @@ export default async function AdminNoticesPage() {
 
   const notices = await prisma.notice.findMany({
     orderBy: { createdAt: "desc" },
-    include: { author: { select: { name: true } } },
+    include: {
+      author: { select: { name: true } },
+      employeeGroup: { select: { name: true } },
+    },
   });
 
   return (
@@ -38,7 +42,9 @@ export default async function AdminNoticesPage() {
               <div className="rounded-lg border border-gray-200 bg-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
                   <Link href={`/notices/${n.id}`} className="font-medium text-gray-800 hover:underline">{n.title}</Link>
-                  <p className="text-xs text-gray-500 mt-0.5">{n.author.name} · {formatYMD(n.createdAt)}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {audienceLabel(n.audience, n.employeeGroup?.name)} · {n.author.name} · {formatYMD(n.createdAt)}
+                  </p>
                 </div>
                 <Link href={`/admin/notices/${n.id}/edit`} className="text-sm text-blue-600 hover:text-blue-800 shrink-0">수정</Link>
               </div>

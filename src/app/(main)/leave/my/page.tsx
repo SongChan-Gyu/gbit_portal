@@ -9,10 +9,11 @@ import CancelRequestButton from "./CancelRequestButton";
 import MyLeaveMonthlyTable from "./MyLeaveMonthlyTable";
 import MyLeaveByTypeTable from "./MyLeaveByTypeTable";
 import { redirect } from "next/navigation";
-import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { mergedLeaveTypeLabel, formatLeaveItemDaysLabel, formatLeaveRequestDaysLabel } from "@/lib/leaveDisplay";
 import { leaveRequestStatusMeta } from "@/lib/statusMeta";
 import MyLeaveRequestFooter from "./MyLeaveRequestFooter";
 import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { requestHasPmHalfMonth } from "@/lib/halfdayPolicy";
 
 const REQUEST_TAB_OPTIONS = [
   { key: "list", label: "목록" },
@@ -523,7 +524,16 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                       <p className="text-sm text-gray-600">
                         {formatMDWithDay(req.startDate)}
                         {req.startDate.toDateString() !== req.endDate.toDateString() && ` ~ ${formatMDWithDay(req.endDate)}`}
-                        <span className="text-slate-800 font-semibold ml-1 tabular-nums">· {req.totalDays}일</span>
+                        <span className="text-slate-800 font-semibold ml-1 tabular-nums">
+                          · {formatLeaveRequestDaysLabel(
+                            req.items.map((it) => ({
+                              days: it.days,
+                              timeSlot: it.timeSlot ?? null,
+                              leaveType: it.leaveType as any,
+                            })),
+                            req.totalDays,
+                          )}
+                        </span>
                       </p>
                     </div>
                     {(() => {
@@ -564,7 +574,12 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                                   {it.startDate.toDateString() !== it.endDate.toDateString() &&
                                     ` ~ ${formatMDWithDay(it.endDate)}`}
                                 </span>
-                                <span className="text-slate-700 tabular-nums font-semibold">{it.days}일</span>
+                                <span className="text-slate-700 tabular-nums font-semibold">
+                                  {formatLeaveItemDaysLabel(
+                                    { days: it.days, timeSlot: it.timeSlot ?? null },
+                                    it.leaveType as any,
+                                  )}
+                                </span>
                                 {it.reason?.trim() && it.reason.trim().length >= 2 && (
                                   <span className="text-gray-400 w-full text-[11px]">사유: {it.reason.trim()}</span>
                                 )}
@@ -589,6 +604,8 @@ export default async function MyLeavePage({ searchParams }: { searchParams: Prom
                       status={req.status}
                       showDetail={showDetail}
                       detailSummaryLabel={isCompound ? "신청 상세" : "상세보기"}
+                      allowWithdraw
+                      allowCancelRequest={!requestHasPmHalfMonth(req.items)}
                     >
                       {detailBlock}
                     </MyLeaveRequestFooter>

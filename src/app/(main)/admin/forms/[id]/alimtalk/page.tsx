@@ -4,6 +4,7 @@ import Link from "next/link";
 import prisma from "@/lib/db";
 import { canAccessSettings } from "@/lib/authGuard";
 import { employeesForFormAlimtalk, audienceLabel } from "@/lib/formAccess";
+import { formatFormSubmitDeadlineLabel } from "@/lib/formSubmitDeadline";
 import FormAlimtalkClient from "./FormAlimtalkClient";
 
 export const metadata = { title: "양식 알림 발송 | GBIT Portal" };
@@ -21,9 +22,10 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
       title: true,
       slug: true,
       audience: true,
-      targetGroupId: true,
+      employeeGroupId: true,
       isActive: true,
-      targetGroup: { select: { name: true } },
+      submitDeadline: true,
+      employeeGroup: { select: { name: true } },
     },
   });
   if (!form) redirect("/admin/forms");
@@ -32,7 +34,7 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
 
   const employees = await employeesForFormAlimtalk(prisma, {
     audience,
-    targetGroupId: form.targetGroupId,
+    targetGroupId: form.employeeGroupId,
   });
 
   // 이 양식에 대한 최근 발송 로그 (FORM_REMINDER)
@@ -68,6 +70,8 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
   });
   const submittedEmployeeIds = new Set(submissions.map((s) => s.employeeId).filter(Boolean) as string[]);
 
+  const submitDeadlineLabel = formatFormSubmitDeadlineLabel(form.submitDeadline);
+
   return (
     <div className="max-w-4xl">
       <div className="mb-6">
@@ -76,8 +80,9 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
         </Link>
         <h1 className="page-title mt-2">{form.title} · 알림 발송</h1>
         <p className="text-sm text-gray-500 mt-0.5">
-          대상: {audienceLabel(audience, form.targetGroup?.name ?? null)} ·{" "}
+          대상: {audienceLabel(audience, form.employeeGroup?.name ?? null)} ·{" "}
           {form.isActive ? "활성" : "비활성"} · {formUrl}
+          {form.submitDeadline && <> · 제출 유효기간 {submitDeadlineLabel}</>}
         </p>
       </div>
 
@@ -85,6 +90,8 @@ export default async function FormAlimtalkPage({ params }: { params: Promise<{ i
         formId={id}
         formTitle={form.title}
         formUrl={formUrl}
+        submitDeadlineLabel={submitDeadlineLabel}
+        hasSubmitDeadline={!!form.submitDeadline}
         employees={employees.map((e) => ({
           id: e.id,
           name: e.name,

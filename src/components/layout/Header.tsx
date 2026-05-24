@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { LogOut, Menu, X } from "lucide-react";
 import Sidebar from "./Sidebar";
 import NotificationBell from "./NotificationBell";
+import { clearLoginAnnouncementSessionDismissals } from "@/lib/loginAnnouncementSession";
 
 const ROLE_LABEL: Record<string, string> = {
   STAFF: "팀원", TEAM_LEAD: "팀장", PM: "PM", ADMIN: "관리자",
@@ -51,6 +52,7 @@ export default function Header({ allowedMenuKeys, formMenuItems }: { allowedMenu
   }, [open]);
 
   async function handleSignOut() {
+    clearLoginAnnouncementSessionDismissals();
     try {
       await signOut({ callbackUrl: "/login", redirect: false });
     } catch {

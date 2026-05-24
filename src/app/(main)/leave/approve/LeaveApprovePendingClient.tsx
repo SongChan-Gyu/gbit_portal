@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { formatMDWithDay, formatYMD } from "@/lib/dateUtils";
-import { mergedLeaveTypeLabel } from "@/lib/leaveDisplay";
+import { mergedLeaveTypeLabel, formatLeaveItemDaysLabel, formatLeaveRequestDaysLabel } from "@/lib/leaveDisplay";
 import ApproveActions from "./ApproveActions";
 import CancelApproveActions from "./CancelApproveActions";
 import { CheckCircle2 } from "lucide-react";
@@ -17,7 +17,18 @@ type SerializedReq = {
     reason: string | null;
     balanceComment?: string | null;
     timeSlot?: string | null;
-    leaveType: { name: string; color: string; code?: string };
+    leaveType: {
+      name: string;
+      color: string;
+      code?: string;
+      applyGroupKey?: string | null;
+      isHalf?: boolean;
+      isAmOnly?: boolean;
+      isPmOnly?: boolean;
+      allowsFullDay?: boolean | null;
+      allowsHalfDay?: boolean | null;
+      halfDayAmPm?: string | null;
+    };
     startDate: string;
     endDate: string;
   }>;
@@ -50,7 +61,7 @@ function summaryLine(req: SerializedReq): string {
       it.leaveType as any,
       { timeSlot: it.timeSlot ?? null },
     );
-    return `${formatMDWithDay(it.startDate)} · ${mergedName} ${it.days}일`;
+    return `${formatMDWithDay(it.startDate)} · ${mergedName} ${formatLeaveItemDaysLabel(it, it.leaveType as any)}`;
   }
   const a = formatMDWithDay(req.startDate);
   const b = formatMDWithDay(req.endDate);
@@ -63,7 +74,15 @@ function summaryLine(req: SerializedReq): string {
 }
 
 function detailTitle(req: SerializedReq): string {
-  return `${req.employee.name} · 신청 ${req.items.length}항목 · 합계 ${req.totalDays}일`;
+  const daysLabel = formatLeaveRequestDaysLabel(
+    req.items.map((i) => ({
+      days: i.days,
+      timeSlot: i.timeSlot ?? null,
+      leaveType: i.leaveType as Parameters<typeof formatLeaveRequestDaysLabel>[0][0]["leaveType"],
+    })),
+    req.totalDays,
+  );
+  return `${req.employee.name} · 신청 ${req.items.length}항목 · 합계 ${daysLabel}`;
 }
 
 /** 신청 내역과 같은 한 줄: 유형(색/병가빨강) 날짜 **N일** */
@@ -89,7 +108,9 @@ function ItemDetailLine({ it }: { it: SerializedReq["items"][0] }) {
           {mergedName}
         </span>{" "}
         <span className="text-slate-700">{period}</span>{" "}
-        <span className="font-bold text-slate-900 tabular-nums">{it.days}일</span>
+        <span className="font-bold text-slate-900 tabular-nums">
+          {formatLeaveItemDaysLabel(it, it.leaveType as any)}
+        </span>
       </p>
       {it.balanceComment && <p className="text-xs text-slate-500 mt-1 pl-0.5">{it.balanceComment}</p>}
       {reason && <p className="text-xs text-gray-400 mt-1 pl-0.5">사유: {reason}</p>}
@@ -334,7 +355,16 @@ function PendingDetail({
               {formatMDWithDay(req.startDate)}
               {req.startDate.slice(0, 10) !== req.endDate.slice(0, 10) &&
                 ` ~ ${formatMDWithDay(req.endDate)}`}
-              <span className="ml-1 text-slate-800 font-bold">{req.totalDays}일</span>
+              <span className="ml-1 text-slate-800 font-bold">
+                {formatLeaveRequestDaysLabel(
+                  req.items.map((i) => ({
+                    days: i.days,
+                    timeSlot: i.timeSlot ?? null,
+                    leaveType: i.leaveType as Parameters<typeof formatLeaveRequestDaysLabel>[0][0]["leaveType"],
+                  })),
+                  req.totalDays,
+                )}
+              </span>
             </p>
           </div>
           <div>

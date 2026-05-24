@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useMemo } from "react";
 import { Send, Eye, CheckSquare, Square, Users, CheckCircle2, Circle } from "lucide-react";
 
@@ -19,21 +20,38 @@ type Props = {
   formId: string;
   formTitle: string;
   formUrl: string;
+  submitDeadlineLabel: string;
+  hasSubmitDeadline: boolean;
   employees: EmpRow[];
 };
 
-const TEMPLATE_PREVIEW = (name: string, formTitle: string, formUrl: string) => `안녕하세요, ${name}님.
+const TEMPLATE_PREVIEW = (
+  name: string,
+  formTitle: string,
+  submitDeadlineLabel: string,
+  formUrl: string,
+) => `[GBIT Portal]
+${name}님, 임직원 대상 공식 양식 제출 안내입니다.
 
-GBIT Portal에서 아래 양식 제출을 요청드립니다.
+회사에서 요구하는 아래 양식을 기한 내 제출해 주세요.
 
-📋 양식명: ${formTitle}
+■ 양식명: ${formTitle}
+■ 제출 유효기간: ${submitDeadlineLabel}
 
-아래 링크를 통해 양식을 작성해 주세요:
+포털 접속 후 작성·제출:
 ${formUrl}
 
-감사합니다.`;
+※ 기한 내 미제출 시 업무 처리에 차질이 생길 수 있습니다.
+※ 본인이 해당 대상이 아니면 무시해 주세요.`;
 
-export default function FormAlimtalkClient({ formId, formTitle, formUrl, employees }: Props) {
+export default function FormAlimtalkClient({
+  formId,
+  formTitle,
+  formUrl,
+  submitDeadlineLabel,
+  hasSubmitDeadline,
+  employees,
+}: Props) {
   const internal = useMemo(() => employees.filter((e) => e.employeeType !== "EXTERNAL"), [employees]);
   const external = useMemo(() => employees.filter((e) => e.employeeType === "EXTERNAL"), [employees]);
 
@@ -200,6 +218,16 @@ export default function FormAlimtalkClient({ formId, formTitle, formUrl, employe
 
   return (
     <div className="space-y-5">
+      {!hasSubmitDeadline && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          제출 유효기간이 설정되지 않았습니다.{" "}
+          <Link href={`/admin/forms/${formId}/edit`} className="font-semibold underline">
+            양식 수정
+          </Link>
+          에서 기한을 입력한 뒤 알림톡을 발송해 주세요.
+        </div>
+      )}
+
       {/* 발송 액션 바 */}
       <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border border-gray-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3 shadow-sm">
         <div className="text-sm text-gray-600">
@@ -208,11 +236,14 @@ export default function FormAlimtalkClient({ formId, formTitle, formUrl, employe
           ) : (
             <span className="text-gray-400">발송할 직원을 선택하세요</span>
           )}
+          {hasSubmitDeadline && (
+            <span className="block text-xs text-gray-500 mt-0.5">제출 유효기간: {submitDeadlineLabel}</span>
+          )}
         </div>
         <button
           type="button"
           onClick={handleSend}
-          disabled={sending || checkedIds.size === 0}
+          disabled={sending || checkedIds.size === 0 || !hasSubmitDeadline}
           className="btn-primary text-sm py-2 px-4 flex items-center gap-2 disabled:opacity-50"
         >
           <Send size={14} />
@@ -247,7 +278,7 @@ export default function FormAlimtalkClient({ formId, formTitle, formUrl, employe
             <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
               <p className="text-xs text-yellow-700 mb-2 font-medium">카카오 알림톡 · {previewEmployee.name}</p>
               <pre className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed font-sans">
-                {TEMPLATE_PREVIEW(previewEmployee.name, formTitle, formUrl)}
+                {TEMPLATE_PREVIEW(previewEmployee.name, formTitle, submitDeadlineLabel, formUrl)}
               </pre>
             </div>
             <p className="text-xs text-gray-400 mt-3 leading-snug">

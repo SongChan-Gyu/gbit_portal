@@ -23,7 +23,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     select: {
       id: true,
       audience: true,
-      targetGroupId: true,
+      employeeGroupId: true,
       fields: { orderBy: { sortOrder: "asc" }, select: { id: true, label: true } },
     },
   });
@@ -36,7 +36,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
   const can = await employeeCanAccessForm(prisma, employeeId, emp?.employeeType, {
     id: form.id,
     audience: form.audience,
-    targetGroupId: form.targetGroupId,
+    targetGroupId: form.employeeGroupId,
   });
   if (!can) return NextResponse.json({ submitted: false });
 
@@ -87,7 +87,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   const access = await employeeCanAccessForm(prisma, resolvedEmployeeId, empRow?.employeeType, {
     id: form.id,
     audience: form.audience,
-    targetGroupId: form.targetGroupId,
+    targetGroupId: form.employeeGroupId,
   });
   if (!access) {
     return NextResponse.json({ error: "이 양식에 제출할 권한이 없습니다." }, { status: 403 });

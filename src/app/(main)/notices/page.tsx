@@ -3,14 +3,23 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import Link from "next/link";
 import { formatYMD } from "@/lib/dateUtils";
+import { audienceVisibleOrClause } from "@/lib/audienceAccess";
 
 export const metadata = { title: "공지사항 | GBIT Portal" };
 
 export default async function NoticesPage() {
   const session = await auth();
   if (!session) redirect("/login");
+  const user = session.user as { employeeId: string };
+
+  const emp = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true },
+  });
+  const isExternal = emp?.employeeType === "EXTERNAL";
 
   const notices = await prisma.notice.findMany({
+    where: audienceVisibleOrClause(user.employeeId, isExternal),
     orderBy: { createdAt: "desc" },
     include: { author: { select: { name: true } } },
   });

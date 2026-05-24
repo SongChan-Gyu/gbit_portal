@@ -11,7 +11,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (guard) return guard;
 
   const { id } = await ctx.params;
-  const g = await prisma.formTargetGroup.findUnique({
+  const g = await prisma.employeeGroup.findUnique({
     where: { id },
     include: {
       members: {
@@ -35,7 +35,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   if (guard) return guard;
 
   const { id } = await ctx.params;
-  const existing = await prisma.formTargetGroup.findUnique({ where: { id } });
+  const existing = await prisma.employeeGroup.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "그룹을 찾을 수 없습니다." }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
@@ -47,18 +47,18 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   }
 
   await prisma.$transaction(async (tx) => {
-    await tx.formTargetGroup.update({
+    await tx.employeeGroup.update({
       where: { id },
       data: { name: name.slice(0, 120) },
     });
     if (employeeIds) {
-      await tx.formTargetGroupMember.deleteMany({ where: { groupId: id } });
+      await tx.employeeGroupMember.deleteMany({ where: { groupId: id } });
       if (employeeIds.length > 0) {
         const rows: { groupId: string; employeeId: string }[] = employeeIds.map((eid) => ({
           groupId: id,
           employeeId: String(eid),
         }));
-        await tx.formTargetGroupMember.createMany({
+        await tx.employeeGroupMember.createMany({
           data: rows,
         });
       }
@@ -74,7 +74,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     ip: getIp(req) ?? undefined,
   });
 
-  const g = await prisma.formTargetGroup.findUnique({
+  const g = await prisma.employeeGroup.findUnique({
     where: { id },
     include: {
       members: {
@@ -96,7 +96,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
   if (guard) return guard;
 
   const { id } = await ctx.params;
-  const g = await prisma.formTargetGroup.findUnique({
+  const g = await prisma.employeeGroup.findUnique({
     where: { id },
     select: { name: true, _count: { select: { forms: true } } },
   });
@@ -107,7 +107,7 @@ export async function DELETE(req: Request, ctx: { params: Promise<{ id: string }
       { status: 400 },
     );
   }
-  await prisma.formTargetGroup.delete({ where: { id } });
+  await prisma.employeeGroup.delete({ where: { id } });
   await writeAudit({
     entityType: "FormTargetGroup",
     entityId: id,

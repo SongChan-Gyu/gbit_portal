@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
+import { requestHasPmHalfMonth } from "@/lib/halfdayPolicy";
 
 /**
  * POST /api/leave/cancel-approve
@@ -29,6 +30,8 @@ export async function POST(req: Request) {
   if (!request) return NextResponse.json({ error: "신청을 찾을 수 없습니다." }, { status: 404 });
   if (request.status !== "CANCEL_REQUESTED")
     return NextResponse.json({ error: "취소 신청 상태가 아닙니다." }, { status: 400 });
+  if (requestHasPmHalfMonth(request.items))
+    return NextResponse.json({ error: "하프데이는 취소·철회할 수 없습니다." }, { status: 400 });
 
   // 현재 결재 차례인 approval 찾기 (테스트 시 x-impersonate로 결재자 대리)
   const myApproval = request.approvals.find(

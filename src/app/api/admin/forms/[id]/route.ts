@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requireAdmin, requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit, getIp } from "@/lib/audit";
+import { parseFormSubmitDeadlineInput } from "@/lib/formSubmitDeadline";
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -25,7 +26,7 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const form = await prisma.form.findUnique({ where: { id } });
   if (!form) return NextResponse.json({ error: "폼을 찾을 수 없습니다." }, { status: 404 });
   const body = await req.json().catch(() => ({}));
-  const { title, slug, description, isActive, fields, showInMenu, audience, targetGroupId, isAnonymous } = body;
+  const { title, slug, description, isActive, fields, showInMenu, audience, targetGroupId, isAnonymous, submitDeadline } = body;
   const slugRaw = slug != null ? String(slug).trim().replace(/\s+/g, "-").toLowerCase() : undefined;
   const slugNorm = slugRaw || null; // 빈 문자열 → null (공개 링크 없음)
   if (slugNorm && !/^[a-z0-9-]+$/.test(slugNorm))
@@ -36,23 +37,23 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   }
   const before = form ? { title: form.title, slug: form.slug } : undefined;
 
-  let audienceData: { audience?: string; targetGroupId?: string | null } = {};
+  let audienceData: { audience?: string; employeeGroupId?: string | null } = {};
   if (audience != null) {
     const aud = String(audience);
     if (aud === "GROUP") {
       const gid = targetGroupId != null ? String(targetGroupId) : null;
       if (!gid)
         return NextResponse.json({ error: "대상 그룹을 선택해 주세요." }, { status: 400 });
-      audienceData = { audience: aud, targetGroupId: gid };
+      audienceData = { audience: aud, employeeGroupId: gid };
     } else {
-      audienceData = { audience: aud, targetGroupId: null };
+      audienceData = { audience: aud, employeeGroupId: null };
     }
   } else if (targetGroupId !== undefined) {
     if (form.audience === "GROUP") {
       const gid = targetGroupId != null ? String(targetGroupId) : null;
       if (!gid)
         return NextResponse.json({ error: "대상 그룹을 선택해 주세요." }, { status: 400 });
-      audienceData = { targetGroupId: gid };
+      audienceData = { employeeGroupId: gid };
     }
   }
 
@@ -68,6 +69,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
         ...(showInMenu !== undefined && { showInMenu: !!showInMenu }),
         ...audienceData,
         ...(isAnonymous !== undefined && { isAnonymous: !!isAnonymous }),
+        ...(submitDeadline !== undefined && {
+          submitDeadline: parseFormSubmitDeadlineInput(submitDeadline),
+        }),
         fields: {
           create: (Array.isArray(fields) ? fields : []).map(
             (f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({

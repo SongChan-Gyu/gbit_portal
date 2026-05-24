@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requireAdmin, requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit, getIp } from "@/lib/audit";
+import { parseFormSubmitDeadlineInput } from "@/lib/formSubmitDeadline";
 
 /** GET: 폼 목록 */
 export async function GET() {
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
   const guard = requireSettingsAccess(u); if (guard) return guard;
 
   const body = await req.json().catch(() => ({}));
-  const { title, slug, description, isActive, fields, showInMenu, audience, targetGroupId, isAnonymous } = body;
+  const { title, slug, description, isActive, fields, showInMenu, audience, targetGroupId, isAnonymous, submitDeadline } = body;
   if (!title)
     return NextResponse.json({ error: "제목은 필수입니다." }, { status: 400 });
 
@@ -57,8 +58,9 @@ export async function POST(req: Request) {
       isActive: isActive !== false,
       showInMenu: !!showInMenu,
       audience: aud,
-      targetGroupId: tgid,
+      employeeGroupId: tgid,
       isAnonymous: !!isAnonymous,
+      submitDeadline: parseFormSubmitDeadlineInput(submitDeadline),
       fields: {
         create: (Array.isArray(fields) ? fields : []).map((f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({
           sortOrder: i,

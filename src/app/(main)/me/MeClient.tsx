@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
+import { clearLoginAnnouncementSessionDismissals } from "@/lib/loginAnnouncementSession";
 
 /** 숫자만 (최대 11자리, 휴대폰) */
 function phoneDigits(s: string): string {
@@ -112,6 +113,7 @@ export default function MeClient({ initial, forcePasswordChange = false }: { ini
     if (forcePasswordChange) {
       setTimeout(() => {
         void (async () => {
+          clearLoginAnnouncementSessionDismissals();
           try {
             await signOut({ redirect: false });
           } catch {

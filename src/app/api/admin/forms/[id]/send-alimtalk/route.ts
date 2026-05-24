@@ -5,6 +5,7 @@ import prisma from "@/lib/db";
 import { sendFormReminderAlimtalk } from "@/lib/kakao";
 import { writeAudit, getIp } from "@/lib/audit";
 import { employeesForFormAlimtalk } from "@/lib/formAccess";
+import { formatFormSubmitDeadlineLabel } from "@/lib/formSubmitDeadline";
 
 /**
  * POST /api/admin/forms/[id]/send-alimtalk
@@ -24,12 +25,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ error: "발송 대상을 선택해 주세요." }, { status: 400 });
   }
 
-  const form = await prisma.form.findUnique({ where: { id: formId } });
+  const form = await prisma.form.findUnique({
+    where: { id: formId },
+    select: { id: true, title: true, slug: true, audience: true, employeeGroupId: true, submitDeadline: true },
+  });
   if (!form) return NextResponse.json({ error: "양식을 찾을 수 없습니다." }, { status: 404 });
+
+  if (!form.submitDeadline) {
+    return NextResponse.json(
+      { error: "알림톡 발송 전 양식 수정 화면에서 제출 유효기간을 설정해 주세요." },
+      { status: 400 },
+    );
+  }
+
+  const submitDeadlineLabel = formatFormSubmitDeadlineLabel(form.submitDeadline);
 
   const allowedList = await employeesForFormAlimtalk(prisma, {
     audience: form.audience ?? "ALL",
-    targetGroupId: form.targetGroupId,
+    targetGroupId: form.employeeGroupId,
   });
   const allowedIds = new Set(allowedList.map((e) => e.id));
   const filteredIds = employeeIds.filter((id) => allowedIds.has(id));
@@ -60,7 +73,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       continue;
     }
     try {
-      await sendFormReminderAlimtalk(prisma, emp.id, emp.phone, emp.name, form.title, formUrl);
+      await sendFormReminderAlimtalk(
+        prisma,
+        emp.id,
+        emp.phone,
+        emp.name,
+        form.title,
+        formUrl,
+        submitDeadlineLabel,
+      );
       results.push({ name: emp.name, status: "OK" });
     } catch {
       results.push({ name: emp.name, status: "ERROR" });

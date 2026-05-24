@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
+import { requestHasPmHalfMonth } from "@/lib/halfdayPolicy";
 
 /**
  * POST /api/leave/request/[id]/admin-cancel
@@ -32,6 +33,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "이미 종료된 신청입니다." }, { status: 400 });
     if (request.status === "REJECTED")
       return NextResponse.json({ error: "반려된 신청은 취소할 수 없습니다." }, { status: 400 });
+    if (requestHasPmHalfMonth(request.items))
+      return NextResponse.json({ error: "하프데이는 관리자 직권 취소도 할 수 없습니다." }, { status: 400 });
 
     const isPending = request.status === "PENDING";
 

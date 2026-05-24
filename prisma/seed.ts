@@ -558,6 +558,7 @@ async function seedLeaveTypes() {
     ["TENURE_10Y",     "10년근속휴가",      10,  false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 20],
     ["AWARD",          "포상휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  12,    "#f59e0b", 21],
     ["HOLIDAY_EXT",       "연휴연장",            1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 22],
+    ["DUTY_DEPT",           "직무부서휴가",        1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#8b5cf6", 23],
     ["BIRTHDAY_HALF",     "생일반차",            0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 3,   "#ec4899", 25],
   ] as const;
 
@@ -569,6 +570,7 @@ async function seedLeaveTypes() {
     if (lc === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
     if (lc === "TENURE_1Y" || lc === "TENURE_5Y" || lc === "TENURE_10Y") return lc;
     if (lc === "AWARD") return "AWARD";
+    if (lc === "DUTY_DEPT") return "DUTY_DEPT";
     return null;
   }
   function usageCategoryForCode(code: string): "ASSET" | "REASON" {
@@ -586,8 +588,9 @@ async function seedLeaveTypes() {
     if (code === "SICK") return "입원·통원 등";
     if (code === "CARE") return "연 2일 한도";
     if (code === "HOLIDAY_EXT") return "휴무 3일+ 연속 시 전후·징검다리 영업일 1일";
-    if (code === "PM_HALF_MONTH") return "수요일 오후";
-    if (code === "HEALING_DAY_HALF_REPLACE") return "0일 · 영업일 요일 무관 (하프데이 월한도 공유)";
+    if (code === "DUTY_DEPT") return "운영·교육·복지부 2일 부여 · 종일·반차";
+    if (code === "PM_HALF_MONTH") return "수요일 오후 · 해당월 첫째 주 수요일까지 신청 · 취소 불가";
+    if (code === "HEALING_DAY_HALF_REPLACE") return "0일 · 영업일 · 해당월 승인된 하프데이 필요 · 승인 시 하프데이 자동 취소";
     if (code === "HEALING_DAY") return "스탬프 4칸 이상 장당 1회 · 1시간40분 출퇴근 조정";
     if (code === "BIRTHDAY_HALF") return "생일에 자동 부여 0.5일";
     if (code === "AWARD") return "별도 부여";
@@ -604,18 +607,32 @@ async function seedLeaveTypes() {
     return code !== "AWARD" && code !== "POOL_TENURE_BONUS";
   }
 
+  const DUAL_TIME_SLOT_CODES = new Set([
+    "ANNUAL",
+    "PUBLIC",
+    "RECOGNITION",
+    "CARE",
+    "HOLIDAY_EXT",
+    "DUTY_DEPT",
+  ]);
+
   for (const [code,name,dpu,deduct,steps,maxMon,maxYr,stamp,stampCnt,isHalf,amOnly,pmOnly,vBasis,vMon,color,sort] of types) {
     if (await prisma.leaveType.findUnique({ where: { code } })) continue;
     const half = !!(isHalf as boolean);
-    const allowsFullDay = !half;
-    const allowsHalfDay = half;
-    const halfDayAmPm = !half
+    let allowsFullDay = !half;
+    let allowsHalfDay = half;
+    let halfDayAmPm = !half
       ? "BOTH"
       : (amOnly as boolean)
         ? "AM_ONLY"
         : (pmOnly as boolean)
           ? "PM_ONLY"
           : "BOTH";
+    if (DUAL_TIME_SLOT_CODES.has(code)) {
+      allowsFullDay = true;
+      allowsHalfDay = true;
+      halfDayAmPm = "BOTH";
+    }
     const data = {
       code,
       name, daysPerUnit:dpu as number,

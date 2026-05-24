@@ -5,6 +5,8 @@ import { sendLeaveResultAlimtalk } from "@/lib/kakao";
 import { writeAudit } from "@/lib/audit";
 import { findHealingStampCard, releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { isHealingHalfReplaceCode } from "@/lib/healingLeaveCodes";
+import { PM_HALF_MONTH_CODE } from "@/lib/halfdayPolicy";
 
 export async function POST(req: Request) {
   try {
@@ -111,6 +113,52 @@ export async function POST(req: Request) {
         data: { healingUsed: true, healingLeaveRequestId: request.id },
       });
       if (consumed.count === 0) throw new Error("HEALING_SLOT_GONE");
+    }
+
+    const healingReplaceItem = request.items.find((i) => isHealingHalfReplaceCode(i.leaveType.code));
+    if (healingReplaceItem) {
+      const anchor = healingReplaceItem.startDate;
+      const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+      const monthEnd = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+      const halfReqs = await tx.leaveRequest.findMany({
+        where: {
+          employeeId: request.employeeId,
+          status: { in: ["APPROVED", "PENDING"] },
+          id: { not: request.id },
+          items: {
+            some: {
+              leaveType: { code: PM_HALF_MONTH_CODE },
+              startDate: { gte: monthStart, lt: monthEnd },
+            },
+          },
+        },
+      });
+      for (const halfReq of halfReqs) {
+        await tx.leaveApproval.updateMany({
+          where: { leaveRequestId: halfReq.id, status: "PENDING" },
+          data: {
+            status: "REJECTED",
+            comment: "힐링데이(하프대체) 승인으로 자동 취소",
+            approvedAt: new Date(),
+          },
+        });
+        await tx.leaveRequest.update({
+          where: { id: halfReq.id },
+          data: {
+            status: "CANCELLED",
+            cancelledAt: new Date(),
+            cancelReason: "힐링데이(하프대체) 승인으로 자동 취소",
+          },
+        });
+        await tx.leaveHistory.create({
+          data: {
+            leaveRequestId: halfReq.id,
+            action: "AUTO_CANCELLED",
+            actorId,
+            comment: "힐링데이(하프대체) 승인으로 하프데이 자동 취소",
+          },
+        });
+      }
     }
 
     await tx.leaveHistory.create({

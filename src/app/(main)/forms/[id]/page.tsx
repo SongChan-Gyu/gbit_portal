@@ -24,7 +24,7 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
   const can = await employeeCanAccessForm(prisma, user.employeeId ?? null, employee?.employeeType, {
     id: form.id,
     audience: form.audience,
-    targetGroupId: form.targetGroupId,
+    targetGroupId: form.employeeGroupId,
   });
   if (!can) notFound();
 
