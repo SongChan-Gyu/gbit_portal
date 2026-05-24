@@ -58,8 +58,9 @@ type Props = {
 
 const MARGIN = 12;
 const GAP = 10;
-const CARD_MIN = 160;
+const CARD_MIN = 220;
 const CARD_MAX = 520;
+const TOUR_TOP = 6;
 
 function viewportHeight() {
   return window.visualViewport?.height ?? window.innerHeight;
@@ -67,10 +68,10 @@ function viewportHeight() {
 
 function getContentTopAnchor(): number {
   const main = document.querySelector("main");
-  if (main) return Math.max(MARGIN, main.getBoundingClientRect().top + MARGIN);
+  if (main) return Math.max(TOUR_TOP, main.getBoundingClientRect().top + TOUR_TOP);
   const header = document.querySelector("header");
-  if (header) return header.getBoundingClientRect().bottom + MARGIN;
-  return MARGIN + 48;
+  if (header) return header.getBoundingClientRect().bottom + TOUR_TOP;
+  return TOUR_TOP + 48;
 }
 
 function getScrollParent(el: Element): HTMLElement {
@@ -251,15 +252,30 @@ function TourCard({
       <div className="shrink-0 border-t border-gray-100 bg-white px-3 py-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-1.5 flex-wrap">
           {!isLast ? (
-            <button type="button" disabled={busy} onClick={onNext} className="btn-primary text-xs py-1.5 px-3 rounded-md inline-flex items-center gap-0.5">
-              다음 <ChevronRight className="h-3.5 w-3.5" />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onNext}
+              className="inline-flex items-center justify-center gap-0.5 h-8 px-3 text-xs font-medium rounded-md bg-slate-600 text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40 touch-manipulation"
+            >
+              다음 <ChevronRight className="h-3.5 w-3.5 shrink-0" />
             </button>
           ) : (
-            <button type="button" disabled={busy} onClick={onComplete} className="btn-primary text-xs py-1.5 px-3 rounded-md">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onComplete}
+              className="inline-flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md bg-slate-600 text-white hover:bg-slate-700 active:bg-slate-800 disabled:opacity-40 touch-manipulation"
+            >
               확인했습니다
             </button>
           )}
-          <button type="button" disabled={busy} onClick={onSkip} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1 rounded-md border border-gray-200 bg-gray-50 hover:bg-gray-100">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onSkip}
+            className="inline-flex items-center justify-center h-8 px-3 text-xs font-medium rounded-md border border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-40 touch-manipulation"
+          >
             다시 보지 않기
           </button>
           <div className="flex gap-1 ml-auto">
@@ -320,7 +336,8 @@ export default function SpotlightTour({
 
     const finalize = (pass = 0) => {
       if (!cfg.naturalPosition) {
-        const cardReserve = pass === 0 ? CARD_MIN : (layoutRef.current?.card.height ?? CARD_MIN);
+        const cardReserve =
+          pass === 0 ? CARD_MIN : Math.max(CARD_MIN, layoutRef.current?.card.height ?? CARD_MIN);
         settleScroll(el, topAnchor + cardReserve + GAP);
       }
 
