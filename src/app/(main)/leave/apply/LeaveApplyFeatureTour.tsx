@@ -18,11 +18,12 @@ const STEPS: SpotlightTourStep[] = [
           하프데이는 <strong>수요일 오후</strong>, 해당 월 첫째 주 수요일까지 신청합니다. 승인 전 철회 가능, 승인 후 취소 불가.
         </p>
         <p className="mt-1 text-gray-500 text-xs">
-          힐링데이(하프대체)는 같은 달 승인된 하프데이가 있을 때 신청하며, 승인 시 하프데이가 자동 취소됩니다.
+          힐링데이(하프대체)는 해당 하프데이 신청일에 <strong>개인 사유</strong>로 그날 쓰지 못하게 됐을 때 대신 사용할 수 있습니다. 승인 시 하프데이가 자동 취소됩니다.
         </p>
       </>
     ),
     padding: 8,
+    highlightMode: "inset",
     cardPosition: "below",
     scrollReset: "top",
     naturalPosition: true,
@@ -39,7 +40,9 @@ const STEPS: SpotlightTourStep[] = [
         <p className="text-gray-500 text-xs">잔여·조건이 맞는 유형만 버튼에 표시됩니다.</p>
       </>
     ),
-    padding: 8,
+    padding: 10,
+    highlightMode: "inset",
+    highlightTone: "emerald",
   },
   {
     target: '[data-tour="leave-type-reason"]',
@@ -53,7 +56,9 @@ const STEPS: SpotlightTourStep[] = [
         <p className="text-gray-500 text-xs">연차 잔여와 무관하게 신청할 수 있는 유형입니다.</p>
       </>
     ),
-    padding: 8,
+    padding: 10,
+    highlightMode: "inset",
+    highlightTone: "amber",
   },
   {
     target: '[data-tour="leave-unit"]',

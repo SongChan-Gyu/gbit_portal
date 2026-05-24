@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronRight, X } from "lucide-react";
 
+export type HighlightTone = "indigo" | "emerald" | "amber";
+
 export type SpotlightTourStep = {
   target: string;
   title: string;
@@ -12,11 +14,33 @@ export type SpotlightTourStep = {
   maxHighlightH?: number;
   /** 기본 above: 카드가 하이라이트 위. below: 하이라이트 아래(상단 KPI 등) */
   cardPosition?: "above" | "below";
+  /** ring: 고정 테두리. inset: 타깃 요소에 직접 링 (긴 섹션·모바일 권장) */
+  highlightMode?: "ring" | "inset";
+  highlightTone?: HighlightTone;
   /** 스크롤 컨테이너를 맨 위로 — 상단 KPI 단계용 */
   scrollReset?: "top";
   /** 타깃을 강제로 끌어올리지 않고 현재 위치 기준 배치 */
   naturalPosition?: boolean;
 };
+
+const HIGHLIGHT_TONE_CLASSES: Record<HighlightTone, string[]> = {
+  indigo: ["ring-2", "ring-indigo-500/90", "ring-offset-2", "rounded-lg", "relative", "z-[201]", "shadow-md", "shadow-indigo-500/15"],
+  emerald: ["ring-2", "ring-emerald-500/90", "ring-offset-2", "rounded-xl", "relative", "z-[201]", "shadow-md", "shadow-emerald-500/15"],
+  amber: ["ring-2", "ring-amber-500/90", "ring-offset-2", "rounded-xl", "relative", "z-[201]", "shadow-md", "shadow-amber-500/15"],
+};
+
+function allHighlightClasses(): string[] {
+  return Object.values(HIGHLIGHT_TONE_CLASSES).flat();
+}
+
+function applyTargetHighlight(el: Element, tone: HighlightTone) {
+  el.classList.add(...HIGHLIGHT_TONE_CLASSES[tone]);
+}
+
+function clearTargetHighlight(el: Element | null) {
+  if (!el) return;
+  el.classList.remove(...allHighlightClasses());
+}
 
 type Rect = { top: number; left: number; width: number; height: number };
 type CardLayout = { top: number; height: number };
@@ -183,7 +207,6 @@ function TourCard({
   onComplete,
   onSkip,
   layout,
-  cardPosition,
 }: {
   step: number;
   total: number;
@@ -195,7 +218,6 @@ function TourCard({
   onComplete: () => void;
   onSkip: () => void;
   layout: CardLayout;
-  cardPosition: "above" | "below";
 }) {
   return (
     <div
@@ -220,9 +242,6 @@ function TourCard({
         <h3 id="spotlight-tour-title" className="text-sm font-bold text-gray-900 leading-snug mt-0.5">
           {title}
         </h3>
-        <p className="text-[10px] text-indigo-600 mt-0.5 font-medium">
-          {cardPosition === "below" ? "↑ 바로 위 파란 테두리" : "↓ 바로 아래 파란 테두리"}
-        </p>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 py-2">
@@ -271,6 +290,7 @@ export default function SpotlightTour({
   const lockingRef = useRef(false);
   const scrollParentRef = useRef<HTMLElement | null>(null);
   const layoutRef = useRef<TourLayout | null>(null);
+  const highlightedElRef = useRef<Element | null>(null);
 
   stepsRef.current = steps;
   const current = steps[step] ?? steps[0];
@@ -332,6 +352,8 @@ export default function SpotlightTour({
 
   useEffect(() => {
     if (!open) {
+      clearTargetHighlight(highlightedElRef.current);
+      highlightedElRef.current = null;
       setLayout(null);
       layoutRef.current = null;
       scrollParentRef.current = null;
@@ -340,6 +362,30 @@ export default function SpotlightTour({
     setLayout(null);
     layoutStep(step);
   }, [open, step, layoutStep]);
+
+  useEffect(() => {
+    if (!open || !layout) return;
+
+    const cfg = current;
+    const el = document.querySelector(cfg.target);
+    if (highlightedElRef.current && highlightedElRef.current !== el) {
+      clearTargetHighlight(highlightedElRef.current);
+      highlightedElRef.current = null;
+    }
+
+    const mode = cfg.highlightMode ?? "ring";
+    if (mode === "inset" && el) {
+      applyTargetHighlight(el, cfg.highlightTone ?? "indigo");
+      highlightedElRef.current = el;
+    }
+
+    return () => {
+      if (highlightedElRef.current === el) {
+        clearTargetHighlight(el);
+        highlightedElRef.current = null;
+      }
+    };
+  }, [open, step, layout, current]);
 
   useEffect(() => {
     if (!open) return;
@@ -378,16 +424,18 @@ export default function SpotlightTour({
       {layout?.highlight ? (
         <>
           <DimPanels rect={layout.highlight} />
-          <div
-            className="pointer-events-none fixed z-[201] rounded-lg border-[3px] border-indigo-500"
-            style={{
-              top: layout.highlight.top,
-              left: layout.highlight.left,
-              width: layout.highlight.width,
-              height: layout.highlight.height,
-              boxShadow: "0 0 0 1px rgba(99,102,241,0.55), 0 0 20px rgba(99,102,241,0.45)",
-            }}
-          />
+          {(current.highlightMode ?? "ring") === "ring" && (
+            <div
+              className="pointer-events-none fixed z-[201] rounded-lg border-2 border-indigo-500/90"
+              style={{
+                top: layout.highlight.top,
+                left: layout.highlight.left,
+                width: layout.highlight.width,
+                height: layout.highlight.height,
+                boxShadow: "0 0 0 1px rgba(99,102,241,0.4), 0 4px 16px rgba(99,102,241,0.25)",
+              }}
+            />
+          )}
         </>
       ) : (
         <div className="absolute inset-0 bg-slate-900/58" />
@@ -407,7 +455,6 @@ export default function SpotlightTour({
           onComplete={onComplete}
           onSkip={onSkip}
           layout={layout.card}
-          cardPosition={layout.cardPosition}
         />
       )}
     </div>,
