@@ -29,7 +29,7 @@ export default function HalfPoolKpiCell({
   return (
     <div
       data-tour="leave-half-kpi"
-      className="col-span-2 sm:col-span-1 text-center min-w-0 px-1 py-2 sm:py-0.5 flex flex-col justify-center gap-1 border-t sm:border-t-0 border-gray-200/90 mt-2 sm:mt-0 pt-2.5 sm:pt-0"
+      className="col-span-2 sm:col-span-1 text-center min-w-0 px-1 py-2 sm:py-0.5 flex flex-col justify-center gap-1 border-t sm:border-t-0 border-gray-200/90 max-sm:border-l-0 mt-2 sm:mt-0 pt-2.5 sm:pt-0"
     >
       <div className="flex items-center justify-center gap-0.5 min-h-[1.25rem]">
         <button
