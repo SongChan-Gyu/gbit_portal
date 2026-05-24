@@ -200,57 +200,57 @@ function TourCard({
   return (
     <div
       className="fixed z-[202] inset-x-3 flex flex-col overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-2xl shadow-indigo-950/25"
-      style={{ top: layout.top, maxHeight: layout.height }}
+      style={{ top: layout.top, height: layout.height }}
     >
-      <div className="shrink-0 px-4 pt-3 pb-2 border-b border-indigo-100/80 bg-indigo-50/50">
-        <div className="flex items-start justify-between gap-2 mb-0.5">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-indigo-600">
+      <div className="shrink-0 px-3.5 pt-2.5 pb-1.5 border-b border-indigo-100/80 bg-indigo-50/50">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-indigo-600">
             안내 · {step + 1}/{total}
           </p>
           <button
             type="button"
             onClick={onSkip}
             disabled={busy}
-            className="text-gray-400 hover:text-gray-600 p-0.5 rounded-md shrink-0"
+            className="text-gray-400 hover:text-gray-600 p-0.5 rounded-md shrink-0 -mt-0.5"
             aria-label="닫기"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
-        <h3 id="spotlight-tour-title" className="text-[15px] font-bold text-gray-900 leading-snug">
+        <h3 id="spotlight-tour-title" className="text-sm font-bold text-gray-900 leading-snug mt-0.5">
           {title}
         </h3>
-        <p className="text-[11px] text-indigo-600 mt-1 font-medium">
+        <p className="text-[10px] text-indigo-600 mt-0.5 font-medium">
           {cardPosition === "below" ? "↑ 바로 위 파란 테두리" : "↓ 바로 아래 파란 테두리"}
         </p>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-2.5">
-        <div className="text-sm text-gray-600 leading-relaxed space-y-2">{body}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3.5 py-2">
+        <div className="text-[13px] text-gray-600 leading-relaxed space-y-1.5">{body}</div>
       </div>
 
-      <div className="shrink-0 border-t border-gray-100 bg-white px-4 py-2.5 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="shrink-0 border-t border-gray-100 bg-white px-3 py-1.5 pb-[max(0.35rem,env(safe-area-inset-bottom))]">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {!isLast ? (
-            <button type="button" disabled={busy} onClick={onNext} className="btn-primary text-sm py-2.5 px-4 rounded-lg inline-flex items-center gap-1">
-              다음 <ChevronRight className="h-4 w-4" />
+            <button type="button" disabled={busy} onClick={onNext} className="btn-primary text-xs py-1.5 px-3 rounded-md inline-flex items-center gap-0.5">
+              다음 <ChevronRight className="h-3.5 w-3.5" />
             </button>
           ) : (
-            <button type="button" disabled={busy} onClick={onComplete} className="btn-primary text-sm py-2.5 px-4 rounded-lg">
+            <button type="button" disabled={busy} onClick={onComplete} className="btn-primary text-xs py-1.5 px-3 rounded-md">
               확인했습니다
             </button>
           )}
-          <button type="button" disabled={busy} onClick={onSkip} className="text-sm text-gray-600 hover:text-gray-900 px-2.5 py-1.5 rounded-md border border-gray-200 bg-gray-50 hover:bg-gray-100">
+          <button type="button" disabled={busy} onClick={onSkip} className="text-xs text-gray-600 hover:text-gray-900 px-2 py-1 rounded-md border border-gray-200 bg-gray-50 hover:bg-gray-100">
             다시 보지 않기
           </button>
-        </div>
-        <div className="flex gap-1.5 mt-2">
-          {Array.from({ length: total }).map((_, i) => (
-            <span
-              key={i}
-              className={`h-1.5 rounded-full transition-all ${i === step ? "w-6 bg-indigo-500" : "w-1.5 bg-indigo-200"}`}
-            />
-          ))}
+          <div className="flex gap-1 ml-auto">
+            {Array.from({ length: total }).map((_, i) => (
+              <span
+                key={i}
+                className={`h-1 rounded-full transition-all ${i === step ? "w-4 bg-indigo-500" : "w-1 bg-indigo-200"}`}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>

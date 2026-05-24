@@ -931,15 +931,12 @@ export default function LeaveApplyForm({
                   <p className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
                     01. 휴가 종류
                   </p>
-                  <div>
+                  <div {...(idx === 0 ? { "data-tour": "leave-type-asset" } : {})}>
                     <p className="text-xs font-semibold text-emerald-700 mb-2 flex items-center gap-1.5">
                       <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" aria-hidden />
                       자산형 (연차·돌봄·이벤트 등 부여 일수)
                     </p>
-                    <div
-                      {...(idx === 0 ? { "data-tour": "leave-type-asset" } : {})}
-                      className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5"
-                    >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
                       {leaveGroupsAsset.map((g) => {
                         const isSelected = item._groupKey === g.key;
                         return (
@@ -962,15 +959,12 @@ export default function LeaveApplyForm({
                       })}
                     </div>
                   </div>
-                  <div>
+                  <div {...(idx === 0 ? { "data-tour": "leave-type-reason" } : {})}>
                     <p className="text-xs font-semibold text-amber-800 mb-2 flex items-center gap-1.5">
                       <span className="inline-block w-2 h-2 rounded-full bg-amber-400" aria-hidden />
                       사유형 (공가·병가·인정 등)
                     </p>
-                    <div
-                      {...(idx === 0 ? { "data-tour": "leave-type-reason" } : {})}
-                      className="grid grid-cols-2 sm:grid-cols-3 gap-2.5"
-                    >
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {leaveGroupsReason.map((g) => {
                         const isSelected = item._groupKey === g.key;
                         return (
