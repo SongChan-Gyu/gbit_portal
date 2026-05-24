@@ -39,6 +39,8 @@ const STEPS: SpotlightTourStep[] = [
         <p className="text-gray-500 text-xs">잔여·조건이 맞는 유형만 버튼에 표시됩니다.</p>
       </>
     ),
+    padding: 8,
+    maxHighlightH: 230,
   },
   {
     target: '[data-tour="leave-type-reason"]',
@@ -52,6 +54,8 @@ const STEPS: SpotlightTourStep[] = [
         <p className="text-gray-500 text-xs">연차 잔여와 무관하게 신청할 수 있는 유형입니다.</p>
       </>
     ),
+    padding: 8,
+    maxHighlightH: 175,
   },
   {
     target: '[data-tour="leave-unit"]',

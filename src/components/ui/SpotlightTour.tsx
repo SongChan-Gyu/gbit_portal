@@ -20,7 +20,7 @@ export type SpotlightTourStep = {
 
 type Rect = { top: number; left: number; width: number; height: number };
 type CardLayout = { top: number; height: number };
-type TourLayout = { highlight: Rect; card: CardLayout };
+type TourLayout = { highlight: Rect; card: CardLayout; cardPosition: "above" | "below" };
 
 type Props = {
   steps: SpotlightTourStep[];
@@ -34,11 +34,15 @@ type Props = {
 
 const MARGIN = 12;
 const GAP = 10;
-const CARD_MIN = 180;
-const CARD_MAX = 260;
+const CARD_MIN = 200;
+const CARD_MAX = 340;
 
 function viewportHeight() {
   return window.visualViewport?.height ?? window.innerHeight;
+}
+
+function preferredCardHeight(vh: number) {
+  return Math.min(CARD_MAX, Math.max(CARD_MIN, Math.round(vh * 0.38)));
 }
 
 function getContentTopAnchor(): number {
@@ -82,39 +86,87 @@ function scrollElementTopTo(el: Element, viewportTop: number) {
   scrollParent.scrollBy({ top: delta, behavior: "instant" });
 }
 
-function buildLayout(cfg: SpotlightTourStep, cardH: number): TourLayout | null {
+function clipHighlightToViewport(highlight: Rect, vh: number): Rect {
+  const bottom = vh - MARGIN;
+  if (highlight.top >= bottom) {
+    return { ...highlight, top: bottom - 48, height: 48 };
+  }
+  const visibleH = bottom - highlight.top;
+  if (highlight.height > visibleH) {
+    return { ...highlight, height: Math.max(48, visibleH) };
+  }
+  return highlight;
+}
+
+function placeCard(
+  highlight: Rect,
+  preferred: "above" | "below",
+  cardMaxH: number,
+  topAnchor: number,
+  vh: number,
+): { top: number; height: number; position: "above" | "below" } {
+  const bottomLimit = vh - MARGIN;
+  const spaceAbove = highlight.top - topAnchor - GAP;
+  const spaceBelow = bottomLimit - (highlight.top + highlight.height) - GAP;
+
+  let position = preferred;
+  if (position === "below" && cardMaxH > spaceBelow && spaceAbove > spaceBelow) {
+    position = "above";
+  } else if (position === "above" && cardMaxH > spaceAbove && spaceBelow > spaceAbove) {
+    position = "below";
+  }
+
+  const fit = (pos: "above" | "below") => {
+    if (pos === "below") {
+      const top = highlight.top + highlight.height + GAP;
+      const height = Math.min(cardMaxH, bottomLimit - top);
+      return { top, height, ok: height >= CARD_MIN && top + height <= bottomLimit + 0.5 };
+    }
+    const height = Math.min(cardMaxH, highlight.top - topAnchor - GAP);
+    const top = Math.max(topAnchor, highlight.top - GAP - height);
+    const overlap = top + height + GAP > highlight.top;
+    return { top, height, ok: height >= CARD_MIN && !overlap };
+  };
+
+  let layout = fit(position);
+  if (!layout.ok) {
+    const alt = fit(position === "above" ? "below" : "above");
+    if (alt.ok || alt.height > layout.height) {
+      position = position === "above" ? "below" : "above";
+      layout = alt;
+    }
+  }
+
+  let { top, height } = layout;
+  height = Math.max(CARD_MIN, Math.min(cardMaxH, height));
+
+  if (position === "above") {
+    top = Math.max(topAnchor, highlight.top - GAP - height);
+    if (top + height + GAP > highlight.top) {
+      height = Math.max(CARD_MIN, highlight.top - GAP - top);
+    }
+  } else {
+    top = highlight.top + highlight.height + GAP;
+    height = Math.min(height, bottomLimit - top);
+  }
+
+  return { top, height, position };
+}
+
+function buildLayout(cfg: SpotlightTourStep, cardMaxH: number): TourLayout | null {
   const raw = measureTarget(cfg.target, cfg.padding ?? 8, cfg.maxHighlightH);
   if (!raw) return null;
 
   const vh = viewportHeight();
-  const position = cfg.cardPosition ?? "above";
-  let highlight = { ...raw };
-
-  if (highlight.top + highlight.height > vh - MARGIN) {
-    highlight = {
-      ...highlight,
-      height: Math.max(48, vh - MARGIN - highlight.top),
-    };
-  }
-
-  let cardTop: number;
-  if (position === "below") {
-    cardTop = highlight.top + highlight.height + GAP;
-    if (cardTop + cardH > vh - MARGIN) {
-      cardTop = vh - MARGIN - cardH;
-    }
-  } else {
-    cardTop = highlight.top - GAP - cardH;
-    const topAnchor = getContentTopAnchor();
-    if (cardTop < topAnchor) cardTop = topAnchor;
-    if (cardTop + cardH + GAP > highlight.top) {
-      cardTop = Math.max(topAnchor, highlight.top - GAP - cardH);
-    }
-  }
+  const topAnchor = getContentTopAnchor();
+  const highlight = clipHighlightToViewport(raw, vh);
+  const preferred = cfg.cardPosition ?? "above";
+  const card = placeCard(highlight, preferred, cardMaxH, topAnchor, vh);
 
   return {
-    card: { top: cardTop, height: cardH },
+    card: { top: card.top, height: card.height },
     highlight,
+    cardPosition: card.position,
   };
 }
 
@@ -171,7 +223,7 @@ function TourCard({
   return (
     <div
       className="fixed z-[202] inset-x-3 flex flex-col overflow-hidden rounded-2xl border border-indigo-200 bg-white shadow-2xl shadow-indigo-950/25"
-      style={{ top: layout.top, height: layout.height }}
+      style={{ top: layout.top, maxHeight: layout.height }}
     >
       <div className="shrink-0 px-4 pt-3 pb-2 border-b border-indigo-100/80 bg-indigo-50/50">
         <div className="flex items-start justify-between gap-2 mb-0.5">
@@ -267,10 +319,10 @@ export default function SpotlightTour({
     }
 
     const vh = viewportHeight();
-    const cardH = Math.min(CARD_MAX, Math.max(CARD_MIN, Math.round(vh * 0.3)));
+    const cardMaxH = preferredCardHeight(vh);
     const position = cfg.cardPosition ?? "above";
     const topAnchor = getContentTopAnchor();
-    const targetTop = position === "below" ? topAnchor : topAnchor + cardH + GAP;
+    const targetTop = position === "below" ? topAnchor : topAnchor + cardMaxH + GAP;
 
     if (!cfg.naturalPosition) {
       scrollElementTopTo(el, targetTop);
@@ -280,7 +332,7 @@ export default function SpotlightTour({
       if (!cfg.naturalPosition) {
         scrollElementTopTo(el, targetTop);
       }
-      const next = buildLayout(cfg, cardH);
+      const next = buildLayout(cfg, cardMaxH);
       if (next) {
         setLayout(next);
         lockingRef.current = false;
@@ -371,7 +423,7 @@ export default function SpotlightTour({
           onComplete={onComplete}
           onSkip={onSkip}
           layout={layout.card}
-          cardPosition={current.cardPosition ?? "above"}
+          cardPosition={layout.cardPosition}
         />
       )}
     </div>,
