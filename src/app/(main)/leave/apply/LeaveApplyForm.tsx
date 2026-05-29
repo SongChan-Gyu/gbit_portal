@@ -355,6 +355,28 @@ export default function LeaveApplyForm({
   const holidaySet = useMemo(() => buildHolidayDisplaySet(holidays), [holidays]);
   const isTeam2HalfWeeklyLimit = isTeamHalfWeeklyLimitTeam(teamName);
 
+  /** 선택한 하프데이 날짜가 속한 주(월~일) 기준 4명 초과 여부 */
+  const pmHalfWeekLimitExceededForSelection = useMemo(() => {
+    if (!isTeam2HalfWeeklyLimit) return false;
+    return items.some((it) => {
+      const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
+      if (lt?.code !== PM_HALF_MONTH_CODE) return false;
+      const ymd = it.startDate?.slice(0, 10);
+      if (!ymd) return false;
+      return isTeamHalfWeeklyLimitExceeded(ymd, currentEmployeeId, teamHalfWeekApplicantsByWeek);
+    });
+  }, [items, leaveTypes, isTeam2HalfWeeklyLimit, currentEmployeeId, teamHalfWeekApplicantsByWeek]);
+
+  /** 달력에서 다른 주(초과)를 눌렀을 때 남는 오류 — 현재 선택일 기준으로만 표시 */
+  const formError =
+    error === TEAM_HALF_WEEKLY_LIMIT_ERROR && !pmHalfWeekLimitExceededForSelection ? "" : error;
+
+  useEffect(() => {
+    if (error === TEAM_HALF_WEEKLY_LIMIT_ERROR && !pmHalfWeekLimitExceededForSelection) {
+      setError("");
+    }
+  }, [error, pmHalfWeekLimitExceededForSelection]);
+
   const canSubmitZeroHalfReplace = useMemo(() => {
     return items.some((it) => {
       if (!needsLeaveRowValidation(it)) return false;
@@ -726,6 +748,7 @@ export default function LeaveApplyForm({
           setError("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
           return;
         }
+        setError((prev) => (prev === TEAM_HALF_WEEKLY_LIMIT_ERROR ? "" : prev));
         changeDate(calendarItemIdx, "startDate", dateStr);
         closeCalendar();
         return;
@@ -1433,11 +1456,11 @@ export default function LeaveApplyForm({
         <span className="text-xs font-normal text-gray-400">예: 오전반차 + 오후인정 복수 신청</span>
       </button>
 
-      {/* 오류 */}
-      {error && (
+      {/* 오류 (하프데이 주간 한도는 선택한 날짜 주 기준으로만 표시) */}
+      {formError && (
         <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">
           <AlertCircle size={15} className="shrink-0" />
-          {error}
+          {formError}
         </div>
       )}
 
