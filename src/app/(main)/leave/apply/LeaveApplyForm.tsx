@@ -4,7 +4,7 @@ import DatePickerButton from "@/components/ui/DatePickerButton";
 import { useRouter } from "next/navigation";
 import { calcWorkingDays, todayStr } from "@/lib/workdays";
 import { calcHolidayExtFullDays, isHolidayOrWeekendYmd } from "@/lib/holidayExt";
-import { calendarUtcDowFromYMD, eachYmdInInclusiveRange, formatYMD, isWednesdayYMD } from "@/lib/dateUtils";
+import { calendarUtcDowFromYMD, eachYmdInInclusiveRange, formatYMD } from "@/lib/dateUtils";
 import { leaveItemDeductDays, leaveItemFormDisplayDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
@@ -16,10 +16,18 @@ import {
   PM_HALF_MONTH_CODE,
   anyHalfDayMonthAvailable,
   canApplyHalfDayInMonth,
-  firstWednesdayYmdOfMonth,
   halfdayApplicationDeadlineError,
+  halfdayApplicationDeadlineLabel,
   isPastHalfdayApplicationDeadlineForMonth,
+  isPmHalfDayHolidayWednesdaySelection,
+  isValidPmHalfDayLeaveYmd,
   monthKeyFromYmd,
+  PM_HALF_HOLIDAY_WEDNESDAY_HINT,
+  pmHalfDayLeaveDateError,
+  isTeamHalfWeeklyLimitExceeded,
+  isTeamHalfWeeklyLimitTeam,
+  TEAM_HALF_WEEKLY_LIMIT_ERROR,
+  TEAM_HALF_WEEKLY_MAX_APPLICANTS,
 } from "@/lib/halfdayPolicy";
 
 // ── 타입 ──────────────────────────────────────────────────────
@@ -292,6 +300,9 @@ export default function LeaveApplyForm({
   healingHalfReplaceUsedByMonth,
   approvedHealingHalfReplaceMonthKeys,
   holidays,
+  teamName,
+  currentEmployeeId,
+  teamHalfWeekApplicantsByWeek,
 }: {
   leaveTypes: LT[];
   allocations: Alloc[];
@@ -305,6 +316,9 @@ export default function LeaveApplyForm({
   healingHalfReplaceUsedByMonth: Record<string, number>;
   approvedHealingHalfReplaceMonthKeys: string[];
   holidays: string[];
+  teamName: string | null;
+  currentEmployeeId: string;
+  teamHalfWeekApplicantsByWeek: Record<string, string[]>;
 }) {
   const router = useRouter();
   const [items, setItems] = useState<LeaveItem[]>([initItem()]);
@@ -339,6 +353,7 @@ export default function LeaveApplyForm({
   );
 
   const holidaySet = useMemo(() => buildHolidayDisplaySet(holidays), [holidays]);
+  const isTeam2HalfWeeklyLimit = isTeamHalfWeeklyLimitTeam(teamName);
 
   const canSubmitZeroHalfReplace = useMemo(() => {
     return items.some((it) => {
@@ -673,12 +688,27 @@ export default function LeaveApplyForm({
     if (calendarStep === "start") {
       setCalendarPickedStart(dateStr);
       if (isHalf) {
-        if (lt?.code === PM_HALF_MONTH_CODE && !isWednesdayYMD(dateStr)) {
-          setError("하프데이는 수요일을 선택해 주세요.");
+        if (lt?.code === PM_HALF_MONTH_CODE && !isValidPmHalfDayLeaveYmd(dateStr, holidaySetForCalendar)) {
+          if (isPmHalfDayHolidayWednesdaySelection(dateStr, holidaySetForCalendar)) {
+            setError(PM_HALF_HOLIDAY_WEDNESDAY_HINT);
+          } else {
+            setError(pmHalfDayLeaveDateError());
+          }
           return;
         }
-        if (lt?.code === PM_HALF_MONTH_CODE && isPastHalfdayApplicationDeadlineForMonth(dateStr)) {
-          setError(halfdayApplicationDeadlineError(dateStr));
+        if (
+          lt?.code === PM_HALF_MONTH_CODE &&
+          isPastHalfdayApplicationDeadlineForMonth(dateStr, undefined, holidaySetForCalendar)
+        ) {
+          setError(halfdayApplicationDeadlineError(dateStr, holidaySetForCalendar));
+          return;
+        }
+        if (
+          lt?.code === PM_HALF_MONTH_CODE &&
+          isTeam2HalfWeeklyLimit &&
+          isTeamHalfWeeklyLimitExceeded(dateStr, currentEmployeeId, teamHalfWeekApplicantsByWeek)
+        ) {
+          setError(TEAM_HALF_WEEKLY_LIMIT_ERROR);
           return;
         }
         if (lt?.code === PM_HALF_MONTH_CODE) {
@@ -780,8 +810,23 @@ export default function LeaveApplyForm({
           return;
         }
         const ymd = it.startDate.slice(0, 10);
-        if (isPastHalfdayApplicationDeadlineForMonth(ymd)) {
-          setError(halfdayApplicationDeadlineError(ymd));
+        if (!isValidPmHalfDayLeaveYmd(ymd, holidaySet)) {
+          if (isPmHalfDayHolidayWednesdaySelection(ymd, holidaySet)) {
+            setError(PM_HALF_HOLIDAY_WEDNESDAY_HINT);
+          } else {
+            setError(pmHalfDayLeaveDateError());
+          }
+          return;
+        }
+        if (isPastHalfdayApplicationDeadlineForMonth(ymd, undefined, holidaySet)) {
+          setError(halfdayApplicationDeadlineError(ymd, holidaySet));
+          return;
+        }
+        if (
+          isTeam2HalfWeeklyLimit &&
+          isTeamHalfWeeklyLimitExceeded(ymd, currentEmployeeId, teamHalfWeekApplicantsByWeek)
+        ) {
+          setError(TEAM_HALF_WEEKLY_LIMIT_ERROR);
           return;
         }
       }
@@ -1194,9 +1239,40 @@ export default function LeaveApplyForm({
                     {/* 일수 카운터 (힐링데이는 스탬프 페이지에서만 사용, 여기서는 연차/반차/하프데이 등) */}
                     {lt?.code === PM_HALF_MONTH_CODE && (
                       <p className="mt-2 text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
-                        하프데이는 <strong>수요일 오후</strong>에만 사용 가능합니다. 해당 월{" "}
-                        <strong>첫째 주 수요일({firstWednesdayYmdOfMonth(new Date().getFullYear(), new Date().getMonth() + 1)})</strong>
-                        까지만 신청할 수 있습니다. <strong>승인 전에는 철회</strong>할 수 있고, 승인 후 취소는 불가합니다.
+                        하프데이는 <strong>수요일 오후</strong>에 사용합니다. 해당 수요일이 휴일이면{" "}
+                        <strong>다음날 목요일</strong>에 신청할 수 있습니다. 해당 월{" "}
+                        <strong>
+                          신청 마감{" "}
+                          {halfdayApplicationDeadlineLabel(
+                            new Date().getFullYear(),
+                            new Date().getMonth() + 1,
+                            holidaySet,
+                          )}
+                        </strong>
+                        까지입니다. <strong>승인 전에는 철회</strong>할 수 있고, 승인 후 취소는 불가합니다.
+                        {isTeam2HalfWeeklyLimit ? (
+                          <span className="mt-1.5 block">
+                            <strong>{teamName}</strong>은 한 주(월~일)에 하프데이 신청 인원이 최대{" "}
+                            <strong>{TEAM_HALF_WEEKLY_MAX_APPLICANTS}명</strong>입니다.
+                          </span>
+                        ) : null}
+                        {item.startDate?.trim() &&
+                        isTeam2HalfWeeklyLimit &&
+                        isTeamHalfWeeklyLimitExceeded(
+                          item.startDate.slice(0, 10),
+                          currentEmployeeId,
+                          teamHalfWeekApplicantsByWeek,
+                        ) ? (
+                          <span className="mt-1.5 block font-medium text-red-700">
+                            {TEAM_HALF_WEEKLY_LIMIT_ERROR}
+                          </span>
+                        ) : null}
+                        {item.startDate?.trim() &&
+                        isPmHalfDayHolidayWednesdaySelection(item.startDate.slice(0, 10), holidaySet) ? (
+                          <span className="mt-1.5 block font-medium text-amber-800">
+                            {PM_HALF_HOLIDAY_WEDNESDAY_HINT}
+                          </span>
+                        ) : null}
                       </p>
                     )}
                     {lt && isHealingHalfReplaceCode(lt.code) && (

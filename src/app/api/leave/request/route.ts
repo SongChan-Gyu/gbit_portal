@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import {
-  isWednesdayYMD,
   holidayDateToYmd,
   addDaysYMD,
   ymdRangeUtcBounds,
@@ -22,7 +21,12 @@ import {
   PM_HALF_MONTH_CODE,
   halfdayApplicationDeadlineError,
   isPastHalfdayApplicationDeadlineForMonth,
+  isPmHalfDayHolidayWednesdaySelection,
+  isValidPmHalfDayLeaveYmd,
+  PM_HALF_HOLIDAY_WEDNESDAY_HINT,
+  pmHalfDayLeaveDateError,
 } from "@/lib/halfdayPolicy";
+import { teamHalfDayWeeklyLimitError } from "@/lib/halfdayTeamWeekly";
 
 export async function POST(req: Request) {
   try {
@@ -32,7 +36,7 @@ export async function POST(req: Request) {
 
     const emp = await prisma.employee.findUnique({
       where: { id: user.employeeId },
-      select: { employeeType: true },
+      select: { employeeType: true, teamId: true, team: { select: { name: true } } },
     });
     if (emp?.employeeType === "EXTERNAL")
       return NextResponse.json({ error: "외부개발자는 휴가 신청이 불가합니다." }, { status: 403 });
@@ -221,11 +225,23 @@ export async function POST(req: Request) {
 
       if (lt.code === PM_HALF_MONTH_CODE) {
         const ymd = it.startDate.slice(0, 10);
-        if (!isWednesdayYMD(ymd)) {
-          return NextResponse.json({ error: "하프데이는 수요일에만 신청할 수 있습니다." }, { status: 400 });
+        if (!isValidPmHalfDayLeaveYmd(ymd, holidaySet)) {
+          if (isPmHalfDayHolidayWednesdaySelection(ymd, holidaySet)) {
+            return NextResponse.json({ error: PM_HALF_HOLIDAY_WEDNESDAY_HINT }, { status: 400 });
+          }
+          return NextResponse.json({ error: pmHalfDayLeaveDateError() }, { status: 400 });
         }
-        if (isPastHalfdayApplicationDeadlineForMonth(ymd)) {
-          return NextResponse.json({ error: halfdayApplicationDeadlineError(ymd) }, { status: 400 });
+        if (isPastHalfdayApplicationDeadlineForMonth(ymd, undefined, holidaySet)) {
+          return NextResponse.json({ error: halfdayApplicationDeadlineError(ymd, holidaySet) }, { status: 400 });
+        }
+        const weeklyLimitErr = await teamHalfDayWeeklyLimitError(prisma, {
+          teamId: emp?.teamId,
+          teamName: emp?.team?.name,
+          employeeId: user.employeeId,
+          leaveYmd: ymd,
+        });
+        if (weeklyLimitErr) {
+          return NextResponse.json({ error: weeklyLimitErr }, { status: 400 });
         }
       }
 

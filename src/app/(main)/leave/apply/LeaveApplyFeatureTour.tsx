@@ -15,7 +15,7 @@ const STEPS: SpotlightTourStep[] = [
           화살표로 다른 달도 볼 수 있습니다.
         </p>
         <p className="mt-1">
-          하프데이는 <strong>수요일 오후</strong>, 해당 월 첫째 주 수요일까지 신청합니다. 승인 전 철회 가능, 승인 후 취소 불가.
+          하프데이는 <strong>수요일 오후</strong>입니다. 해당 수요일이 휴일이면 <strong>다음날 목요일</strong>에 신청할 수 있습니다. 해당 월 첫째 주 수요일(휴일이면 목요일)까지 신청합니다. 승인 전 철회 가능, 승인 후 취소 불가.
         </p>
         <p className="mt-1 text-gray-500 text-xs">
           힐링데이(하프대체)는 해당 하프데이 신청일에 <strong>개인 사유</strong>로 그날 쓰지 못하게 됐을 때 대신 사용할 수 있습니다. 승인 시 <strong>기존 신청된</strong> 하프데이가 자동 취소됩니다.

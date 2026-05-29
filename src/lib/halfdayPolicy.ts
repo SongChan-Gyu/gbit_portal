@@ -1,6 +1,15 @@
-import { addDaysYMD, calendarUtcDowFromYMD, todayKstYmd } from "@/lib/dateUtils";
+import { addDaysYMD, calendarUtcDowFromYMD, isWednesdayYMD, todayKstYmd } from "@/lib/dateUtils";
+import { isHolidayOrWeekendYmd } from "@/lib/holidayExt";
 
 export const PM_HALF_MONTH_CODE = "PM_HALF_MONTH" as const;
+
+/** 휴일 수요일을 달력에서 고른 경우 안내 */
+export const PM_HALF_HOLIDAY_WEDNESDAY_HINT =
+  "만약 휴일인 수요일을 선택한 경우, 내일 목요일에 신청할 수 있습니다.";
+
+export function isThursdayYMD(ymd: string): boolean {
+  return calendarUtcDowFromYMD(ymd.slice(0, 10)) === 4;
+}
 
 /** 해당 연·월의 첫째 주 수요일 (달력 YMD, KST 달력 축) */
 export function firstWednesdayYmdOfMonth(year: number, month: number): string {
@@ -11,28 +20,133 @@ export function firstWednesdayYmdOfMonth(year: number, month: number): string {
   return ymd;
 }
 
-/** 해당월 하프데이 신청 마감(첫째 주 수요일) 경과 여부 — todayKst > deadline 이면 true */
+/** 해당월 하프데이 신청 마감일 — 첫째 주 수요일, 수요일이 휴일이면 익일 목요일 */
+export function halfdayApplicationDeadlineYmd(
+  year: number,
+  month: number,
+  holidaySet: Set<string>,
+): string {
+  const wed = firstWednesdayYmdOfMonth(year, month);
+  if (isHolidayOrWeekendYmd(wed, holidaySet)) return addDaysYMD(wed, 1);
+  return wed;
+}
+
+/** 해당월 하프데이 신청 마감 경과 여부 — todayKst > deadline 이면 true */
 export function isPastHalfdayApplicationDeadlineForMonth(
   targetYmd: string,
   todayKst?: string,
+  holidaySet?: Set<string>,
 ): boolean {
   const ymd = targetYmd.slice(0, 10);
   const [y, m] = ymd.split("-").map(Number);
   if (!y || !m) return false;
-  const deadline = firstWednesdayYmdOfMonth(y, m);
+  const deadline =
+    holidaySet && holidaySet.size > 0
+      ? halfdayApplicationDeadlineYmd(y, m, holidaySet)
+      : firstWednesdayYmdOfMonth(y, m);
   const today = (todayKst ?? todayKstYmd()).slice(0, 10);
   return today > deadline;
 }
 
-export function halfdayApplicationDeadlineLabel(year: number, month: number): string {
+export function halfdayApplicationDeadlineLabel(
+  year: number,
+  month: number,
+  holidaySet?: Set<string>,
+): string {
+  if (holidaySet && holidaySet.size > 0) {
+    return halfdayApplicationDeadlineYmd(year, month, holidaySet);
+  }
   return firstWednesdayYmdOfMonth(year, month);
 }
 
-export function halfdayApplicationDeadlineError(targetYmd: string): string {
+export function halfdayApplicationDeadlineError(targetYmd: string, holidaySet?: Set<string>): string {
   const ymd = targetYmd.slice(0, 10);
   const [y, m] = ymd.split("-").map(Number);
-  const deadline = firstWednesdayYmdOfMonth(y, m);
-  return `하프데이는 해당 월(${y}년 ${m}월) 첫째 주 수요일(${deadline})까지만 신청할 수 있습니다.`;
+  const wed = firstWednesdayYmdOfMonth(y, m);
+  const deadline =
+    holidaySet && holidaySet.size > 0
+      ? halfdayApplicationDeadlineYmd(y, m, holidaySet)
+      : wed;
+  const holidayNote =
+    holidaySet && isHolidayOrWeekendYmd(wed, holidaySet) && deadline !== wed
+      ? " (해당 주 수요일이 휴일이어서 목요일까지)"
+      : "";
+  return `하프데이는 해당 월(${y}년 ${m}월) 첫째 주 수요일${holidayNote} ${deadline}까지 신청할 수 있습니다.`;
+}
+
+/** 하프데이 사용일: 수요일(영업일) 또는 전날이 휴일인 수요일인 목요일 */
+export function isValidPmHalfDayLeaveYmd(ymd: string, holidaySet: Set<string>): boolean {
+  const d = ymd.slice(0, 10);
+  if (isWednesdayYMD(d)) return !isHolidayOrWeekendYmd(d, holidaySet);
+  if (isThursdayYMD(d)) {
+    const prev = addDaysYMD(d, -1);
+    return isWednesdayYMD(prev) && isHolidayOrWeekendYmd(prev, holidaySet);
+  }
+  return false;
+}
+
+export function isPmHalfDayHolidayWednesdaySelection(ymd: string, holidaySet: Set<string>): boolean {
+  const d = ymd.slice(0, 10);
+  return isWednesdayYMD(d) && isHolidayOrWeekendYmd(d, holidaySet);
+}
+
+export function pmHalfDayLeaveDateError(): string {
+  return "하프데이는 수요일에 신청할 수 있습니다. 해당 수요일이 휴일이면 다음날 목요일을 선택해 주세요.";
+}
+
+/** 주간 하프데이 인원 제한 대상 팀 */
+export const TEAM_HALF_WEEKLY_LIMIT_TEAM_NAME = "2팀";
+
+export const TEAM_HALF_WEEKLY_MAX_APPLICANTS = 4;
+
+export const TEAM_HALF_WEEKLY_LIMIT_ERROR =
+  "한주 하프데이 최대인원 4명을 초과하였습니다.";
+
+/** 해당 YMD가 속한 주의 월요일 YYYY-MM-DD (월~일) */
+export function weekStartYmdFromYmd(ymd: string): string {
+  const d = ymd.slice(0, 10);
+  const dow = calendarUtcDowFromYMD(d);
+  const diffToMonday = dow === 0 ? -6 : 1 - dow;
+  return addDaysYMD(d, diffToMonday);
+}
+
+export function isTeamHalfWeeklyLimitTeam(teamName: string | null | undefined): boolean {
+  return (teamName ?? "").trim() === TEAM_HALF_WEEKLY_LIMIT_TEAM_NAME;
+}
+
+export function wouldExceedTeamHalfWeeklyLimit(
+  applicantEmployeeIds: Iterable<string>,
+  newEmployeeId: string,
+  max: number = TEAM_HALF_WEEKLY_MAX_APPLICANTS,
+): boolean {
+  const set = new Set(applicantEmployeeIds);
+  if (set.has(newEmployeeId)) return false;
+  return set.size >= max;
+}
+
+export function isTeamHalfWeeklyLimitExceeded(
+  leaveYmd: string,
+  employeeId: string,
+  applicantsByWeek: Record<string, string[]>,
+): boolean {
+  const weekKey = weekStartYmdFromYmd(leaveYmd);
+  return wouldExceedTeamHalfWeeklyLimit(applicantsByWeek[weekKey] ?? [], employeeId);
+}
+
+export function buildTeamHalfWeekApplicantMap(
+  rows: { ymd: string; employeeId: string }[],
+): Record<string, string[]> {
+  const map = new Map<string, Set<string>>();
+  for (const row of rows) {
+    const key = weekStartYmdFromYmd(row.ymd);
+    let set = map.get(key);
+    if (!set) {
+      set = new Set();
+      map.set(key, set);
+    }
+    set.add(row.employeeId);
+  }
+  return Object.fromEntries([...map.entries()].map(([k, v]) => [k, [...v]]));
 }
 
 export function requestHasPmHalfMonth(

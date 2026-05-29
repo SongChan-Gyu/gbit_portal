@@ -2,8 +2,9 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { getFiscalYear } from "@/lib/workdays";
 import { redirect } from "next/navigation";
-import { formatYMD, holidayDateToYmd } from "@/lib/dateUtils";
-import { monthKeyFromYmd } from "@/lib/halfdayPolicy";
+import { addDaysYMD, formatYMD, holidayDateToYmd } from "@/lib/dateUtils";
+import { isTeamHalfWeeklyLimitTeam, monthKeyFromYmd } from "@/lib/halfdayPolicy";
+import { fetchTeamHalfWeekApplicantMap } from "@/lib/halfdayTeamWeekly";
 import LeaveApplyForm from "./LeaveApplyForm";
 import LeaveApplyFeatureTour from "./LeaveApplyFeatureTour";
 import HalfPoolKpiCell from "./HalfPoolKpiCell";
@@ -106,6 +107,16 @@ export default async function LeaveApplyPage() {
   const todayYmd = holidayDateToYmd(now);
   const currentMonthKey = monthKeyFromYmd(todayYmd);
 
+  let teamHalfWeekApplicantsByWeek: Record<string, string[]> = {};
+  if (employee?.teamId && isTeamHalfWeeklyLimitTeam(employee.team?.name)) {
+    teamHalfWeekApplicantsByWeek = await fetchTeamHalfWeekApplicantMap(
+      prisma,
+      employee.teamId,
+      addDaysYMD(todayYmd, -90),
+      addDaysYMD(todayYmd, 180),
+    );
+  }
+
   return (
     <div className="max-w-2xl">
       {/* 페이지 헤더 */}
@@ -162,6 +173,9 @@ export default async function LeaveApplyPage() {
         healingHalfReplaceUsedByMonth={healingHalfReplaceUsedByMonth}
         approvedHealingHalfReplaceMonthKeys={approvedHealingHalfReplaceMonthKeys}
         holidays={holidays.map((h) => holidayDateToYmd(h.date))}
+        teamName={employee?.team?.name ?? null}
+        currentEmployeeId={user.employeeId}
+        teamHalfWeekApplicantsByWeek={teamHalfWeekApplicantsByWeek}
       />
 
       <LeaveApplyFeatureTour />
