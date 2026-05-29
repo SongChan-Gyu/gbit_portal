@@ -323,6 +323,8 @@ export default function LeaveApplyForm({
   const router = useRouter();
   const [items, setItems] = useState<LeaveItem[]>([initItem()]);
   const [error, setError] = useState("");
+  /** 달력에서 막힌 날짜 안내(선택일과 무관 — 초과 주 클릭 시에도 표시) */
+  const [datePickMessage, setDatePickMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const todayYmd = todayStr();
@@ -367,15 +369,10 @@ export default function LeaveApplyForm({
     });
   }, [items, leaveTypes, isTeam2HalfWeeklyLimit, currentEmployeeId, teamHalfWeekApplicantsByWeek]);
 
-  /** 달력에서 다른 주(초과)를 눌렀을 때 남는 오류 — 현재 선택일 기준으로만 표시 */
-  const formError =
+  /** 제출 오류 중, 현재 선택일 주는 여유 있는데 남은 주간 한도 메시지는 숨김 */
+  const submitBannerError =
     error === TEAM_HALF_WEEKLY_LIMIT_ERROR && !pmHalfWeekLimitExceededForSelection ? "" : error;
-
-  useEffect(() => {
-    if (error === TEAM_HALF_WEEKLY_LIMIT_ERROR && !pmHalfWeekLimitExceededForSelection) {
-      setError("");
-    }
-  }, [error, pmHalfWeekLimitExceededForSelection]);
+  const formError = datePickMessage || submitBannerError;
 
   const canSubmitZeroHalfReplace = useMemo(() => {
     return items.some((it) => {
@@ -710,19 +707,28 @@ export default function LeaveApplyForm({
     if (calendarStep === "start") {
       setCalendarPickedStart(dateStr);
       if (isHalf) {
+        const clearPickFeedback = () => {
+          setDatePickMessage("");
+          setError((prev) => (prev === TEAM_HALF_WEEKLY_LIMIT_ERROR ? "" : prev));
+        };
+        const blockPick = (msg: string) => {
+          clearPickFeedback();
+          setDatePickMessage(msg);
+        };
+
         if (lt?.code === PM_HALF_MONTH_CODE && !isValidPmHalfDayLeaveYmd(dateStr, holidaySetForCalendar)) {
-          if (isPmHalfDayHolidayWednesdaySelection(dateStr, holidaySetForCalendar)) {
-            setError(PM_HALF_HOLIDAY_WEDNESDAY_HINT);
-          } else {
-            setError(pmHalfDayLeaveDateError());
-          }
+          blockPick(
+            isPmHalfDayHolidayWednesdaySelection(dateStr, holidaySetForCalendar)
+              ? PM_HALF_HOLIDAY_WEDNESDAY_HINT
+              : pmHalfDayLeaveDateError(),
+          );
           return;
         }
         if (
           lt?.code === PM_HALF_MONTH_CODE &&
           isPastHalfdayApplicationDeadlineForMonth(dateStr, undefined, holidaySetForCalendar)
         ) {
-          setError(halfdayApplicationDeadlineError(dateStr, holidaySetForCalendar));
+          blockPick(halfdayApplicationDeadlineError(dateStr, holidaySetForCalendar));
           return;
         }
         if (
@@ -730,13 +736,13 @@ export default function LeaveApplyForm({
           isTeam2HalfWeeklyLimit &&
           isTeamHalfWeeklyLimitExceeded(dateStr, currentEmployeeId, teamHalfWeekApplicantsByWeek)
         ) {
-          setError(TEAM_HALF_WEEKLY_LIMIT_ERROR);
+          blockPick(TEAM_HALF_WEEKLY_LIMIT_ERROR);
           return;
         }
         if (lt?.code === PM_HALF_MONTH_CODE) {
           const mk = monthKeyFromYmd(dateStr);
           if (!canApplyHalfDayInMonth(mk, halfDayUsedByMonth, approvedHealingHalfReplaceMonthSet)) {
-            setError(
+            blockPick(
               approvedHealingHalfReplaceMonthSet.has(mk)
                 ? "해당 월에 힐링데이(하프대체)가 승인되어 하프데이를 신청할 수 없습니다."
                 : "해당 월 하프데이는 이미 신청·사용 중입니다.",
@@ -745,10 +751,10 @@ export default function LeaveApplyForm({
           }
         }
         if (isHealingHalfReplaceCode(lt?.code) && isHolidayOrWeekendYmd(dateStr, holidaySetForCalendar)) {
-          setError("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
+          blockPick("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
           return;
         }
-        setError((prev) => (prev === TEAM_HALF_WEEKLY_LIMIT_ERROR ? "" : prev));
+        clearPickFeedback();
         changeDate(calendarItemIdx, "startDate", dateStr);
         closeCalendar();
         return;
@@ -789,6 +795,7 @@ export default function LeaveApplyForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setDatePickMessage("");
     for (const it of items) {
       if (!needsLeaveRowValidation(it)) continue;
       if (!it.leaveTypeId?.trim()) { setError("작성 중인 항목에 휴가 유형을 선택해 주세요."); return; }
@@ -1279,13 +1286,15 @@ export default function LeaveApplyForm({
                             <strong>{TEAM_HALF_WEEKLY_MAX_APPLICANTS}명</strong>입니다.
                           </span>
                         ) : null}
-                        {item.startDate?.trim() &&
-                        isTeam2HalfWeeklyLimit &&
-                        isTeamHalfWeeklyLimitExceeded(
-                          item.startDate.slice(0, 10),
-                          currentEmployeeId,
-                          teamHalfWeekApplicantsByWeek,
-                        ) ? (
+                        {datePickMessage ? (
+                          <span className="mt-1.5 block font-medium text-red-700">{datePickMessage}</span>
+                        ) : item.startDate?.trim() &&
+                          isTeam2HalfWeeklyLimit &&
+                          isTeamHalfWeeklyLimitExceeded(
+                            item.startDate.slice(0, 10),
+                            currentEmployeeId,
+                            teamHalfWeekApplicantsByWeek,
+                          ) ? (
                           <span className="mt-1.5 block font-medium text-red-700">
                             {TEAM_HALF_WEEKLY_LIMIT_ERROR}
                           </span>
