@@ -571,7 +571,8 @@ export default async function DashboardPage({
       {dashboardForms.length > 0 && (
         <div className="panel">
           <div className="panel-header">
-            <span className="panel-title">양식 제출</span>
+            <span className="panel-title">건강검진</span>
+            <Link href="/health-check" className="text-xs text-blue-600 hover:underline">전체 보기</Link>
           </div>
           <div className="divide-y divide-gray-100">
             {dashboardForms.map((f) => {

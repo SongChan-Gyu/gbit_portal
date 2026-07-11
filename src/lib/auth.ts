@@ -98,6 +98,17 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         token.mustChangePassword = !!(user as { mustChangePassword?: boolean }).mustChangePassword;
         token.isSettingsAdmin = !!(user as any).isSettingsAdmin;
       }
+      if (token.employeeId) {
+        const emp = await prisma.employee.findUnique({
+          where: { id: token.employeeId as string },
+          select: { dutyDept: true, role: true, isSettingsAdmin: true },
+        });
+        if (emp) {
+          token.dutyDept = emp.dutyDept;
+          token.role = emp.role;
+          token.isSettingsAdmin = emp.isSettingsAdmin;
+        }
+      }
       return token;
     },
     async session({ session, token }) {
@@ -109,6 +120,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         (session.user as any).position   = token.position;
         (session.user as any).mustChangePassword = !!token.mustChangePassword;
         (session.user as any).isSettingsAdmin = !!token.isSettingsAdmin;
+        (session.user as any).dutyDept   = token.dutyDept ?? null;
       }
       return session;
     },

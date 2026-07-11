@@ -8,6 +8,7 @@ import LoginAnnouncementGate from "@/components/login-announcement/LoginAnnounce
 import prisma from "@/lib/db";
 import { DEFAULT_PERMISSIONS } from "@/lib/menuConfig";
 import { isWelfareDept } from "@/lib/jeju";
+import { canViewAllHealthCheckSubmissions } from "@/lib/healthCheck";
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -30,9 +31,21 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   const isExternal = employee?.employeeType === "EXTERNAL";
   if (isExternal) {
     allowedMenuKeys = ["dashboard", "me", "notices", "jeju", "jeju_my", "jeju_info"];
-  } else if (isWelfareDept(employee)) {
-    if (!allowedMenuKeys.includes("jeju_admin")) allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
-    if (!allowedMenuKeys.includes("jeju_approve")) allowedMenuKeys = [...allowedMenuKeys, "jeju_approve"];
+  } else {
+    for (const k of ["health_check", "health_check_my"]) {
+      if (!allowedMenuKeys.includes(k)) allowedMenuKeys = [...allowedMenuKeys, k];
+    }
+    if (isWelfareDept(employee)) {
+      if (!allowedMenuKeys.includes("jeju_admin")) allowedMenuKeys = [...allowedMenuKeys, "jeju_admin"];
+      if (!allowedMenuKeys.includes("jeju_approve")) allowedMenuKeys = [...allowedMenuKeys, "jeju_approve"];
+    }
+    if (canViewAllHealthCheckSubmissions(employee, user.role)) {
+      if (!allowedMenuKeys.includes("health_check_all")) {
+        allowedMenuKeys = [...allowedMenuKeys, "health_check_all"];
+      }
+    } else {
+      allowedMenuKeys = allowedMenuKeys.filter((k) => k !== "health_check_all");
+    }
   }
 
   // 설정 관리자: 역할 변경 없이 설정 메뉴만 추가 노출
@@ -43,24 +56,6 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     }
   }
 
-  // 포털 메뉴 노출 양식: showInMenu=true, isActive=true, audience 매칭
-  const formMenuItems = await prisma.form.findMany({
-    where: {
-      showInMenu: true,
-      isActive: true,
-      OR: [
-        { audience: "ALL" },
-        { audience: isExternal ? "EXTERNAL" : "INTERNAL" },
-        {
-          audience: "GROUP",
-          employeeGroup: { members: { some: { employeeId: user.employeeId } } },
-        },
-      ],
-    },
-    select: { id: true, title: true },
-    orderBy: { createdAt: "asc" },
-  });
-
   return (
     <SessionProvider session={session}>
       {/* 상단: 전환 배너(있을 때) + 본문 영역; 배너는 문서 흐름이라 메뉴를 덮지 않음 */}
@@ -70,10 +65,10 @@ export default async function MainLayout({ children }: { children: React.ReactNo
         <div className="flex flex-1 min-h-0 max-w-full overflow-hidden overflow-x-hidden">
           {/* 사이드바 - 데스크톱 */}
           <aside className="hidden md:flex flex-col w-64 lg:w-72 shrink-0 bg-white border-r border-gray-100 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y">
-            <Sidebar allowedMenuKeys={allowedMenuKeys} formMenuItems={formMenuItems} />
+            <Sidebar allowedMenuKeys={allowedMenuKeys} />
           </aside>
           <div className="flex-1 flex flex-col overflow-hidden min-h-0">
-            <Header allowedMenuKeys={allowedMenuKeys} formMenuItems={formMenuItems} />
+            <Header allowedMenuKeys={allowedMenuKeys} />
             <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-y-contain safe-area-bottom">
               <div className="px-4 py-5 md:px-6 md:py-6 pb-10 md:pb-6 max-w-5xl mx-auto w-full min-w-0">
                 {children}

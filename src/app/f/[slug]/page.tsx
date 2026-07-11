@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { CheckCircle, RotateCcw } from "lucide-react";
+import { renderFormField, validateFormField } from "@/components/forms/FormFieldInput";
+import { formatRrn7 } from "@/lib/rrn7Input";
 
 type Field = {
   id: string;
@@ -55,11 +57,11 @@ export default function PublicFormPage() {
 
         const init: Record<string, string> = {};
         formData.fields.forEach((f) => {
-          // 이전 답변으로 프리필
-          init[f.id] =
+          const raw =
             subData.submitted && subData.answers[f.id] != null
               ? subData.answers[f.id]
               : "";
+          init[f.id] = f.fieldType === "rrn7" ? formatRrn7(raw) : raw;
         });
         setAnswers(init);
       })
@@ -72,84 +74,7 @@ export default function PublicFormPage() {
   };
 
   function renderField(f: Field, value: string, disabled: boolean) {
-    const opts = (f.options ?? []).filter(Boolean);
-    switch (f.fieldType) {
-      case "textarea":
-        return (
-          <textarea
-            className="input w-full min-h-[80px]"
-            value={value}
-            onChange={(e) => setAnswer(f.id, e.target.value)}
-            required={f.required}
-            disabled={disabled}
-          />
-        );
-      case "number":
-        return (
-          <input type="number" className="input w-full" value={value}
-            onChange={(e) => setAnswer(f.id, e.target.value)} required={f.required} disabled={disabled} />
-        );
-      case "date":
-        return (
-          <div className="input-date-shell">
-            <input
-              type="date"
-              className="input input-date-compact"
-              value={value}
-              onChange={(e) => setAnswer(f.id, e.target.value)}
-              required={f.required}
-              disabled={disabled}
-            />
-          </div>
-        );
-      case "select":
-        return (
-          <select className="input w-full" value={value}
-            onChange={(e) => setAnswer(f.id, e.target.value)} required={f.required} disabled={disabled}>
-            <option value="">선택하세요</option>
-            {opts.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-        );
-      case "radio":
-        return (
-          <div className="space-y-1.5 mt-1">
-            {opts.map((opt) => (
-              <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                <input type="radio" name={`field-${f.id}`} value={opt} checked={value === opt}
-                  onChange={() => setAnswer(f.id, opt)} required={f.required} disabled={disabled}
-                  className="accent-blue-600" />
-                <span className="text-sm text-gray-700">{opt}</span>
-              </label>
-            ))}
-          </div>
-        );
-      case "checkbox": {
-        const selected = value ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
-        return (
-          <div className="space-y-1.5 mt-1">
-            {opts.map((opt) => {
-              const checked = selected.includes(opt);
-              return (
-                <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" value={opt} checked={checked} disabled={disabled}
-                    onChange={() => {
-                      const next = checked ? selected.filter((s) => s !== opt) : [...selected, opt];
-                      setAnswer(f.id, next.join(","));
-                    }}
-                    className="w-4 h-4 accent-blue-600" />
-                  <span className="text-sm text-gray-700">{opt}</span>
-                </label>
-              );
-            })}
-          </div>
-        );
-      }
-      default:
-        return (
-          <input type="text" className="input w-full" value={value}
-            onChange={(e) => setAnswer(f.id, e.target.value)} required={f.required} disabled={disabled} />
-        );
-    }
+    return renderFormField(f, value, (v) => setAnswer(f.id, v), disabled);
   }
 
   const isReadOnly = prevSubmission.submitted && !resubmitting;
@@ -158,9 +83,9 @@ export default function PublicFormPage() {
     e.preventDefault();
     if (!form) return;
     for (const f of form.fields) {
-      if (!f.required) continue;
-      if (!String(answers[f.id] ?? "").trim()) {
-        alert(`필수 항목을 입력해 주세요: ${f.label}`);
+      const msg = validateFormField(f, answers[f.id] ?? "");
+      if (msg) {
+        alert(msg);
         return;
       }
     }

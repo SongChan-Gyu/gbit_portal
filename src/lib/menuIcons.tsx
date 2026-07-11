@@ -19,6 +19,7 @@ import {
   Wrench,
   UserRoundCog,
   Home,
+  Stethoscope,
   MessagesSquare,
   MessageCircleQuestion,
 } from "lucide-react";
@@ -41,6 +42,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   improvement_board: MessagesSquare,
   support_inbox: MessageCircleQuestion,
   jeju: Home,
+  health_check: Stethoscope,
   admin: Settings2,
   admin_organization: Users,
   admin_leave_settings: CalendarRange,

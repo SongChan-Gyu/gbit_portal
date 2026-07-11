@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle, RotateCcw } from "lucide-react";
+import { renderFormField, validateFormField } from "@/components/forms/FormFieldInput";
+import { formatRrn7 } from "@/lib/rrn7Input";
 
 type Field = {
   id: string;
@@ -23,139 +26,37 @@ type PrevSubmission =
   | { submitted: false }
   | { submitted: true; submittedAt: string; answers: Record<string, string> };
 
-function renderField(
-  f: Field,
-  value: string,
-  onChange: (val: string) => void,
-  disabled: boolean,
-) {
-  const opts = (f.options ?? []).filter(Boolean);
-
-  switch (f.fieldType) {
-    case "textarea":
-      return (
-        <textarea
-          className="input w-full min-h-[80px]"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={f.required}
-          disabled={disabled}
-        />
-      );
-    case "number":
-      return (
-        <input
-          type="number"
-          className="input w-full"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={f.required}
-          disabled={disabled}
-        />
-      );
-    case "date":
-      return (
-        <div className="input-date-shell">
-          <input
-            type="date"
-            className="input input-date-compact"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            required={f.required}
-            disabled={disabled}
-          />
-        </div>
-      );
-    case "select":
-      return (
-        <select
-          className="input w-full"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={f.required}
-          disabled={disabled}
-        >
-          <option value="">선택하세요</option>
-          {opts.map((opt) => (
-            <option key={opt} value={opt}>{opt}</option>
-          ))}
-        </select>
-      );
-    case "radio":
-      return (
-        <div className="space-y-1.5 mt-1">
-          {opts.map((opt) => (
-            <label key={opt} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name={`field-${f.id}`}
-                value={opt}
-                checked={value === opt}
-                onChange={() => onChange(opt)}
-                required={f.required}
-                disabled={disabled}
-                className="accent-blue-600"
-              />
-              <span className="text-sm text-gray-700">{opt}</span>
-            </label>
-          ))}
-        </div>
-      );
-    case "checkbox": {
-      const selected = value ? value.split(",").map((s) => s.trim()).filter(Boolean) : [];
-      return (
-        <div className="space-y-1.5 mt-1">
-          {opts.map((opt) => {
-            const checked = selected.includes(opt);
-            return (
-              <label key={opt} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  value={opt}
-                  checked={checked}
-                  disabled={disabled}
-                  onChange={() => {
-                    const next = checked
-                      ? selected.filter((s) => s !== opt)
-                      : [...selected, opt];
-                    onChange(next.join(","));
-                  }}
-                  className="w-4 h-4 accent-blue-600"
-                />
-                <span className="text-sm text-gray-700">{opt}</span>
-              </label>
-            );
-          })}
-        </div>
-      );
-    }
-    default:
-      return (
-        <input
-          type="text"
-          className="input w-full"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          required={f.required}
-          disabled={disabled}
-        />
-      );
-  }
+function initialAnswer(f: Field, raw: string): string {
+  if (f.fieldType === "rrn7") return formatRrn7(raw);
+  return raw;
 }
 
 export default function FormSubmitClient({
   form,
   prevSubmission = { submitted: false },
+  allowMultipleSubmissions = false,
+  afterSubmitHref,
+  editingSubmissionId,
 }: {
   form: FormData;
   prevSubmission?: PrevSubmission;
+  allowMultipleSubmissions?: boolean;
+  afterSubmitHref?: string;
+  /** 지정 시 해당 건을 수정 (다건 제출 양식) */
+  editingSubmissionId?: string;
 }) {
+  const isEditMode = !!editingSubmissionId;
+
   const [answers, setAnswers] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
     form.fields.forEach((f) => {
-      init[f.id] =
+      const fromPrev =
         prevSubmission.submitted && prevSubmission.answers[f.id] != null
           ? prevSubmission.answers[f.id]
+          : "";
+      init[f.id] =
+        isEditMode || (!allowMultipleSubmissions && prevSubmission.submitted)
+          ? initialAnswer(f, fromPrev)
           : "";
     });
     return init;
@@ -176,10 +77,9 @@ export default function FormSubmitClient({
 
   function validate() {
     for (const f of form.fields) {
-      if (!f.required) continue;
-      const val = String(answers[f.id] ?? "").trim();
-      if (!val) {
-        setError(`필수 항목을 입력해 주세요: ${f.label}`);
+      const msg = validateFormField(f, answers[f.id] ?? "");
+      if (msg) {
+        setError(msg);
         return false;
       }
     }
@@ -194,7 +94,11 @@ export default function FormSubmitClient({
     const res = await fetch(`/api/forms/${form.id}/submit`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ answers, _internal: true }),
+      body: JSON.stringify({
+        answers,
+        ...(editingSubmissionId ? { submissionId: editingSubmissionId } : {}),
+        _internal: true,
+      }),
     });
     const data = await res.json();
     setSubmitting(false);
@@ -211,15 +115,40 @@ export default function FormSubmitClient({
         <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
           <CheckCircle size={32} className="text-green-500" />
         </div>
-        <h1 className="text-xl font-bold text-gray-800 mb-1">제출 완료</h1>
+        <h1 className="text-xl font-bold text-gray-800 mb-1">{isEditMode ? "수정 완료" : "제출 완료"}</h1>
         <p className="text-gray-500 text-sm">
-          {prevSubmission.submitted ? "내용이 업데이트되었습니다." : "작성해 주셔서 감사합니다."}
+          {isEditMode
+            ? "신청 내용이 수정·저장되었습니다."
+            : allowMultipleSubmissions
+              ? "신청 내용이 저장되었습니다. 가족 검진 등 추가 신청이 있으면 다시 작성해 주세요."
+              : prevSubmission.submitted
+                ? "내용이 업데이트되었습니다."
+                : "작성해 주셔서 감사합니다."}
         </p>
+        {afterSubmitHref && (
+          <div className="mt-5 flex flex-col sm:flex-row items-center justify-center gap-2">
+            <Link href={afterSubmitHref} className="btn-primary px-5 py-2.5 rounded-xl text-sm">
+              내 신청 내역 보기
+            </Link>
+            {allowMultipleSubmissions && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSuccess(false);
+                  setAnswers(Object.fromEntries(form.fields.map((f) => [f.id, ""])));
+                }}
+                className="btn-ghost px-5 py-2.5 rounded-xl text-sm text-gray-600"
+              >
+                추가 신청하기
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }
 
-  const isReadOnly = prevSubmission.submitted && !resubmitting;
+  const isReadOnly = !isEditMode && !allowMultipleSubmissions && prevSubmission.submitted && !resubmitting;
 
   return (
     <div className="max-w-xl mx-auto">
@@ -228,7 +157,9 @@ export default function FormSubmitClient({
         <div className="h-1.5 bg-gradient-to-r from-blue-500 to-indigo-500" />
 
         <div className="p-5 sm:p-6">
-          <h1 className="text-[17px] font-bold text-gray-900 mb-0.5">{form.title}</h1>
+          <h1 className="text-[17px] font-bold text-gray-900 mb-0.5">
+            {isEditMode ? `${form.title} · 수정` : form.title}
+          </h1>
           {form.description && (
             <p className="text-sm text-gray-500 mb-4 whitespace-pre-wrap leading-relaxed">{form.description}</p>
           )}
@@ -239,8 +170,20 @@ export default function FormSubmitClient({
             </div>
           )}
 
+          {allowMultipleSubmissions && !isEditMode && (
+            <div className="mb-5 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-900">
+              본인·가족 각각 별도로 제출해 주세요. 제출할 때마다 신청 건이 저장됩니다.
+            </div>
+          )}
+
+          {isEditMode && (
+            <div className="mb-5 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+              제출한 내용을 수정한 뒤 <strong>수정 저장</strong>을 눌러 주세요.
+            </div>
+          )}
+
           {/* 기제출 배너 */}
-          {prevSubmission.submitted && !resubmitting && (
+          {!allowMultipleSubmissions && prevSubmission.submitted && !resubmitting && (
             <div className="mb-5 rounded-xl bg-green-50 border border-green-200 px-4 py-3 flex items-start justify-between gap-3">
               <div className="flex items-start gap-2.5">
                 <CheckCircle size={17} className="text-green-600 mt-0.5 shrink-0" />
@@ -277,7 +220,7 @@ export default function FormSubmitClient({
                       {f.label}
                       {f.required && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
-                    {renderField(f, answers[f.id] ?? "", (v) => setAnswer(f.id, v), isReadOnly)}
+                    {renderFormField(f, answers[f.id] ?? "", (v) => setAnswer(f.id, v), isReadOnly)}
                   </div>
                 ))}
               </div>
@@ -293,7 +236,13 @@ export default function FormSubmitClient({
                 disabled={submitting}
                 className="w-full btn-primary py-3 rounded-xl font-semibold disabled:opacity-50 mt-2"
               >
-                {submitting ? "제출 중..." : prevSubmission.submitted ? "수정 완료 (다시 제출)" : "제출하기"}
+                {submitting
+                  ? "저장 중..."
+                  : isEditMode
+                    ? "수정 저장"
+                    : prevSubmission.submitted
+                      ? "수정 완료 (다시 제출)"
+                      : "제출하기"}
               </button>
             )}
           </form>

@@ -268,7 +268,7 @@ export default function FormBuilder({
               checked={form.showInMenu}
               onChange={(e) => set("showInMenu", e.target.checked)}
             />
-            <span className="text-sm text-gray-700">포털 사이드바 메뉴에 노출</span>
+            <span className="text-sm text-gray-700">건강검진 메뉴에 노출</span>
           </label>
         </div>
 

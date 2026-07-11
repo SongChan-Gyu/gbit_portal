@@ -4,6 +4,7 @@ import { requireAdmin, requireSettingsAccess } from "@/lib/authGuard";
 import prisma from "@/lib/db";
 import { writeAudit, getIp } from "@/lib/audit";
 import { parseFormSubmitDeadlineInput } from "@/lib/formSubmitDeadline";
+import { formFieldUsesOptions, isFormFieldType } from "@/lib/formFieldTypes";
 
 /** GET: 폼 목록 */
 export async function GET() {
@@ -65,8 +66,8 @@ export async function POST(req: Request) {
         create: (Array.isArray(fields) ? fields : []).map((f: { label: string; fieldType?: string; options?: string[]; required?: boolean }, i: number) => ({
           sortOrder: i,
           label: f.label ?? "",
-          fieldType: (["text","textarea","number","date","select","radio","checkbox"] as string[]).includes(f.fieldType ?? "") ? f.fieldType! : "text",
-          options: (["select","radio","checkbox"] as string[]).includes(f.fieldType ?? "") && Array.isArray(f.options) ? JSON.stringify(f.options) : null,
+          fieldType: isFormFieldType(f.fieldType ?? "") ? f.fieldType! : "text",
+          options: formFieldUsesOptions(f.fieldType ?? "") && Array.isArray(f.options) ? JSON.stringify(f.options) : null,
           required: !!f.required,
         })),
       },

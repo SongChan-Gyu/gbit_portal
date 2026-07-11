@@ -49,6 +49,17 @@ export const MENU_GROUPS: MenuGroupDef[] = [
     ],
   },
   {
+    key: "health_check",
+    label: "건강검진",
+    icon: "🩺",
+    section: "main",
+    children: [
+      { key: "health_check", label: "신청하기", href: "/health-check" },
+      { key: "health_check_my", label: "내 신청 내역", href: "/health-check/my" },
+      { key: "health_check_all", label: "전체 신청 내역", href: "/health-check/all" },
+    ],
+  },
+  {
     key: "collab",
     label: "소통",
     icon: "💬",
@@ -112,6 +123,7 @@ export const DEFAULT_PERMISSIONS: Record<string, string[]> = {
     "leave_apply", "leave_my", "leave_approve", "leave_policy",
     "attendance", "stamp",
     "jeju", "jeju_my", "jeju_info",
+    "health_check", "health_check_my",
   ],
   PM: ALL_MENU_KEYS,
   ADMIN: ALL_MENU_KEYS,

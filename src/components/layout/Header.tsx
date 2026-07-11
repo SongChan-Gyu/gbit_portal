@@ -11,9 +11,7 @@ const ROLE_LABEL: Record<string, string> = {
   STAFF: "팀원", TEAM_LEAD: "팀장", PM: "PM", ADMIN: "관리자",
 };
 
-type FormMenuItem = { id: string; title: string };
-
-export default function Header({ allowedMenuKeys, formMenuItems }: { allowedMenuKeys?: string[]; formMenuItems?: FormMenuItem[] }) {
+export default function Header({ allowedMenuKeys }: { allowedMenuKeys?: string[] }) {
   const { data: session } = useSession();
   const user = session?.user as any;
   const [open, setOpen] = useState(false);
@@ -127,7 +125,7 @@ export default function Header({ allowedMenuKeys, formMenuItems }: { allowedMenu
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden touch-pan-y overscroll-y-contain [-webkit-overflow-scrolling:touch]">
-                <Sidebar allowedMenuKeys={allowedMenuKeys} formMenuItems={formMenuItems} onClose={() => setOpen(false)} />
+                <Sidebar allowedMenuKeys={allowedMenuKeys} onClose={() => setOpen(false)} />
               </div>
             </div>
           </div>,

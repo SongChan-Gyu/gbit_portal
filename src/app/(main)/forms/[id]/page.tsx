@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import FormSubmitClient from "./FormSubmitClient";
 import { employeeCanAccessForm } from "@/lib/formAccess";
+import { allowsMultipleSubmissions } from "@/lib/formSubmissionPolicy";
 
 export default async function InternalFormPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -36,14 +37,17 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
     required: f.required,
   }));
 
-  // 기존 제출 이력 조회
-  const prevSub = user.employeeId
-    ? await prisma.formSubmission.findFirst({
-        where: { formId: form.id, employeeId: user.employeeId },
-        orderBy: { createdAt: "desc" },
-        include: { answers: { select: { formFieldId: true, value: true } } },
-      })
-    : null;
+  const allowMultiple = allowsMultipleSubmissions(form);
+
+  // 기존 제출 이력 조회 (다건 제출 양식은 매번 새로 작성)
+  const prevSub =
+    !allowMultiple && user.employeeId
+      ? await prisma.formSubmission.findFirst({
+          where: { formId: form.id, employeeId: user.employeeId },
+          orderBy: { createdAt: "desc" },
+          include: { answers: { select: { formFieldId: true, value: true } } },
+        })
+      : null;
 
   const prevSubmission = prevSub
     ? {
@@ -64,6 +68,8 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
           isAnonymous: form.isAnonymous,
         }}
         prevSubmission={prevSubmission}
+        allowMultipleSubmissions={allowMultiple}
+        afterSubmitHref={allowMultiple ? "/health-check/my" : undefined}
       />
     </div>
   );
