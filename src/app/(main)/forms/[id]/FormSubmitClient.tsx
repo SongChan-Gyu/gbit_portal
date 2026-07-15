@@ -120,7 +120,7 @@ export default function FormSubmitClient({
           {isEditMode
             ? "신청 내용이 수정·저장되었습니다."
             : allowMultipleSubmissions
-              ? "신청 내용이 저장되었습니다. 가족 검진 등 추가 신청이 있으면 다시 작성해 주세요."
+              ? "신청 내용이 저장되었습니다. 본인·가족 등 추가 신청이 있으면 다시 작성해 주세요."
               : prevSubmission.submitted
                 ? "내용이 업데이트되었습니다."
                 : "작성해 주셔서 감사합니다."}

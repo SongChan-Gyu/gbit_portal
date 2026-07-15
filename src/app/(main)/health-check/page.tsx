@@ -4,7 +4,12 @@ import prisma from "@/lib/db";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { formVisibleToUserOrClause } from "@/lib/formAccess";
-import { canViewAllHealthCheckSubmissions, healthCheckFormWhere } from "@/lib/healthCheck";
+import {
+  canViewAllHealthCheckSubmissions,
+  checkHealthCheckEligibility,
+  HEALTH_CHECK_FORM_SLUG,
+  healthCheckFormWhere,
+} from "@/lib/healthCheck";
 
 export const metadata = { title: "건강검진 신청 | GBIT Portal" };
 
@@ -16,11 +21,13 @@ export default async function HealthCheckPage() {
   const employee = user.employeeId
     ? await prisma.employee.findUnique({
         where: { id: user.employeeId },
-        select: { employeeType: true, dutyDept: true },
+        select: { employeeType: true, dutyDept: true, birthDate: true, name: true },
       })
     : null;
   const isExternal = employee?.employeeType === "EXTERNAL";
   const canViewAll = canViewAllHealthCheckSubmissions(employee, user.role);
+  const healthCheckEligibility = checkHealthCheckEligibility(employee, { slug: HEALTH_CHECK_FORM_SLUG });
+  const healthCheckBlockReason = healthCheckEligibility.ok ? null : healthCheckEligibility.reason;
 
   let allSubmissionCount = 0;
   if (canViewAll) {
@@ -82,6 +89,14 @@ export default async function HealthCheckPage() {
         </Link>
       )}
 
+      {healthCheckBlockReason && (
+        <div className="panel border-amber-200 bg-amber-50/80">
+          <div className="panel-body text-sm text-amber-900">
+            {healthCheckBlockReason}
+          </div>
+        </div>
+      )}
+
       {forms.length === 0 ? (
         <div className="panel">
           <div className="panel-body text-sm text-gray-500 py-10 text-center">
@@ -95,18 +110,19 @@ export default async function HealthCheckPage() {
           </div>
           <div className="divide-y divide-gray-100">
             {forms.map((f) => {
-              const done = submittedFormIds.has(f.id);
+              const isHealthCheckForm = f.slug === HEALTH_CHECK_FORM_SLUG;
+              const internalHealthCheck = isHealthCheckForm && employee?.employeeType !== "EXTERNAL";
+              const done = submittedFormIds.has(f.id) && !internalHealthCheck;
               const href = `/forms/${f.id}`;
-              return (
-                <Link
-                  key={f.id}
-                  href={href}
-                  className="flex items-center justify-between px-4 py-3 md:py-2.5 hover:bg-slate-50 transition-colors touch-manipulation"
-                >
+              const blocked = isHealthCheckForm && !!healthCheckBlockReason;
+              const rowClass =
+                "flex items-center justify-between px-4 py-3 md:py-2.5 transition-colors touch-manipulation";
+              const rowContent = (
+                <>
                   <div className="min-w-0 flex items-center gap-2.5">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[15px] md:text-[13px] font-medium ${done ? "text-gray-500" : "text-gray-800"}`}>
+                        <span className={`text-[15px] md:text-[13px] font-medium ${done || blocked ? "text-gray-500" : "text-gray-800"}`}>
                           {f.title}
                         </span>
                         {f.isAnonymous && (
@@ -124,8 +140,33 @@ export default async function HealthCheckPage() {
                         제출완료
                       </span>
                     )}
+                    {blocked && (
+                      <span className="shrink-0 text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                        신청불가
+                      </span>
+                    )}
                   </div>
                   <ChevronRight size={18} className="text-gray-400 shrink-0 md:w-3.5 md:h-3.5" />
+                </>
+              );
+              if (blocked) {
+                return (
+                  <div
+                    key={f.id}
+                    className={`${rowClass} cursor-not-allowed bg-slate-50`}
+                    title={healthCheckBlockReason ?? undefined}
+                  >
+                    {rowContent}
+                  </div>
+                );
+              }
+              return (
+                <Link
+                  key={f.id}
+                  href={href}
+                  className={`${rowClass} hover:bg-slate-50`}
+                >
+                  {rowContent}
                 </Link>
               );
             })}

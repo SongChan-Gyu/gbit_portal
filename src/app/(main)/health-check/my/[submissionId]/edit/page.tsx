@@ -4,7 +4,7 @@ import prisma from "@/lib/db";
 import Link from "next/link";
 import FormSubmitClient from "@/app/(main)/forms/[id]/FormSubmitClient";
 import { allowsMultipleSubmissions } from "@/lib/formSubmissionPolicy";
-import { HEALTH_CHECK_FORM_SLUG } from "@/lib/healthCheck";
+import { checkHealthCheckEligibility, HEALTH_CHECK_FORM_SLUG } from "@/lib/healthCheck";
 
 export const metadata = { title: "건강검진 신청 수정 | GBIT Portal" };
 
@@ -20,6 +20,10 @@ export default async function HealthCheckEditPage({
   if (!user.employeeId) redirect("/health-check");
 
   const { submissionId } = await params;
+  const employee = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { employeeType: true, birthDate: true },
+  });
 
   const submission = await prisma.formSubmission.findFirst({
     where: { id: submissionId, employeeId: user.employeeId },
@@ -36,6 +40,23 @@ export default async function HealthCheckEditPage({
   }
 
   const form = submission.form;
+  const eligibility = checkHealthCheckEligibility(employee, form);
+  if (!eligibility.ok) {
+    return (
+      <div className="space-y-4">
+        <Link href="/health-check/my" className="text-sm text-gray-500 hover:text-gray-700">
+          ← 내 신청 내역
+        </Link>
+        <div className="max-w-xl rounded-2xl bg-white border border-amber-200 shadow-sm p-6">
+          <h1 className="text-[17px] font-bold text-gray-900 mb-2">{form.title} · 수정</h1>
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            {eligibility.reason}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const fields = form.fields.map((f) => ({
     id: f.id,
     label: f.label,

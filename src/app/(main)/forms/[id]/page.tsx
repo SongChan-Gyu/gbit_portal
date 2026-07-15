@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import FormSubmitClient from "./FormSubmitClient";
 import { employeeCanAccessForm } from "@/lib/formAccess";
 import { allowsMultipleSubmissions } from "@/lib/formSubmissionPolicy";
+import { checkHealthCheckEligibility, HEALTH_CHECK_FORM_SLUG } from "@/lib/healthCheck";
 
 export default async function InternalFormPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -19,7 +20,10 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
 
   const user = session.user as any;
   const employee = user.employeeId
-    ? await prisma.employee.findUnique({ where: { id: user.employeeId }, select: { employeeType: true } })
+    ? await prisma.employee.findUnique({
+        where: { id: user.employeeId },
+        select: { employeeType: true, birthDate: true, name: true },
+      })
     : null;
 
   const can = await employeeCanAccessForm(prisma, user.employeeId ?? null, employee?.employeeType, {
@@ -37,7 +41,24 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
     required: f.required,
   }));
 
-  const allowMultiple = allowsMultipleSubmissions(form);
+  const isHealthCheckForm = form.slug === HEALTH_CHECK_FORM_SLUG;
+  const allowMultiple =
+    allowsMultipleSubmissions(form) ||
+    (isHealthCheckForm && employee?.employeeType !== "EXTERNAL");
+  const healthCheckEligibility = isHealthCheckForm ? checkHealthCheckEligibility(employee, form) : null;
+
+  if (healthCheckEligibility && !healthCheckEligibility.ok) {
+    return (
+      <div className="py-2">
+        <div className="max-w-xl mx-auto rounded-2xl bg-white border border-amber-200 shadow-sm p-6">
+          <h1 className="text-[17px] font-bold text-gray-900 mb-2">{form.title}</h1>
+          <div className="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+            {healthCheckEligibility.reason}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 기존 제출 이력 조회 (다건 제출 양식은 매번 새로 작성)
   const prevSub =
@@ -69,7 +90,7 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
         }}
         prevSubmission={prevSubmission}
         allowMultipleSubmissions={allowMultiple}
-        afterSubmitHref={allowMultiple ? "/health-check/my" : undefined}
+        afterSubmitHref={isHealthCheckForm ? "/health-check/my" : allowMultiple ? "/health-check/my" : undefined}
       />
     </div>
   );

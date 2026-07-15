@@ -4,6 +4,12 @@ import prisma from "@/lib/db";
 import { employeeCanAccessForm } from "@/lib/formAccess";
 import { allowsMultipleSubmissions } from "@/lib/formSubmissionPolicy";
 import { isValidRrn7 } from "@/lib/rrn7Input";
+import {
+  checkHealthCheckEligibility,
+  healthCheckBlankFieldError,
+  healthCheckSelfOnlyError,
+  HEALTH_CHECK_FORM_SLUG,
+} from "@/lib/healthCheck";
 
 function resolveFormWhere(slug: string) {
   const isCuid = /^c[a-z0-9]{20,}$/.test(slug);
@@ -77,8 +83,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   if (!form)
     return NextResponse.json({ error: "폼을 찾을 수 없거나 비활성화되었습니다." }, { status: 404 });
 
-  const multi = allowsMultipleSubmissions(form);
-
   const body = await req.json().catch(() => ({}));
   const { submitterName, submitterEmail, submitterPhone, answers, submissionId: rawSubmissionId } = body;
   const submissionId =
@@ -90,7 +94,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   const empRow = resolvedEmployeeId
     ? await prisma.employee.findUnique({
         where: { id: resolvedEmployeeId },
-        select: { employeeType: true, name: true },
+        select: { employeeType: true, name: true, birthDate: true },
       })
     : null;
 
@@ -105,6 +109,18 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
 
   if (form.audience !== "ALL" && !resolvedEmployeeId) {
     return NextResponse.json({ error: "로그인 후 제출해 주세요." }, { status: 401 });
+  }
+
+  const isHealthCheckForm = form.slug === HEALTH_CHECK_FORM_SLUG;
+  const allowMultipleForSubmitter =
+    allowsMultipleSubmissions(form) ||
+    (isHealthCheckForm && empRow?.employeeType !== "EXTERNAL");
+
+  if (isHealthCheckForm) {
+    const eligibility = checkHealthCheckEligibility(empRow, form);
+    if (!eligibility.ok) {
+      return NextResponse.json({ error: eligibility.reason }, { status: 400 });
+    }
   }
 
   let resolvedName = String(submitterName ?? sessionUser?.name ?? empRow?.name ?? "").trim();
@@ -130,6 +146,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
       { error: "주민번호는 000000-0 형식(6자리-성별1자리)으로 입력해 주세요." },
       { status: 400 },
     );
+  }
+
+  if (isHealthCheckForm) {
+    const blankFieldError = healthCheckBlankFieldError(form.fields, answerMap);
+    if (blankFieldError) {
+      return NextResponse.json({ error: blankFieldError }, { status: 400 });
+    }
+  }
+
+  if (isHealthCheckForm && empRow?.employeeType === "EXTERNAL") {
+    const selfOnlyError = healthCheckSelfOnlyError(form.fields, answerMap, empRow?.name);
+    if (selfOnlyError) {
+      return NextResponse.json({ error: selfOnlyError }, { status: 400 });
+    }
   }
 
   // 기존 건 수정 (본인이 제출한 건만)
@@ -175,8 +205,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
     return NextResponse.json({ ok: true, id: submissionId, updated: true });
   }
 
-  // 로그인 사용자의 기존 제출 삭제 (1인 1건 양식만 — 건강검진 등 다건 제출 양식은 유지)
-  if (resolvedEmployeeId && !multi) {
+  // 로그인 사용자의 기존 제출 삭제 (1인 1건 양식만)
+  if (resolvedEmployeeId && !allowMultipleForSubmitter) {
     await prisma.formSubmission.deleteMany({
       where: { formId: form.id, employeeId: resolvedEmployeeId },
     });

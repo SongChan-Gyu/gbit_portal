@@ -23,14 +23,14 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     : DEFAULT_PERMISSIONS;
   let allowedMenuKeys: string[] = allPerms[user.role] ?? DEFAULT_PERMISSIONS[user.role] ?? [];
 
-  // 외부개발자: 휴가/스탬프/근태 미관리, 제주 숙소만 사용
+  // 외부개발자: 휴가/스탬프/근태 미관리, 제주 숙소와 건강검진만 사용
   const employee = await prisma.employee.findUnique({
     where: { id: user.employeeId },
     select: { dutyDept: true, employeeType: true, isSettingsAdmin: true },
   });
   const isExternal = employee?.employeeType === "EXTERNAL";
   if (isExternal) {
-    allowedMenuKeys = ["dashboard", "me", "notices", "jeju", "jeju_my", "jeju_info"];
+    allowedMenuKeys = ["dashboard", "me", "notices", "jeju", "jeju_my", "jeju_info", "health_check", "health_check_my"];
   } else {
     for (const k of ["health_check", "health_check_my"]) {
       if (!allowedMenuKeys.includes(k)) allowedMenuKeys = [...allowedMenuKeys, k];

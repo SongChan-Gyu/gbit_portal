@@ -22,9 +22,9 @@ const FIELDS: FieldDef[] = [
   { label: "성명", fieldType: "text", required: true },
   { label: "주민번호 7자리 (성별 포함)", fieldType: "rrn7", required: true },
   { label: "전화번호", fieldType: "text", required: true },
-  { label: "사원번호", fieldType: "text" },
+  { label: "사원번호", fieldType: "text", required: true },
   { label: "관계임직원 성명 (본인인 경우 공란)", fieldType: "text" },
-  { label: "직원과의 관계", fieldType: "text" },
+  { label: "직원과의 관계", fieldType: "text", required: true },
   {
     label: "검진 지원금액",
     fieldType: "select",
@@ -41,12 +41,13 @@ const FORM_META = {
     "· 필수 항목(*)을 빠짐없이 입력해 주세요.",
     "· 주민번호는 000000-0 형식(6자리-성별1자리)으로 입력해 주세요.",
     "· 전화번호는 본인 명의 휴대폰 번호로 입력해 주세요.",
+    "· 내부 직원은 본인·가족 각각 별도로 신청해 주세요.",
     "· 가족 검진 시 관계임직원 성명·직원과의 관계를 기재해 주세요.",
-    "· 본인·가족 각각 별도로 신청해 주세요.",
+    "· 외부개발자는 본인만 신청 가능하며, 태어난 해와 신청년도의 홀짝이 같을 때만 신청할 수 있습니다.",
   ].join("\n"),
   isActive: true,
   showInMenu: true,
-  audience: "INTERNAL" as const,
+  audience: "ALL" as const,
 };
 
 function fieldOptionsJson(f: FieldDef): string | null {
