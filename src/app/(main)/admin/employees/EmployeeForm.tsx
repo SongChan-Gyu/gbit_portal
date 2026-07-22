@@ -29,6 +29,21 @@ const DUTY_DEPT_OPTIONS = [
   ["NONE", "해당사항없음"],
 ];
 
+/** 숫자만 받아 YYYY-MM-DD 형태로 하이픈 삽입 (최대 8자리) */
+function formatYmdInput(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
+}
+
+function isValidYmd(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
 function stripEmployeeForForm(raw: Record<string, unknown>): Partial<Employee> {
   const {
     emailEnabled: _e,
@@ -135,6 +150,13 @@ export default function EmployeeForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true); setError("");
+
+    const birthRaw = String(form.birthDate ?? "").trim();
+    if (birthRaw && !isValidYmd(birthRaw)) {
+      setLoading(false);
+      setError("생년월일은 YYYY-MM-DD 형식(예: 1990-05-20)으로 입력해 주세요.");
+      return;
+    }
 
     let resetPasswordOnCompanyStaffNoChange: boolean | undefined;
     if (isEdit && hasLinkedAccount) {
@@ -274,12 +296,16 @@ export default function EmployeeForm({
         <div>
           <label className="label">생년월일</label>
           <input
-            type="date"
-            className="input"
+            type="text"
+            inputMode="numeric"
+            className="input tabular-nums"
             value={form.birthDate ?? ""}
-            onChange={(e) => set("birthDate", e.target.value)}
+            onChange={(e) => set("birthDate", formatYmdInput(e.target.value))}
+            placeholder="YYYY-MM-DD"
+            maxLength={10}
+            autoComplete="bday"
           />
-          <p className="text-xs text-gray-500 mt-1">생일반차쿠폰 자동 부여용</p>
+          <p className="text-xs text-gray-500 mt-1">숫자만 입력 (예: 19900520 → 1990-05-20). 생일반차쿠폰 자동 부여용</p>
         </div>
       </div>
 

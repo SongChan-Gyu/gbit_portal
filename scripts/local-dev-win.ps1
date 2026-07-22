@@ -30,7 +30,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[local-dev-win] db:ensure-pm (실패해도 무시)" -ForegroundColor Cyan
-npm run db:ensure-pm 2>$null | Out-Null
+cmd /c "npm run db:ensure-pm >nul 2>&1"
 
 Write-Host "[local-dev-win] Next.js (Turbopack) http://localhost:3000 (Chrome/Edge 권장)" -ForegroundColor Green
 npx next dev --turbo
