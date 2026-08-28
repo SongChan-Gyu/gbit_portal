@@ -9,6 +9,7 @@ import {
   formatJejuYearStatsSummary,
   JEJU_YEARLY_HIGH_SUBMISSION_HINT,
   JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
+  JEJU_YEARLY_USAGE_POLICY_NOTE,
   type JejuCalendarYearStats,
   type JejuYearlyUsageInfo,
 } from "@/lib/jejuYearStats";
@@ -210,9 +211,7 @@ export default function JejuMyClient() {
               {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
             </p>
           )}
-          {yearlyUsage?.isUnlimited && (
-            <p className="text-xs text-slate-500">내부 직원 이사는 연간 이용 횟수 제한이 없습니다.</p>
-          )}
+          <p className="text-xs text-slate-500">{JEJU_YEARLY_USAGE_POLICY_NOTE}</p>
         </div>
       )}
       {list.length === 0 ? (
