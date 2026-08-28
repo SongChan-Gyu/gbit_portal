@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { formatJejuAccountNumber } from "@/lib/jeju";
+import { formatJejuAccountNumber, JEJU_MAX_NIGHTS_DEFAULT } from "@/lib/jeju";
 import DatePickerButton from "@/components/ui/DatePickerButton";
 import type { JejuDepositAccount } from "@/lib/jeju";
 
@@ -17,7 +17,7 @@ export default function JejuSettingsTab() {
     accountHolder: "이기광",
     accountNumber: "1105423446194",
   });
-  const [maxNights, setMaxNights] = useState(14);
+  const [maxNightsInput, setMaxNightsInput] = useState(String(JEJU_MAX_NIGHTS_DEFAULT));
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
   const [newBlockDate, setNewBlockDate] = useState("");
   const [notifyConfig, setNotifyConfig] = useState<JejuNotifyConfig>({ step1: {}, step2: {} });
@@ -45,7 +45,9 @@ export default function JejuSettingsTab() {
       }) => {
         if (data.depositAccount) setDepositAccount(data.depositAccount);
         if (Array.isArray(data.blockedDates)) setBlockedDates(data.blockedDates);
-        if (typeof data.maxNights === "number" && data.maxNights >= 1) setMaxNights(data.maxNights);
+        if (typeof data.maxNights === "number" && data.maxNights >= 1) {
+          setMaxNightsInput(String(data.maxNights));
+        }
         if (data.notifyConfig) setNotifyConfig(data.notifyConfig);
         if (data.externalStayView) setExternalStay(data.externalStayView);
         if (typeof data.portalBaseUrl === "string") setPortalBaseUrl(data.portalBaseUrl);
@@ -107,18 +109,34 @@ export default function JejuSettingsTab() {
     else setMessage({ type: "err", text: data.error || "저장 실패" });
   }
 
+  function normalizeMaxNightsInput(raw: string) {
+    setMaxNightsInput(raw.replace(/\D/g, "").slice(0, 3));
+  }
+
   async function saveMaxNights() {
+    const trimmed = maxNightsInput.trim();
+    if (!trimmed) {
+      setMessage({ type: "err", text: "최대 연박 일수를 입력해 주세요." });
+      return;
+    }
+    const n = parseInt(trimmed, 10);
+    if (!Number.isFinite(n) || n < 1 || n > 365) {
+      setMessage({ type: "err", text: "최대 연박은 1~365 사이 숫자로 입력해 주세요." });
+      return;
+    }
     setSaving(true);
     setMessage(null);
     const res = await fetch("/api/admin/jeju-settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ maxNights }),
+      body: JSON.stringify({ maxNights: n }),
     });
     const data = await res.json();
     setSaving(false);
-    if (res.ok) setMessage({ type: "ok", text: "최대 연박이 저장되었습니다." });
-    else setMessage({ type: "err", text: data.error || "저장 실패" });
+    if (res.ok) {
+      setMaxNightsInput(String(n));
+      setMessage({ type: "ok", text: "최대 연박이 저장되었습니다." });
+    } else setMessage({ type: "err", text: data.error || "저장 실패" });
   }
 
   async function saveExternalStay(opts?: { regenerateUrlToken?: boolean }) {
@@ -401,18 +419,30 @@ export default function JejuSettingsTab() {
       {/* 최대 연박 */}
       <div className="card max-w-xl">
         <h3 className="font-semibold text-gray-800 mb-3">최대 연박</h3>
-        <p className="text-xs text-gray-500 mb-4">한 번에 예약 가능한 최대 숙박 일수입니다. (예: 14일이면 최대 14박까지 선택 가능)</p>
+        <p className="text-xs text-gray-500 mb-4">
+          한 번에 예약 가능한 최대 숙박 일수입니다. (예: 7일이면 최대 7박까지 선택 가능) 숫자를 모두 지운 뒤 다시 입력할 수 있습니다.
+        </p>
         <div className="flex flex-wrap gap-2 items-center">
           <input
-            type="number"
-            min={1}
-            max={365}
-            className="input w-24"
-            value={maxNights}
-            onChange={(e) => setMaxNights(Math.min(365, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+            type="text"
+            inputMode="numeric"
+            enterKeyHint="done"
+            className="input w-24 tabular-nums"
+            value={maxNightsInput}
+            onChange={(e) => normalizeMaxNightsInput(e.target.value)}
+            placeholder="7"
+            maxLength={3}
+            autoComplete="off"
+            aria-label="최대 연박 일수"
           />
           <span className="text-sm text-gray-600">박</span>
-          <button type="button" onClick={saveMaxNights} disabled={saving} className="btn-primary">
+          <button
+            type="button"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={saveMaxNights}
+            disabled={saving}
+            className="btn-primary"
+          >
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>

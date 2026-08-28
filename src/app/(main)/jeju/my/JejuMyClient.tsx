@@ -10,6 +10,7 @@ import {
   JEJU_YEARLY_HIGH_SUBMISSION_HINT,
   JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
   type JejuCalendarYearStats,
+  type JejuYearlyUsageInfo,
 } from "@/lib/jejuYearStats";
 import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
 import { formatJejuDepositAccountLine } from "@/lib/jeju";
@@ -61,6 +62,7 @@ export default function JejuMyClient() {
   const router = useRouter();
   const [list, setList] = useState<MyRequest[]>([]);
   const [yearStats, setYearStats] = useState<JejuCalendarYearStats | null>(null);
+  const [yearlyUsage, setYearlyUsage] = useState<JejuYearlyUsageInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [editId, setEditId] = useState<string | null>(null);
   const [editDates, setEditDates] = useState<Record<string, { startDate: string; endDate: string }>>({});
@@ -75,17 +77,20 @@ export default function JejuMyClient() {
     if (res.ok) {
       const data = (await res.json()) as
         | MyRequest[]
-        | { requests?: MyRequest[]; yearStats?: JejuCalendarYearStats };
+        | { requests?: MyRequest[]; yearStats?: JejuCalendarYearStats; yearlyUsage?: JejuYearlyUsageInfo };
       if (Array.isArray(data)) {
         setList(data);
         setYearStats(null);
+        setYearlyUsage(null);
       } else {
         setList(Array.isArray(data.requests) ? data.requests : []);
         setYearStats(data.yearStats ?? null);
+        setYearlyUsage(data.yearlyUsage ?? null);
       }
     } else {
       setList([]);
       setYearStats(null);
+      setYearlyUsage(null);
     }
     setLoading(false);
   };
@@ -195,10 +200,18 @@ export default function JejuMyClient() {
               yearStats.approvedStayInYearCount,
             )}
           </p>
-          {yearStats.submittedCount >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD && (
+          {yearlyUsage?.hint && (
+            <p className="text-sm font-bold text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 leading-snug">
+              {yearlyUsage.hint}
+            </p>
+          )}
+          {!yearlyUsage?.isUnlimited && yearStats && yearStats.submittedCount >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD && !yearlyUsage?.hint && (
             <p className="text-sm font-bold text-amber-950 bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-2 leading-snug">
               {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
             </p>
+          )}
+          {yearlyUsage?.isUnlimited && (
+            <p className="text-xs text-slate-500">내부 직원 이사는 연간 이용 횟수 제한이 없습니다.</p>
           )}
         </div>
       )}

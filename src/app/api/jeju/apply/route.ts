@@ -9,6 +9,12 @@ import {
   JEJU_MAX_NIGHTS_DEFAULT,
 } from "@/lib/jeju";
 import { sendJejuNotification } from "@/lib/jejuNotify";
+import {
+  canSubmitJejuInCalendarYear,
+  formatJejuYearlyUsageLimitError,
+  getJejuCalendarYearStats,
+} from "@/lib/jejuYearStats";
+import { todayStr } from "@/lib/workdays";
 
 async function getBlockedDates(): Promise<string[]> {
   try {
@@ -87,6 +93,16 @@ export async function POST(req: Request) {
   }
   if (nights > maxNights) {
     return NextResponse.json({ error: `최대 연박은 ${maxNights}일입니다.` }, { status: 400 });
+  }
+
+  const applicant = await prisma.employee.findUnique({
+    where: { id: user.employeeId },
+    select: { position: true, employeeType: true },
+  });
+  const calendarYear = parseInt(todayStr().slice(0, 4), 10);
+  const yearStats = await getJejuCalendarYearStats(prisma, user.employeeId, calendarYear);
+  if (!canSubmitJejuInCalendarYear(yearStats, applicant)) {
+    return NextResponse.json({ error: formatJejuYearlyUsageLimitError(calendarYear) }, { status: 400 });
   }
 
   try {

@@ -5,7 +5,14 @@ import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { formatJejuAccountNumber } from "@/lib/jeju";
+import {
+  formatJejuAccountNumber,
+  calcNights,
+  isJejuDateBookable,
+  jejuKstMidnightFromYmdStr,
+  jejuPeriodTouchesBlockedYmds,
+  JEJU_MAX_NIGHTS_DEFAULT,
+} from "@/lib/jeju";
 import { addDaysYMD, calendarUtcDowFromYMD, dowLabelKoFromYmd, todayKstYmd } from "@/lib/dateUtils";
 import {
   buildHolidayDisplaySet,
@@ -14,9 +21,11 @@ import {
 } from "@/lib/calendarHolidayDisplay";
 import {
   formatJejuYearStatsSummary,
+  formatJejuYearlyUsageLimitError,
   JEJU_YEARLY_HIGH_SUBMISSION_HINT,
   JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
   type JejuCalendarYearStats,
+  type JejuYearlyUsageInfo,
 } from "@/lib/jejuYearStats";
 import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
 
@@ -90,12 +99,21 @@ function getValidCheckOutDates(
 
 const fetcher = (url: string) => fetch(url).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.statusText))));
 
-async function fetchMyJejuForYearStats(url: string): Promise<{ yearStats: JejuCalendarYearStats | null }> {
+async function fetchMyJejuForYearStats(url: string): Promise<{
+  yearStats: JejuCalendarYearStats | null;
+  yearlyUsage: JejuYearlyUsageInfo | null;
+}> {
   const r = await fetch(url, { credentials: "include" });
-  if (!r.ok) return { yearStats: null };
-  const j = (await r.json()) as { yearStats?: JejuCalendarYearStats; requests?: unknown };
-  if (j?.yearStats && typeof j.yearStats.year === "number") return { yearStats: j.yearStats };
-  return { yearStats: null };
+  if (!r.ok) return { yearStats: null, yearlyUsage: null };
+  const j = (await r.json()) as {
+    yearStats?: JejuCalendarYearStats;
+    yearlyUsage?: JejuYearlyUsageInfo;
+    requests?: unknown;
+  };
+  if (j?.yearStats && typeof j.yearStats.year === "number") {
+    return { yearStats: j.yearStats, yearlyUsage: j.yearlyUsage ?? null };
+  }
+  return { yearStats: null, yearlyUsage: null };
 }
 
 export default function JejuClient({
@@ -130,6 +148,7 @@ export default function JejuClient({
     dedupingInterval: 60_000,
   });
   const yearStats = myJejuPayload?.yearStats ?? null;
+  const yearlyUsage = myJejuPayload?.yearlyUsage ?? null;
   const allList = allListRaw ?? [];
   const loading = loadingOccupied || (welfare && loadingRequests);
   const [checkInDate, setCheckInDate] = useState("");
@@ -154,7 +173,7 @@ export default function JejuClient({
   const occupiedDates = (occupied.occupiedDates ?? []) as string[];
   const blockedSet = new Set<string>(occupied.blockedDates ?? []);
   const windowEndYmd = config?.bookingWindowEnd ?? todayYmd;
-  const maxNights = config?.maxNights ?? 14;
+  const maxNights = config?.maxNights ?? JEJU_MAX_NIGHTS_DEFAULT;
 
   const validCheckOutDates = useMemo(() => {
     if (!checkInDate) return [];
@@ -223,6 +242,10 @@ export default function JejuClient({
   async function submitApply(e: React.FormEvent) {
     e.preventDefault();
     setApplyError("");
+    if (yearlyUsage && !yearlyUsage.canSubmit) {
+      setApplyError(formatJejuYearlyUsageLimitError(yearStats?.year ?? parseInt(todayYmd.slice(0, 4), 10)));
+      return;
+    }
     const start = checkInDate;
     const end = checkOutDate;
     if (!start || !end) {
@@ -293,10 +316,18 @@ export default function JejuClient({
               yearStats.approvedStayInYearCount,
             )}
           </p>
-          {yearStats.submittedCount >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD && (
+          {yearlyUsage?.hint && (
+            <p className="text-[13px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-snug">
+              {yearlyUsage.hint}
+            </p>
+          )}
+          {!yearlyUsage?.isUnlimited && yearStats && yearStats.submittedCount >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD && !yearlyUsage?.hint && (
             <p className="text-[13px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 leading-snug">
               {JEJU_YEARLY_HIGH_SUBMISSION_HINT}
             </p>
+          )}
+          {yearlyUsage?.isUnlimited && (
+            <p className="text-[12px] text-slate-500">내부 직원 이사는 연간 이용 횟수 제한이 없습니다.</p>
           )}
         </div>
       )}
@@ -547,10 +578,10 @@ export default function JejuClient({
               </button>
               <button
                 type="submit"
-                disabled={applySubmitting}
+                disabled={applySubmitting || yearlyUsage?.canSubmit === false}
                 className="min-h-[48px] rounded-xl bg-slate-800 text-white text-sm font-semibold hover:bg-slate-900 disabled:opacity-50 touch-manipulation"
               >
-                {applySubmitting ? "신청 중…" : "예약하기"}
+                {applySubmitting ? "신청 중…" : yearlyUsage?.canSubmit === false ? "연간 한도 초과" : "예약하기"}
               </button>
             </div>
           </form>

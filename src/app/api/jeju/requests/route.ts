@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
 import { kstYmd } from "@/lib/dateUtils";
-import { getJejuCalendarYearStatsForEmployees, JEJU_YEARLY_SUBMIT_WARN_THRESHOLD } from "@/lib/jejuYearStats";
+import { getJejuCalendarYearStatsForEmployees, JEJU_YEARLY_USAGE_LIMIT, isJejuUnlimitedEmployee } from "@/lib/jejuYearStats";
 import { todayStr } from "@/lib/workdays";
 
 /** 복지부 또는 PM/ADMIN: 전체 신청 목록 */
@@ -29,7 +29,7 @@ export async function GET() {
   const list = await prisma.jejuAccommodation.findMany({
     where: {},
     include: {
-      employee: { select: { id: true, name: true, empNo: true, team: true } },
+      employee: { select: { id: true, name: true, empNo: true, position: true, employeeType: true, team: true } },
       step1Approver: { select: { id: true, name: true } },
       approvedBy: { select: { id: true, name: true } },
       depositConfirmedBy: { select: { id: true, name: true } },
@@ -68,7 +68,8 @@ export async function GET() {
       jejuCalendarYear: calendarYear,
       jejuSubmittedThisYear: submitted,
       jejuApprovedStayThisYear: approvedStay,
-      jejuHighYearlySubmissions: submitted >= JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
+      jejuHighYearlySubmissions:
+        !isJejuUnlimitedEmployee(r.employee) && submitted >= JEJU_YEARLY_USAGE_LIMIT,
       step1ApproverId: r.step1ApproverId,
       step1ApproverName: r.step1Approver?.name ?? null,
       step1ApprovedAt: r.step1ApprovedAt?.toISOString() ?? null,

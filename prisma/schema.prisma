@@ -427,7 +427,7 @@ model SchedulerJobType {
 // ─────────────────────────────────────────
 model SystemConfig {
   key       String   @id
-  value     String   // JSON
+  value     String   @db.Text // JSON (이용주의사항 등 긴 값 허용)
   updatedAt DateTime @updatedAt
 }
 

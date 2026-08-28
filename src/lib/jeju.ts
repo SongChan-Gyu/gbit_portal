@@ -67,8 +67,8 @@ export function jejuKstMidnightFromYmdStr(ymd: string): Date {
   return kstMidnightFromYmd(ymd.slice(0, 10));
 }
 
-/** 최대 연박 수 (시스템 설정, 기본 14) */
-export const JEJU_MAX_NIGHTS_DEFAULT = 14;
+/** 최대 연박 수 (시스템 설정, 기본 7) */
+export const JEJU_MAX_NIGHTS_DEFAULT = 7;
 
 /** 예약금 고정 10만원 */
 export const JEJU_DEPOSIT_AMOUNT = 100_000;

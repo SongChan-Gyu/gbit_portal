@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { kstYmd } from "@/lib/dateUtils";
-import { getJejuCalendarYearStats } from "@/lib/jejuYearStats";
+import { getJejuCalendarYearStats, buildJejuYearlyUsageInfo } from "@/lib/jejuYearStats";
 import { todayStr } from "@/lib/workdays";
 
 export async function GET() {
@@ -10,17 +10,25 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as any;
 
-  const list = await prisma.jejuAccommodation.findMany({
-    where: { employeeId: user.employeeId },
-    include: { employee: { select: { name: true } } },
-    orderBy: { startDate: "desc" },
-  });
+  const [list, applicant] = await Promise.all([
+    prisma.jejuAccommodation.findMany({
+      where: { employeeId: user.employeeId },
+      include: { employee: { select: { name: true } } },
+      orderBy: { startDate: "desc" },
+    }),
+    prisma.employee.findUnique({
+      where: { id: user.employeeId },
+      select: { position: true, employeeType: true },
+    }),
+  ]);
 
   const calendarYear = parseInt(todayStr().slice(0, 4), 10);
   const yearStats = await getJejuCalendarYearStats(prisma, user.employeeId, calendarYear);
+  const yearlyUsage = buildJejuYearlyUsageInfo(yearStats, applicant);
 
   return NextResponse.json({
     yearStats,
+    yearlyUsage,
     requests: list.map((r) => ({
       id: r.id,
       startDate: kstYmd(r.startDate),
