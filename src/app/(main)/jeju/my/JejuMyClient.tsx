@@ -10,6 +10,7 @@ import {
   JEJU_YEARLY_HIGH_SUBMISSION_HINT,
   JEJU_YEARLY_SUBMIT_WARN_THRESHOLD,
   JEJU_YEARLY_USAGE_POLICY_NOTE,
+  JEJU_YEARLY_USAGE_UNLIMITED_DIRECTOR_NOTE,
   type JejuCalendarYearStats,
   type JejuYearlyUsageInfo,
 } from "@/lib/jejuYearStats";
@@ -212,6 +213,9 @@ export default function JejuMyClient() {
             </p>
           )}
           <p className="text-xs text-slate-500">{JEJU_YEARLY_USAGE_POLICY_NOTE}</p>
+          {yearlyUsage?.isUnlimited && (
+            <p className="text-xs text-slate-500">{JEJU_YEARLY_USAGE_UNLIMITED_DIRECTOR_NOTE}</p>
+          )}
         </div>
       )}
       {list.length === 0 ? (

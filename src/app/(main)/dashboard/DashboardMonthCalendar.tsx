@@ -6,6 +6,7 @@ import {
   isRedCalendarDay,
   CALENDAR_HOLIDAY_COLOR,
 } from "@/lib/calendarHolidayDisplay";
+import { calendarUtcDowFromYMD } from "@/lib/dateUtils";
 
 type ByDay = Record<string, { name: string; status: string }[]>;
 
@@ -32,7 +33,7 @@ export default function DashboardMonthCalendar({
 
   const holidaySet = useMemo(() => buildHolidayDisplaySet(holidayYmds), [holidayYmds]);
 
-  const firstDow = new Date(year, month - 1, 1).getDay();
+  const firstDow = calendarUtcDowFromYMD(`${year}-${String(month).padStart(2, "0")}-01`);
   const pad = Array(firstDow).fill(null);
   const cells = [...pad, ...dates.map((d) => d)];
 

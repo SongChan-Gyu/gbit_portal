@@ -195,6 +195,10 @@ export const JEJU_YEARLY_HIGH_SUBMISSION_HINT =
 export const JEJU_YEARLY_USAGE_POLICY_NOTE =
   `제주도 이용 횟수는 연 ${JEJU_YEARLY_USAGE_LIMIT}회로 제한됩니다.`;
 
+/** 내부 직원 이사(연간 한도 없음)에게만 표시하는 보조 안내 */
+export const JEJU_YEARLY_USAGE_UNLIMITED_DIRECTOR_NOTE =
+  "내부 직원 이사는 연간 제한 없이 신청할 수 있습니다.";
+
 /** 신청자·승인자·예약 화면에 쓰는 한 줄 요약 (KST 달력연도 집계와 동일 숫자) */
 export function formatJejuYearStatsSummary(year: number, submittedCount: number, approvedStayCount: number): string {
   return `${year}년 기준 제주숙소 신청현황 — 신청 ${submittedCount}건 · 예약확정 ${approvedStayCount}건`;
