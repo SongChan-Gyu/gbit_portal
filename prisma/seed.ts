@@ -590,7 +590,7 @@ async function seedLeaveTypes() {
     if (code === "HOLIDAY_EXT") return "휴무 3일+ 연속 시 전후·징검다리 영업일 1일";
     if (code === "DUTY_DEPT") return "운영·교육·복지부 2일 부여 · 종일·반차";
     if (code === "PM_HALF_MONTH") return "수요일 오후 · 해당월 첫째 주 수요일까지 신청 · 취소 불가";
-    if (code === "HEALING_DAY_HALF_REPLACE") return "0일 · 영업일 · 해당월 승인된 하프데이 필요 · 승인 시 하프데이 자동 취소";
+    if (code === "HEALING_DAY_HALF_REPLACE") return "0일 · 영업일 · 하프데이 유무와 무관 · 월 1회 · 승인 시 하프데이 자동 취소";
     if (code === "HEALING_DAY") return "스탬프 4칸 이상 장당 1회 · 1시간40분 출퇴근 조정";
     if (code === "BIRTHDAY_HALF") return "생일에 자동 부여 0.5일";
     if (code === "AWARD") return "별도 부여";

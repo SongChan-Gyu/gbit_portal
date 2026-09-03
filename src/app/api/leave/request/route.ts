@@ -256,25 +256,6 @@ export async function POST(req: Request) {
         const [y, mo] = ymd.split("-").map(Number);
         const monthStart = new Date(y, mo - 1, 1);
         const monthEnd = new Date(y, mo, 1);
-        const approvedHalf = await prisma.leaveRequestItem.findFirst({
-          where: {
-            leaveType: { code: PM_HALF_MONTH_CODE },
-            startDate: { gte: monthStart, lt: monthEnd },
-            leaveRequest: {
-              employeeId: user.employeeId,
-              status: "APPROVED",
-            },
-          },
-        });
-        if (!approvedHalf) {
-          return NextResponse.json(
-            {
-              error:
-                "힐링데이(하프대체)는 해당 월에 승인된 하프데이가 있을 때만 신청할 수 있습니다. 먼저 하프데이를 신청·승인해 주세요.",
-            },
-            { status: 400 },
-          );
-        }
         const healingCnt = await prisma.leaveRequestItem.count({
           where: {
             leaveType: { code: lt.code },

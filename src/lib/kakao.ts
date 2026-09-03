@@ -96,6 +96,14 @@ function directsendNotesForPortalTemplateV1(
         `${g("시작일")}(${g("시작요일")}) ~ ${g("종료일")}(${g("종료요일")})`,
         "",
       ];
+    case "STAMP_REQUEST":
+      return [
+        g("결재자명"),
+        g("신청자명"),
+        g("요청유형"),
+        `${g("날짜")}(${g("요일")}) · ${g("사유")}`,
+        "",
+      ];
     case "LEAVE_WITHDRAWN":
       return [g("결재자명"), g("신청자명"), g("요약"), "", ""];
     case "LEAVE_RESULT":
@@ -139,6 +147,14 @@ function directsendNotesForPortalTemplateV2(
         g("휴가유형"),
         `${g("시작일")}(${g("시작요일")}) ~ ${g("종료일")}(${g("종료요일")})`,
         alimtalkPortalPathUrl("/leave/approve"),
+      ];
+    case "STAMP_REQUEST":
+      return [
+        g("결재자명"),
+        g("신청자명"),
+        g("요청유형"),
+        `${g("날짜")}(${g("요일")}) · ${g("사유")}`,
+        alimtalkPortalPathUrl("/stamp/approve"),
       ];
     case "LEAVE_WITHDRAWN":
       return [g("결재자명"), g("신청자명"), g("요약"), "", alimtalkPortalPathUrl("/leave/approve")];
@@ -211,7 +227,7 @@ function directsendNotesForPortalTemplateV2(
 }
 
 /** 다이렉트센드 API는 수신자당 note1~note5만 치환 가능 — 포털 템플릿 코드별 매핑 */
-function directsendNotesForPortalTemplate(
+export function directsendNotesForPortalTemplate(
   templateCode: string,
   params: Record<string, string>,
 ): [string, string, string, string, string] {
@@ -334,6 +350,31 @@ export async function sendLeaveRequestAlimtalk(
     시작요일: dowLabelKoFromYmd(startDate),
     종료일: endDate,
     종료요일: dowLabelKoFromYmd(endDate),
+  });
+}
+
+const STAMP_REQUEST_TYPE_LABEL = "스탬프 요청(팀장 서명)";
+
+/**
+ * 스탬프 서명 요청 알림톡 (STAMP_REQUEST) → 팀장(없으면 PM).
+ * DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 번호가 없으면 MOCKED(미발송). 휴가 템플릿을 재사용하지 않음.
+ */
+export async function sendStampRequestAlimtalk(
+  prisma: DB,
+  approverId: string,
+  phone: string,
+  approverName: string,
+  applicantName: string,
+  stampDateYmd: string,
+  reason: string,
+) {
+  await sendAlimtalk(prisma, approverId, phone, "STAMP_REQUEST", {
+    결재자명: approverName,
+    신청자명: applicantName,
+    요청유형: STAMP_REQUEST_TYPE_LABEL,
+    날짜: stampDateYmd,
+    요일: dowLabelKoFromYmd(stampDateYmd),
+    사유: reason.trim() || "-",
   });
 }
 

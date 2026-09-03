@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  anyHealingHalfReplaceMonthAvailable,
+  canApplyHealingHalfReplaceInMonth,
   halfdayApplicationDeadlineYmd,
   isPmHalfDayHolidayWednesdaySelection,
   isTeamHalfWeeklyLimitExceeded,
@@ -40,6 +42,35 @@ describe("halfdayApplicationDeadlineYmd", () => {
   it("첫 수요일이 휴일이면 목요일 마감", () => {
     const holidays = new Set(["2026-05-06"]);
     expect(halfdayApplicationDeadlineYmd(2026, 5, holidays)).toBe("2026-05-07");
+  });
+});
+
+describe("canApplyHealingHalfReplaceInMonth", () => {
+  it("하프데이 없음·대기·승인과 무관하게 해당 월 힐링 미사용이면 가능", () => {
+    // 하프데이 사용량은 인자로 받지 않음 — PENDING/APPROVED/없음 모두 동일하게 통과
+    expect(canApplyHealingHalfReplaceInMonth("2026-09", {})).toBe(true);
+  });
+
+  it("해당 월 힐링이 이미 있으면 불가", () => {
+    expect(canApplyHealingHalfReplaceInMonth("2026-09", { "2026-09": 1 })).toBe(false);
+  });
+
+  it("다른 달 사용은 이번 달에 영향 없음", () => {
+    expect(canApplyHealingHalfReplaceInMonth("2026-09", { "2026-08": 1 })).toBe(true);
+  });
+});
+
+describe("anyHealingHalfReplaceMonthAvailable", () => {
+  it("이번 달 미사용이면 선택지 노출", () => {
+    expect(anyHealingHalfReplaceMonthAvailable("2026-09-15", {})).toBe(true);
+  });
+
+  it("이번 달 사용이면 말주가 아니면 숨김", () => {
+    expect(anyHealingHalfReplaceMonthAvailable("2026-09-15", { "2026-09": 1 })).toBe(false);
+  });
+
+  it("말주에 이번 달 사용이어도 다음 달 미사용이면 노출", () => {
+    expect(anyHealingHalfReplaceMonthAvailable("2026-09-28", { "2026-09": 1 })).toBe(true);
   });
 });
 

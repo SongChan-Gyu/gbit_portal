@@ -15,7 +15,9 @@ import { isHealingHalfReplaceCode } from "@/lib/healingLeaveCodes";
 import {
   PM_HALF_MONTH_CODE,
   anyHalfDayMonthAvailable,
+  anyHealingHalfReplaceMonthAvailable,
   canApplyHalfDayInMonth,
+  canApplyHealingHalfReplaceInMonth,
   halfdayApplicationDeadlineError,
   halfdayApplicationDeadlineLabel,
   isPastHalfdayApplicationDeadlineForMonth,
@@ -164,7 +166,7 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     color: "#0284c7", borderClass: "border-sky-500",
     subs: [
       { label: "하프데이", code: PM_HALF_MONTH_CODE, desc: "수요일 오후 · 해당월 첫째 주 수요일까지 신청" },
-      { label: "힐링데이(하프대체)", code: "HEALING_DAY_HALF_REPLACE", desc: "승인된 하프데이 필요 · 0일" },
+      { label: "힐링데이(하프대체)", code: "HEALING_DAY_HALF_REPLACE", desc: "하프데이 유무와 무관 · 월 1회 · 0일" },
     ],
   },
   {
@@ -296,7 +298,6 @@ export default function LeaveApplyForm({
   healingStampSlots,
   halfDayUsed,
   halfDayUsedByMonth,
-  approvedHalfMonthKeys,
   healingHalfReplaceUsedByMonth,
   approvedHealingHalfReplaceMonthKeys,
   holidays,
@@ -312,7 +313,6 @@ export default function LeaveApplyForm({
   /** 이번 달 하프데이(PM_HALF) 신청·승인·대기 건수 — 미사용(페이지 KPI만) */
   halfDayUsed?: number;
   halfDayUsedByMonth: Record<string, number>;
-  approvedHalfMonthKeys: string[];
   healingHalfReplaceUsedByMonth: Record<string, number>;
   approvedHealingHalfReplaceMonthKeys: string[];
   holidays: string[];
@@ -423,18 +423,10 @@ export default function LeaveApplyForm({
   const hasActivePoolRemaining = (sourceCode: string) =>
     allocations.some((a) => a.sourceCode === sourceCode && Math.max(0, a.totalDays - a.usedDays) > 0);
 
-  const approvedHalfMonthSet = useMemo(
-    () => new Set(approvedHalfMonthKeys),
-    [approvedHalfMonthKeys],
-  );
-
   const approvedHealingHalfReplaceMonthSet = useMemo(
     () => new Set(approvedHealingHalfReplaceMonthKeys),
     [approvedHealingHalfReplaceMonthKeys],
   );
-
-  const canApplyHealingHalfReplaceInMonth = (monthKey: string) =>
-    approvedHalfMonthSet.has(monthKey) && (healingHalfReplaceUsedByMonth[monthKey] ?? 0) < 1;
 
   const isSelectableCode = (code: string) => {
     const lt = ltByCode[code];
@@ -443,7 +435,7 @@ export default function LeaveApplyForm({
       return hasActivePoolRemaining("DUTY_DEPT");
     }
     if (isHealingHalfReplaceCode(code)) {
-      return approvedHalfMonthKeys.some((mk) => canApplyHealingHalfReplaceInMonth(mk));
+      return anyHealingHalfReplaceMonthAvailable(todayYmd, healingHalfReplaceUsedByMonth);
     }
     if (code === PM_HALF_MONTH_CODE) {
       return anyHalfDayMonthAvailable(
@@ -537,7 +529,7 @@ export default function LeaveApplyForm({
         return { ...g, meta: groupMeta, subs };
       })
       .filter((g) => g.subs.length > 0);
-  }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource, approvedHalfMonthKeys, healingHalfReplaceUsedByMonth, approvedHealingHalfReplaceMonthKeys, allocations, applicationYmdRange.min, applicationYmdRange.max, todayYmd, halfDayUsedByMonth]);
+  }, [dynamicLeaveGroups, ltByCode, poolRemainingBySource, healingHalfReplaceUsedByMonth, approvedHealingHalfReplaceMonthKeys, allocations, applicationYmdRange.min, applicationYmdRange.max, todayYmd, halfDayUsedByMonth]);
   const leaveGroupsAsset = useMemo(
     () => visibleLeaveGroups.filter((g) => BASE_ASSET_GROUP_KEYS.has(g.key) || g.key.startsWith("custom-asset:")),
     [visibleLeaveGroups],
@@ -750,9 +742,15 @@ export default function LeaveApplyForm({
             return;
           }
         }
-        if (isHealingHalfReplaceCode(lt?.code) && isHolidayOrWeekendYmd(dateStr, holidaySetForCalendar)) {
-          blockPick("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
-          return;
+        if (isHealingHalfReplaceCode(lt?.code)) {
+          if (isHolidayOrWeekendYmd(dateStr, holidaySetForCalendar)) {
+            blockPick("힐링데이(하프대체)는 영업일만 선택할 수 있습니다.");
+            return;
+          }
+          if (!canApplyHealingHalfReplaceInMonth(monthKeyFromYmd(dateStr), healingHalfReplaceUsedByMonth)) {
+            blockPick("힐링데이(하프대체)는 같은 달에 1회만 신청할 수 있습니다.");
+            return;
+          }
         }
         clearPickFeedback();
         changeDate(calendarItemIdx, "startDate", dateStr);
@@ -862,14 +860,7 @@ export default function LeaveApplyForm({
       }
       if (lt && isHealingHalfReplaceCode(lt.code)) {
         const mk = monthKeyFromYmd(it.startDate);
-        if (!approvedHalfMonthSet.has(mk)) {
-          const [y, mo] = mk.split("-");
-          setError(
-            `${y}년 ${Number(mo)}월에 승인된 하프데이가 있을 때만 힐링데이(하프대체)를 신청할 수 있습니다.`,
-          );
-          return;
-        }
-        if ((healingHalfReplaceUsedByMonth[mk] ?? 0) >= 1) {
+        if (!canApplyHealingHalfReplaceInMonth(mk, healingHalfReplaceUsedByMonth)) {
           setError("힐링데이(하프대체)는 같은 달에 1회만 신청할 수 있습니다.");
           return;
         }
@@ -1309,8 +1300,8 @@ export default function LeaveApplyForm({
                     )}
                     {lt && isHealingHalfReplaceCode(lt.code) && (
                       <p className="mt-2 text-xs text-sky-700 bg-sky-50 border border-sky-100 rounded-lg px-3 py-2">
-                        힐링데이(하프대체)는 <strong>선택한 날짜가 속한 월</strong>에 승인된 하프데이가 있을 때만 신청할 수 있습니다.
-                        휴가일수는 <strong>0일(출퇴근 조정)</strong>이며, 승인 시 기존 하프데이는 자동 취소됩니다.
+                        힐링데이(하프대체)는 하프데이 신청·승인 여부와 상관없이 사용할 수 있으며, <strong>선택한 날짜가 속한 월에 1회</strong>만 신청할 수 있습니다.
+                        휴가일수는 <strong>0일(출퇴근 조정)</strong>이며, 같은 달에 하프데이가 있으면 승인 시 자동 취소됩니다.
                       </p>
                     )}
                     <div className={`mt-2 px-3 py-2 rounded-lg flex items-center gap-2 text-sm ${

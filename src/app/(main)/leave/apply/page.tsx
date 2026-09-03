@@ -69,7 +69,7 @@ export default async function LeaveApplyPage() {
               status: { notIn: ["CANCELLED", "WITHDRAWN", "REJECTED"] },
             },
           },
-          select: { startDate: true, leaveRequest: { select: { status: true } } },
+          select: { startDate: true },
         })
       : Promise.resolve([]),
     halfReplaceType
@@ -87,14 +87,10 @@ export default async function LeaveApplyPage() {
   ]);
 
   const halfDayUsedByMonth: Record<string, number> = {};
-  const approvedHalfMonthKeys: string[] = [];
-  const approvedHalfMonthSet = new Set<string>();
   for (const row of halfDayItems) {
     const mk = monthKeyFromYmd(holidayDateToYmd(row.startDate));
     halfDayUsedByMonth[mk] = (halfDayUsedByMonth[mk] ?? 0) + 1;
-    if (row.leaveRequest.status === "APPROVED") approvedHalfMonthSet.add(mk);
   }
-  approvedHalfMonthKeys.push(...approvedHalfMonthSet);
 
   const healingHalfReplaceUsedByMonth: Record<string, number> = {};
   const approvedHealingHalfReplaceMonthKeys: string[] = [];
@@ -169,7 +165,6 @@ export default async function LeaveApplyPage() {
         afternoonStampSlots={afternoonStampSlots}
         healingStampSlots={healingStampSlots}
         halfDayUsedByMonth={halfDayUsedByMonth}
-        approvedHalfMonthKeys={approvedHalfMonthKeys}
         healingHalfReplaceUsedByMonth={healingHalfReplaceUsedByMonth}
         approvedHealingHalfReplaceMonthKeys={approvedHealingHalfReplaceMonthKeys}
         holidays={holidays.map((h) => holidayDateToYmd(h.date))}

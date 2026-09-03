@@ -103,7 +103,9 @@ export default function StampClient({
       setReqMsg(data.error ?? "요청 실패");
       return;
     }
-    setReqMsg("✓ 스탬프 요청이 접수되었습니다.");
+    setReqMsg(
+      `✓ 스탬프 요청이 접수되었습니다.${data.warning ? ` (${data.warning})` : ""}`,
+    );
     setReqForm({ stampDate: todayStr(), description: "" });
     router.refresh();
   }

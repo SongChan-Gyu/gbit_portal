@@ -163,6 +163,25 @@ export function halfDayBlockedByApprovedHealing(
   return new Set(approvedHealingHalfReplaceMonthKeys).has(monthKey);
 }
 
+/** 힐링데이(하프대체) — 하프데이 유무와 무관, 해당 월 미사용이면 신청 가능 */
+export function canApplyHealingHalfReplaceInMonth(
+  monthKey: string,
+  healingHalfReplaceUsedByMonth: Record<string, number>,
+): boolean {
+  return (healingHalfReplaceUsedByMonth[monthKey] ?? 0) < 1;
+}
+
+/** KPI·선택지 노출용 — 이번 달(·말 주면 다음 달) 중 힐링데이(하프대체) 신청 가능한 달이 있는지 */
+export function anyHealingHalfReplaceMonthAvailable(
+  todayYmd: string,
+  healingHalfReplaceUsedByMonth: Record<string, number>,
+): boolean {
+  const currentKey = monthKeyFromYmd(todayYmd);
+  const keys = [currentKey];
+  if (isInLastWeekOfMonthKst(todayYmd)) keys.push(nextMonthKey(currentKey));
+  return keys.some((mk) => canApplyHealingHalfReplaceInMonth(mk, healingHalfReplaceUsedByMonth));
+}
+
 export function canApplyHalfDayInMonth(
   monthKey: string,
   halfDayUsedByMonth: Record<string, number>,
