@@ -23,6 +23,7 @@ import { directsendKakaoAlimtalk } from "@/lib/directsendKakao";
  *   쉼표·공백·세미콜론으로 여러 개 (예: 01011112222,01033334444)
  *
  * 위 설정이 없거나 해당 템플릿 번호가 JSON에 없으면 MOCKED(미발송), NotificationLog 기록.
+ * STAMP_REQUEST 만 예외: 전용 번호가 없으면 LEAVE_REQUEST 번호로 발송하고 변수는 스탬프로 채움.
  */
 
 /** ALIMTALK_ALLOWED_RECEIVER — 숫자만 비교. 구분자: 쉼표·공백·세미콜론 */
@@ -52,6 +53,29 @@ function loadDirectsendTemplateNos(): Record<string, string> {
   } catch {
     return {};
   }
+}
+
+/** STAMP_REQUEST 전용 번호가 없으면 휴가 LEAVE_REQUEST 번호를 씀(본문 변수는 스탬프로 채움). */
+export function resolveDirectsendUserTemplateNo(
+  templateCode: string,
+  templateNos: Record<string, string> = loadDirectsendTemplateNos(),
+): { userTemplateNo: string; fallbackFrom: string | null } {
+  const own = templateNos[templateCode] ?? "";
+  if (own) return { userTemplateNo: own, fallbackFrom: null };
+  if (templateCode === "STAMP_REQUEST") {
+    const leave = templateNos["LEAVE_REQUEST"] ?? "";
+    if (leave) return { userTemplateNo: leave, fallbackFrom: "LEAVE_REQUEST" };
+  }
+  return { userTemplateNo: "", fallbackFrom: null };
+}
+
+/** 휴가 템플릿의 「휴가유형」칸에 들어가도 스탬프로 보이게. 휴가 승인과 혼동 방지. */
+const STAMP_REQUEST_TYPE_LABEL = "스탬프(휴가 아님)";
+
+function stampRequestPeriodNote(dateYmd: string, dow: string, reason: string): string {
+  const when = dateYmd && dow ? `${dateYmd}(${dow})` : dateYmd || "-";
+  const why = reason.trim() || "-";
+  return `[스탬프] 팀장 서명 · ${when} · ${why}`;
 }
 
 /** 알림톡 본문 하단 포털 링크 — NEXTAUTH_URL → NEXT_PUBLIC_APP_URL → 운영 기본값 */
@@ -100,8 +124,8 @@ function directsendNotesForPortalTemplateV1(
       return [
         g("결재자명"),
         g("신청자명"),
-        g("요청유형"),
-        `${g("날짜")}(${g("요일")}) · ${g("사유")}`,
+        g("요청유형") || STAMP_REQUEST_TYPE_LABEL,
+        stampRequestPeriodNote(g("날짜"), g("요일"), g("사유")),
         "",
       ];
     case "LEAVE_WITHDRAWN":
@@ -152,8 +176,8 @@ function directsendNotesForPortalTemplateV2(
       return [
         g("결재자명"),
         g("신청자명"),
-        g("요청유형"),
-        `${g("날짜")}(${g("요일")}) · ${g("사유")}`,
+        g("요청유형") || STAMP_REQUEST_TYPE_LABEL,
+        stampRequestPeriodNote(g("날짜"), g("요일"), g("사유")),
         alimtalkPortalPathUrl("/stamp/approve"),
       ];
     case "LEAVE_WITHDRAWN":
@@ -263,7 +287,7 @@ async function sendAlimtalk(
   const apiKey = process.env.DIRECTSEND_API_KEY?.trim();
   const plusId = process.env.DIRECTSEND_KAKAO_PLUS_ID?.trim();
   const templateNos = loadDirectsendTemplateNos();
-  const userTemplateNo = templateNos[templateCode] ?? "";
+  const { userTemplateNo, fallbackFrom } = resolveDirectsendUserTemplateNo(templateCode, templateNos);
 
   const credsOk = Boolean(username && apiKey && plusId && userTemplateNo);
   let status: string = credsOk ? "SENT" : "MOCKED";
@@ -279,11 +303,16 @@ async function sendAlimtalk(
     if (!username || !apiKey || !plusId) {
       errorMsg = "다이렉트센드 DIRECTSEND_USERNAME / DIRECTSEND_API_KEY / DIRECTSEND_KAKAO_PLUS_ID 미설정";
     } else if (!userTemplateNo) {
-      errorMsg = `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 "${templateCode}" 번호 없음`;
+      errorMsg =
+        templateCode === "STAMP_REQUEST"
+          ? `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 STAMP_REQUEST·LEAVE_REQUEST 번호 없음`
+          : `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 "${templateCode}" 번호 없음`;
     }
     if (process.env.NODE_ENV !== "production") {
       console.log(`[AlimTalk Mock] to=${receiver} template=${templateCode}`, params);
     }
+  } else if (fallbackFrom) {
+    errorMsg = `${templateCode} 번호 없음 → ${fallbackFrom} 번호로 발송 (본문은 스탬프 구분)`;
   }
 
   if (status === "SENT" && receiver) {
@@ -353,12 +382,7 @@ export async function sendLeaveRequestAlimtalk(
   });
 }
 
-const STAMP_REQUEST_TYPE_LABEL = "스탬프 요청(팀장 서명)";
-
-/**
- * 스탬프 서명 요청 알림톡 (STAMP_REQUEST) → 팀장(없으면 PM).
- * DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 번호가 없으면 MOCKED(미발송). 휴가 템플릿을 재사용하지 않음.
- */
+/** 스탬프 서명 요청 알림톡. 전용 번호 없으면 LEAVE_REQUEST 번호로 발송하되 변수는 스탬프로 채움. */
 export async function sendStampRequestAlimtalk(
   prisma: DB,
   approverId: string,
