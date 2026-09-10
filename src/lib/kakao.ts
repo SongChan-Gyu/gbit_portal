@@ -23,7 +23,8 @@ import { directsendKakaoAlimtalk } from "@/lib/directsendKakao";
  *   쉼표·공백·세미콜론으로 여러 개 (예: 01011112222,01033334444)
  *
  * 위 설정이 없거나 해당 템플릿 번호가 JSON에 없으면 MOCKED(미발송), NotificationLog 기록.
- * STAMP_REQUEST 만 예외: 전용 번호가 없으면 LEAVE_REQUEST 번호로 발송하고 변수는 스탬프로 채움.
+ * 스탬프만 예외: STAMP_REQUEST → LEAVE_REQUEST, STAMP_RESULT → LEAVE_RESULT.
+ * 전용 번호가 없으면 휴가 번호로 발송하고 변수는 스탬프로 채움.
  */
 
 /** ALIMTALK_ALLOWED_RECEIVER — 숫자만 비교. 구분자: 쉼표·공백·세미콜론 */
@@ -55,16 +56,22 @@ function loadDirectsendTemplateNos(): Record<string, string> {
   }
 }
 
-/** STAMP_REQUEST 전용 번호가 없으면 휴가 LEAVE_REQUEST 번호를 씀(본문 변수는 스탬프로 채움). */
+/** 스탬프 전용 번호가 없을 때 쓰는 휴가 템플릿 번호. 본문 변수는 스탬프로 채움. */
+const STAMP_TEMPLATE_FALLBACK: Record<string, string> = {
+  STAMP_REQUEST: "LEAVE_REQUEST",
+  STAMP_RESULT: "LEAVE_RESULT",
+};
+
 export function resolveDirectsendUserTemplateNo(
   templateCode: string,
   templateNos: Record<string, string> = loadDirectsendTemplateNos(),
 ): { userTemplateNo: string; fallbackFrom: string | null } {
   const own = templateNos[templateCode] ?? "";
   if (own) return { userTemplateNo: own, fallbackFrom: null };
-  if (templateCode === "STAMP_REQUEST") {
-    const leave = templateNos["LEAVE_REQUEST"] ?? "";
-    if (leave) return { userTemplateNo: leave, fallbackFrom: "LEAVE_REQUEST" };
+  const fallbackCode = STAMP_TEMPLATE_FALLBACK[templateCode];
+  if (fallbackCode) {
+    const leave = templateNos[fallbackCode] ?? "";
+    if (leave) return { userTemplateNo: leave, fallbackFrom: fallbackCode };
   }
   return { userTemplateNo: "", fallbackFrom: null };
 }
@@ -76,6 +83,14 @@ function stampRequestPeriodNote(dateYmd: string, dow: string, reason: string): s
   const when = dateYmd && dow ? `${dateYmd}(${dow})` : dateYmd || "-";
   const why = reason.trim() || "-";
   return `[스탬프] 팀장 서명 · ${when} · ${why}`;
+}
+
+function stampResultCommentNote(dateYmd: string, dow: string, reason: string, comment: string): string {
+  const when = dateYmd && dow ? `${dateYmd}(${dow})` : dateYmd || "-";
+  const why = reason.trim() || "-";
+  const extra = comment.trim();
+  const base = `[스탬프] ${when} · ${why}`;
+  return extra ? `${base} · ${extra}` : base;
 }
 
 /** 알림톡 본문 하단 포털 링크 — NEXTAUTH_URL → NEXT_PUBLIC_APP_URL → 운영 기본값 */
@@ -132,6 +147,8 @@ function directsendNotesForPortalTemplateV1(
       return [g("결재자명"), g("신청자명"), g("요약"), "", ""];
     case "LEAVE_RESULT":
       return [g("신청자명"), g("처리결과"), g("처리코멘트"), "", ""];
+    case "STAMP_RESULT":
+      return [g("신청자명"), g("처리결과"), g("처리코멘트"), "", ""];
     case "JEJU_APPROVED":
       return [g("신청자명"), periodJeju(), `${g("숙박일수")}박`, `${g("입실인원")}명`, ""];
     case "JEJU_REJECTED":
@@ -184,6 +201,8 @@ function directsendNotesForPortalTemplateV2(
       return [g("결재자명"), g("신청자명"), g("요약"), "", alimtalkPortalPathUrl("/leave/approve")];
     case "LEAVE_RESULT":
       return [g("신청자명"), g("처리결과"), g("처리코멘트"), "", alimtalkPortalPathUrl("/leave/my")];
+    case "STAMP_RESULT":
+      return [g("신청자명"), g("처리결과"), g("처리코멘트"), "", alimtalkPortalPathUrl("/stamp")];
     case "JEJU_APPROVED":
       return [
         g("신청자명"),
@@ -303,10 +322,10 @@ async function sendAlimtalk(
     if (!username || !apiKey || !plusId) {
       errorMsg = "다이렉트센드 DIRECTSEND_USERNAME / DIRECTSEND_API_KEY / DIRECTSEND_KAKAO_PLUS_ID 미설정";
     } else if (!userTemplateNo) {
-      errorMsg =
-        templateCode === "STAMP_REQUEST"
-          ? `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 STAMP_REQUEST·LEAVE_REQUEST 번호 없음`
-          : `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 "${templateCode}" 번호 없음`;
+      const fallbackCode = STAMP_TEMPLATE_FALLBACK[templateCode];
+      errorMsg = fallbackCode
+        ? `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 ${templateCode}·${fallbackCode} 번호 없음`
+        : `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 "${templateCode}" 번호 없음`;
     }
     if (process.env.NODE_ENV !== "production") {
       console.log(`[AlimTalk Mock] to=${receiver} template=${templateCode}`, params);
@@ -429,6 +448,25 @@ export async function sendLeaveResultAlimtalk(
     신청자명: name,
     처리결과: result,
     처리코멘트: comment || "-",
+  });
+}
+
+/** 스탬프 처리 결과 알림톡. 전용 번호 없으면 LEAVE_RESULT 번호로 발송하되 변수는 스탬프로 채움. */
+export async function sendStampResultAlimtalk(
+  prisma: DB,
+  employeeId: string,
+  phone: string,
+  name: string,
+  result: string,
+  stampDateYmd: string,
+  reason: string,
+  comment: string,
+) {
+  const dow = dowLabelKoFromYmd(stampDateYmd);
+  await sendAlimtalk(prisma, employeeId, phone, "STAMP_RESULT", {
+    신청자명: name,
+    처리결과: result,
+    처리코멘트: stampResultCommentNote(stampDateYmd, dow, reason, comment),
   });
 }
 

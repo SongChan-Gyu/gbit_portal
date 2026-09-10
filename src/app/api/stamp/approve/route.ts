@@ -2,7 +2,57 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requireRole } from "@/lib/authGuard";
 import prisma from "@/lib/db";
+import { toYMD } from "@/lib/dateUtils";
+import { sendStampResultAlimtalk } from "@/lib/kakao";
+import { createNotification } from "@/lib/notification";
 import { appendStampCouponToCard } from "@/lib/stampCard";
+
+type StampApplicant = {
+  id: string;
+  name: string;
+  phone: string;
+  alimtalkEnabled: boolean;
+};
+
+async function notifyStampApplicantResult(opts: {
+  emp: StampApplicant;
+  action: "APPROVE" | "REJECT";
+  stampDate: Date;
+  reason: string;
+  comment?: string | null;
+}) {
+  const { emp, action, stampDate, reason, comment } = opts;
+  const resultLabel = action === "APPROVE" ? "스탬프 승인" : "스탬프 반려";
+  const ymd = toYMD(stampDate);
+
+  try {
+    await createNotification({
+      employeeId: emp.id,
+      type: action === "APPROVE" ? "STAMP_APPROVED" : "STAMP_REJECTED",
+      body: `${resultLabel}${ymd ? ` (${ymd})` : ""}`,
+      link: "/stamp",
+    });
+  } catch (e) {
+    console.warn("[stamp/approve] 인앱 알림 생성 실패", e);
+  }
+
+  if (!emp.phone) return;
+  if (emp.alimtalkEnabled === false) return;
+  try {
+    await sendStampResultAlimtalk(
+      prisma,
+      emp.id,
+      emp.phone,
+      emp.name,
+      resultLabel,
+      ymd,
+      reason,
+      comment ?? "",
+    );
+  } catch (alimErr) {
+    console.warn("[stamp/approve] 알림톡 발송 실패 (스탬프 처리는 완료됨)", alimErr);
+  }
+}
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -25,6 +75,13 @@ export async function POST(req: Request) {
       where: { id },
       data: { status: "REJECTED", approvedAt: new Date(), comment: comment ?? null },
     });
+    await notifyStampApplicantResult({
+      emp: sr.employee,
+      action: "REJECT",
+      stampDate: sr.stampDate,
+      reason: sr.description,
+      comment,
+    });
     return NextResponse.json({ ok: true });
   }
 
@@ -41,6 +98,14 @@ export async function POST(req: Request) {
         comment: comment ?? null,
       },
     });
+  });
+
+  await notifyStampApplicantResult({
+    emp: sr.employee,
+    action: "APPROVE",
+    stampDate: sr.stampDate,
+    reason: sr.description,
+    comment,
   });
 
   return NextResponse.json({ ok: true });

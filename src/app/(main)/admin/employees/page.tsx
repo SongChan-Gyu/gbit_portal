@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import Link from "next/link";
 import EmployeesListClient from "./EmployeesListClient";
+import EmployeeExcelExportButton from "./EmployeeExcelExportButton";
 import ExcelImportBlock from "./ExcelImportBlock";
 
 export default async function EmployeesPage({ searchParams }:{ searchParams:Promise<{ q?:string }> }) {
@@ -39,9 +40,12 @@ export default async function EmployeesPage({ searchParams }:{ searchParams:Prom
     <div className="max-w-6xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <h1 className="page-title">사원 관리</h1>
-        <Link href="/admin/employees/new" className="btn-primary text-sm py-2.5 px-4 rounded-lg font-medium inline-flex items-center justify-center shrink-0">
-          + 사원 등록
-        </Link>
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <EmployeeExcelExportButton className="btn-secondary text-sm py-2.5 px-4 rounded-lg font-medium" />
+          <Link href="/admin/employees/new" className="btn-primary text-sm py-2.5 px-4 rounded-lg font-medium inline-flex items-center justify-center">
+            + 사원 등록
+          </Link>
+        </div>
       </div>
 
       {/* 엑셀 일괄 등록 */}

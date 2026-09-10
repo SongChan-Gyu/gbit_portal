@@ -4,6 +4,7 @@
  * - 2행~: 데이터. 사번은 비워두면 자동 부여됨.
  */
 import { kstYmd } from "@/lib/dateUtils";
+import { employeeStatusMeta } from "@/lib/statusMeta";
 
 export const TEMPLATE_HEADERS = [
   "이름",
@@ -199,4 +200,94 @@ export function parseSheetToRows(
     });
   }
   return { rows: result, errors };
+}
+
+/** 사원정보 엑셀 다운로드 헤더 (한글 표시) */
+export const EXPORT_HEADERS = [
+  "사번",
+  "회사사번",
+  "이름",
+  "팀",
+  "직급",
+  "직급부서",
+  "입사일",
+  "생년월일",
+  "연락처",
+  "이메일",
+  "고용유형",
+  "역할",
+  "상태",
+  "로그인아이디",
+] as const;
+
+export const EXPORT_BRIEF_HEADERS = ["사번", "이름", "생년월일"] as const;
+
+export type EmployeeExportInput = {
+  empNo: string;
+  companyStaffNo: string | null;
+  name: string;
+  teamName: string | null;
+  position: string;
+  dutyDept: string | null;
+  hireDate: Date;
+  birthDate: Date | null;
+  phone: string;
+  email: string | null;
+  employeeType: string;
+  role: string;
+  status: string;
+  username: string | null;
+};
+
+export function buildEmployeeExportSheetRows(
+  employees: EmployeeExportInput[],
+  opts: { brief?: boolean; externalOnly?: boolean } = {},
+): string[][] {
+  const list = opts.externalOnly
+    ? employees.filter((e) => e.employeeType === "EXTERNAL")
+    : employees;
+  if (opts.brief) {
+    const rows: string[][] = [[...EXPORT_BRIEF_HEADERS]];
+    for (const e of list) {
+      rows.push([
+        e.empNo ?? "",
+        e.name,
+        e.birthDate ? kstYmd(e.birthDate) : "",
+      ]);
+    }
+    return rows;
+  }
+  const rows: string[][] = [[...EXPORT_HEADERS]];
+  for (const e of list) {
+    const hireYmd = kstYmd(e.hireDate);
+    const hireOut =
+      e.employeeType === "EXTERNAL" && hireYmd === EXTERNAL_DEFAULT_HIRE_YMD ? "" : hireYmd;
+    rows.push([
+      e.empNo ?? "",
+      (e.companyStaffNo ?? "").trim(),
+      e.name,
+      e.teamName ?? "",
+      e.position,
+      DUTY_DEPT_TO_LABEL[e.dutyDept ?? ""] ?? (e.dutyDept ?? ""),
+      hireOut,
+      e.birthDate ? kstYmd(e.birthDate) : "",
+      e.phone ?? "",
+      e.email ?? "",
+      EMPLOYEE_TYPE_TO_LABEL[e.employeeType] ?? e.employeeType,
+      ROLE_TO_LABEL[e.role] ?? e.role,
+      employeeStatusMeta(e.status).label,
+      e.username ?? "",
+    ]);
+  }
+  return rows;
+}
+
+export function employeeExportFilename(
+  dateYmd: string,
+  opts: { brief?: boolean; externalOnly?: boolean } = {},
+): string {
+  const parts = ["사원정보"];
+  if (opts.brief) parts.push("간략");
+  if (opts.externalOnly) parts.push("외부개발자");
+  return `${parts.join("_")}_${dateYmd}.xlsx`;
 }

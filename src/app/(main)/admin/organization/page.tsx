@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import prisma from "@/lib/db";
 import Link from "next/link";
 import ExcelImportBlock from "@/app/(main)/admin/employees/ExcelImportBlock";
+import EmployeeExcelExportButton from "@/app/(main)/admin/employees/EmployeeExcelExportButton";
 import EmployeesListClient from "@/app/(main)/admin/employees/EmployeesListClient";
 import TeamsEditor from "@/app/(main)/admin/teams/TeamsEditor";
 
@@ -87,9 +88,12 @@ export default async function OrganizationPage({
       {/* ── 사원 관리 ─────────────────────────────── */}
       {tab === "employees" && (
         <div>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <p className="text-sm text-gray-500">재직 중인 사원을 조회하고 관리합니다.</p>
-            <Link href="/admin/employees/new" className="btn-primary text-sm py-2 px-4">+ 사원 등록</Link>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <EmployeeExcelExportButton className="btn-secondary text-sm py-2 px-4" />
+              <Link href="/admin/employees/new" className="btn-primary text-sm py-2 px-4">+ 사원 등록</Link>
+            </div>
           </div>
 
           {/* 엑셀 일괄 등록: 파일 선택 → 미리보기 → 일괄 등록 */}
