@@ -1,7 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import {
   buildHolidayDisplaySet,
   isRedCalendarDay,
@@ -32,6 +32,9 @@ const STATUS_LABEL: Record<Exclude<DayStatus, null>, string> = {
   PM: "오후",
 };
 
+/** 월간 달력 셀에 바로 보여줄 최대 인원. 초과분은 +N 클릭 시 전체 목록 */
+const MONTH_CELL_MAX = 5;
+
 export default function TeamScheduleClient({
   view,
   members,
@@ -59,6 +62,17 @@ export default function TeamScheduleClient({
 }) {
   const router = useRouter();
   const holidaySet = useMemo(() => buildHolidayDisplaySet(holidayYmds), [holidayYmds]);
+  const [detailDate, setDetailDate] = useState<string | null>(null);
+  const detailList = detailDate ? (byDay[detailDate] ?? []) : [];
+
+  useEffect(() => {
+    if (!detailDate) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDetailDate(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [detailDate]);
 
   function shiftWeek(delta: number) {
     const next = weekOffset + delta;
@@ -163,6 +177,8 @@ export default function TeamScheduleClient({
               if (dateStr === null) return <div key={`pad-${i}`} className="min-h-[80px] bg-gray-50/50" />;
               const isToday = dateStr === todayStr;
               const list = byDay[dateStr] ?? [];
+              const overflow = !isAdminOrPm && list.length > MONTH_CELL_MAX;
+              const visible = overflow ? list.slice(0, MONTH_CELL_MAX) : list;
               const dayNum = parseInt(dateStr.slice(8, 10), 10);
               const [cy, cm, cd] = dateStr.split("-").map((x) => parseInt(x, 10));
               const dayOfWeek = new Date(cy, cm - 1, cd).getDay();
@@ -171,7 +187,23 @@ export default function TeamScheduleClient({
               return (
                 <div
                   key={dateStr}
-                  className={`min-h-[80px] border-b border-r border-gray-100 p-1.5 ${isWeekend ? "bg-gray-50/50" : "bg-white"}`}
+                  className={`min-h-[80px] border-b border-r border-gray-100 p-1.5 ${isWeekend ? "bg-gray-50/50" : "bg-white"} ${
+                    overflow ? "cursor-pointer hover:bg-slate-50" : ""
+                  }`}
+                  onClick={overflow ? () => setDetailDate(dateStr) : undefined}
+                  onKeyDown={
+                    overflow
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setDetailDate(dateStr);
+                          }
+                        }
+                      : undefined
+                  }
+                  role={overflow ? "button" : undefined}
+                  tabIndex={overflow ? 0 : undefined}
+                  aria-label={overflow ? `${dayNum}일 휴가 ${list.length}명, 전체 보기` : undefined}
                 >
                   <div
                     className={`text-xs font-semibold mb-1 ${
@@ -183,7 +215,7 @@ export default function TeamScheduleClient({
                     {isToday && <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-blue-500 inline-block align-middle" />}
                   </div>
                   <div className="space-y-0.5">
-                    {(isAdminOrPm ? list : list.slice(0, 5)).map((x, j) => {
+                    {visible.map((x, j) => {
                       const cfg = x.status != null ? STATUS_CONFIG[x.status] : null;
                       const label = x.status != null ? STATUS_LABEL[x.status] : "";
                       return (
@@ -196,8 +228,17 @@ export default function TeamScheduleClient({
                         </div>
                       );
                     })}
-                    {!isAdminOrPm && list.length > 5 && (
-                      <div className="text-[10px] text-gray-500">+{list.length - 5}</div>
+                    {overflow && (
+                      <button
+                        type="button"
+                        className="text-[10px] font-semibold text-blue-600 hover:text-blue-800 hover:underline w-full text-left"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDetailDate(dateStr);
+                        }}
+                      >
+                        +{list.length - MONTH_CELL_MAX} · 전체 {list.length}명
+                      </button>
                     )}
                   </div>
                 </div>
@@ -286,7 +327,61 @@ export default function TeamScheduleClient({
       {/* 안내 */}
       <p className="text-xs text-gray-400 px-1">
         * 승인된 휴가만 표시됩니다. 휴가 유형은 개인정보 보호를 위해 표시되지 않습니다.
+        {!isAdminOrPm && " 월간 달력에서 하루 5명이 넘으면 +N을 눌러 전체 인원을 볼 수 있습니다."}
       </p>
+
+      {detailDate && detailList.length > 0 && (() => {
+        const [, mm, dd] = detailDate.split("-");
+        const monthNum = parseInt(mm, 10);
+        const dayNum = parseInt(dd, 10);
+        return (
+          <div
+            className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4"
+            onClick={() => setDetailDate(null)}
+            role="presentation"
+          >
+            <div
+              className="bg-white w-full sm:max-w-sm sm:rounded-xl rounded-t-2xl shadow-2xl max-h-[85vh] flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="team-leave-detail-title"
+            >
+              <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
+                <div>
+                  <p id="team-leave-detail-title" className="text-sm font-semibold text-gray-900">
+                    {monthNum}월 {dayNum}일 휴가 인원
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">총 {detailList.length}명</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDetailDate(null)}
+                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="닫기"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <ul className="overflow-y-auto px-4 py-3 space-y-1.5">
+                {detailList.map((x, j) => {
+                  const cfg = x.status != null ? STATUS_CONFIG[x.status] : null;
+                  const label = x.status != null ? STATUS_LABEL[x.status] : "";
+                  return (
+                    <li
+                      key={`${x.name}-${j}`}
+                      className={`flex items-center justify-between gap-2 text-sm px-2.5 py-1.5 rounded-lg border ${cfg?.bg ?? "bg-gray-50"} ${cfg?.text ?? "text-gray-700"} ${cfg?.border ?? "border-gray-200"}`}
+                    >
+                      <span className="font-medium truncate">{x.name}</span>
+                      <span className="shrink-0 text-xs font-semibold">{label}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
