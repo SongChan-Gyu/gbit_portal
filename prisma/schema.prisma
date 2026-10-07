@@ -197,7 +197,7 @@ model LeaveAllocation {
   id          String    @id @default(cuid())
   employeeId  String
   employee    Employee  @relation(fields: [employeeId], references: [id])
-  // 할당 분류: BASE_ANNUAL/TENURE_BONUS/DEPT_BONUS/TENURE_1Y/TENURE_5Y/TENURE_10Y/AWARD/CARRYOVER/SICK_RECOGNITION
+  // 할당 분류: BASE_ANNUAL/TENURE_BONUS/DEPT_BONUS/TENURE_1Y/TENURE_5Y/TENURE_10Y/AWARD/COMPENSATORY/CARRYOVER/SICK_RECOGNITION
   sourceCode  String
   label       String    // 표시명 (기본연차 15일, 5년근속 5일 등)
   totalDays   Float

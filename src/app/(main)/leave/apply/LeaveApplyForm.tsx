@@ -191,6 +191,11 @@ const LEAVE_GROUPS_BASE: GroupDef[] = [
     subs: [{ label: "신청", code: "AWARD" }],
   },
   {
+    key: "compensatory", label: "대체휴가", meta: "별도 부여",
+    color: "#0d9488", borderClass: "border-teal-500",
+    subs: [{ label: "신청", code: "COMPENSATORY" }],
+  },
+  {
     key: "tenure",
     label: "근속휴가",
     meta: "입사 N주년 부여",
@@ -216,7 +221,7 @@ LEAVE_GROUPS_BASE.forEach((g) => g.subs.forEach((s) => { CODE_TO_GROUP_BASE[s.co
 
 /** UI: 자산형(소모 가능 부여) vs 사유형 — 섹션 분리 */
 const BASE_ASSET_GROUP_KEYS = new Set([
-  "annual", "care", "holidayExt", "stamp", "halfday", "dutyDept", "award", "birthday", "tenure",
+  "annual", "care", "holidayExt", "stamp", "halfday", "dutyDept", "award", "compensatory", "birthday", "tenure",
 ]);
 const BASE_REASON_GROUP_KEYS = new Set(["condolence", "public", "recognition", "sick"]);
 
@@ -448,8 +453,9 @@ export default function LeaveApplyForm({
     if ((lt.applyGroupKey ?? "").trim().toLowerCase() === "tenure") {
       return hasActivePoolRemaining(code) || (poolRemainingBySource[code] ?? 0) > 0;
     }
-    if (lt.allocationSourceCode === "AWARD") {
-      return hasActivePoolRemaining("AWARD") || (poolRemainingBySource["AWARD"] ?? 0) > 0;
+    if (lt.allocationSourceCode === "AWARD" || lt.allocationSourceCode === "COMPENSATORY") {
+      const src = lt.allocationSourceCode;
+      return hasActivePoolRemaining(src) || (poolRemainingBySource[src] ?? 0) > 0;
     }
     return true;
   };

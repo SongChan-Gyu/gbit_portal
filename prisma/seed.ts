@@ -123,6 +123,7 @@ async function main() {
     { sourceCode: "HOLIDAY_EXT",  label: "연휴연장휴가", sortOrder: 4, defaultDays: 1,    note: "전원 1일" },
     { sourceCode: "DUTY_DEPT",    label: "직무부서휴가", sortOrder: 5, defaultDays: 2,    note: "운영부/교육부/복지부 2일" },
     { sourceCode: "AWARD",        label: "포상휴가",     sortOrder: 6, defaultDays: null, note: "PM·관리자가 사원별 부여" },
+    { sourceCode: "COMPENSATORY", label: "대체휴가",     sortOrder: 11, defaultDays: null, note: "공휴일·일요일 근무 시 PM·관리자가 사원별 부여" },
     // 근속 기념일 기반 특별부여 (tenureYears: 스케줄러가 해당 주년에 자동 부여)
     { sourceCode: "TENURE_1Y",  label: "1년근속휴가",  sortOrder: 7, defaultDays: 3,  tenureYears: 1,  carryoverThresholdMonths: 3 },
     { sourceCode: "TENURE_5Y",  label: "5년근속휴가",  sortOrder: 8, defaultDays: 5,  tenureYears: 5  },
@@ -557,6 +558,7 @@ async function seedLeaveTypes() {
     ["TENURE_5Y",      "5년근속휴가",       5,   false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 19],
     ["TENURE_10Y",     "10년근속휴가",      10,  false, 1, null, null, false, null, false,false,false,"입사일기준",  12,    "#10b981", 20],
     ["AWARD",          "포상휴가",          1,   false, 2, null, null, false, null, false,false,false,"부여일기준",  12,    "#f59e0b", 21],
+    ["COMPENSATORY",   "대체휴가",          1,   false, 1, null, null, false, null, false,false,false,"부여일기준",  12,    "#14b8a6", 24],
     ["HOLIDAY_EXT",       "연휴연장",            1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#0ea5e9", 22],
     ["DUTY_DEPT",           "직무부서휴가",        1,   false, 1, null, null, false, null, false,false,false,"귀속연도",    null,  "#8b5cf6", 23],
     ["BIRTHDAY_HALF",     "생일반차",            0.5, false, 1, null, null, false, null, true, false,true, "부여일기준", 3,   "#ec4899", 25],
@@ -570,6 +572,7 @@ async function seedLeaveTypes() {
     if (lc === "BIRTHDAY_HALF") return "BIRTHDAY_HALF";
     if (lc === "TENURE_1Y" || lc === "TENURE_5Y" || lc === "TENURE_10Y") return lc;
     if (lc === "AWARD") return "AWARD";
+    if (lc === "COMPENSATORY") return "COMPENSATORY";
     if (lc === "DUTY_DEPT") return "DUTY_DEPT";
     return null;
   }
@@ -594,6 +597,7 @@ async function seedLeaveTypes() {
     if (code === "HEALING_DAY") return "스탬프 4칸 이상 장당 1회 · 1시간40분 출퇴근 조정";
     if (code === "BIRTHDAY_HALF") return "생일에 자동 부여 0.5일";
     if (code === "AWARD") return "별도 부여";
+    if (code === "COMPENSATORY") return "별도 부여 · 공휴일·일요일 근무";
     if (code === "PM_RECOG_STAMP") return "8칸 완성 장당 1회";
     if (code === "TENURE_1Y") return "입사 1주년 부여";
     if (code === "TENURE_5Y") return "입사 5주년 부여";
@@ -604,7 +608,7 @@ async function seedLeaveTypes() {
     return code === "ANNUAL" || code === "POOL_TENURE_BONUS" || code === "TENURE_1Y";
   }
   function includeInFiscalInitForCode(code: string): boolean {
-    return code !== "AWARD" && code !== "POOL_TENURE_BONUS";
+    return code !== "AWARD" && code !== "COMPENSATORY" && code !== "POOL_TENURE_BONUS";
   }
 
   const DUAL_TIME_SLOT_CODES = new Set([

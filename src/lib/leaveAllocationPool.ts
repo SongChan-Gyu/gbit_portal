@@ -61,3 +61,50 @@ export function leaveItemFormDisplayDays(
 export function isDedicatedAllocationSource(sourceCode: string): boolean {
   return !isAnnualPoolSourceCode(sourceCode);
 }
+
+export type RemainingPeriodAlloc = {
+  id: string;
+  validUntil: Date | string;
+  validFrom?: Date | string;
+};
+
+function toTime(v: Date | string): number {
+  return v instanceof Date ? v.getTime() : new Date(v).getTime();
+}
+
+function remainingOf(remainingById: Map<string, number> | Record<string, number>, id: string): number {
+  if (remainingById instanceof Map) return remainingById.get(id) ?? 0;
+  return remainingById[id] ?? 0;
+}
+
+/** 잔여 유효기간이 짧은(만료가 가까운) 할당이 앞. 동일 만료면 부여일이 빠른 쪽. */
+export function compareAllocationsByRemainingPeriod(
+  a: RemainingPeriodAlloc,
+  b: RemainingPeriodAlloc,
+): number {
+  const untilDiff = toTime(a.validUntil) - toTime(b.validUntil);
+  if (untilDiff !== 0) return untilDiff;
+  if (a.validFrom != null && b.validFrom != null) {
+    const fromDiff = toTime(a.validFrom) - toTime(b.validFrom);
+    if (fromDiff !== 0) return fromDiff;
+  }
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+export function sortAllocationsByRemainingPeriod<T extends RemainingPeriodAlloc>(allocs: T[]): T[] {
+  return [...allocs].sort(compareAllocationsByRemainingPeriod);
+}
+
+/** 신청 구간을 덮고 잔여가 충분한 할당 중, 잔여 기간이 가장 짧은 건. */
+export function pickAllocationByRemainingPeriod<T extends RemainingPeriodAlloc>(
+  list: T[],
+  remainingById: Map<string, number> | Record<string, number>,
+  days: number,
+  covers: (a: T) => boolean,
+): T | null {
+  for (const a of sortAllocationsByRemainingPeriod(list)) {
+    if (!covers(a)) continue;
+    if (remainingOf(remainingById, a.id) >= days) return a;
+  }
+  return null;
+}

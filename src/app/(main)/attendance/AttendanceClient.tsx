@@ -14,7 +14,7 @@ const ABBR: Record<string, string> = {
   RECOGNITION:"인정", RECOGNITION_AM:"전인", RECOGNITION_PM:"후인",
   PM_HALF_MONTH:"하프", SICK:"병가", HEALING_DAY:"힐링(스)", HEALING_DAY_HALF_REPLACE:"하프대체",
   PM_RECOG_STAMP:"스탬프", TENURE_1Y:"근1", TENURE_5Y:"근5",
-  TENURE_10Y:"근10", AWARD:"포상",
+  TENURE_10Y:"근10", AWARD:"포상", COMPENSATORY:"대체",
 };
 
 type ReqItem = {

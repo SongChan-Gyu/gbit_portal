@@ -11,7 +11,11 @@ import {
 import { sendLeaveRequestAlimtalk } from "@/lib/kakao";
 import { writeAudit, getIp } from "@/lib/audit";
 import { countAfternoonEligible, findAfternoonStampCard } from "@/lib/stampCard";
-import { leaveItemDeductDays } from "@/lib/leaveAllocationPool";
+import {
+  compareAllocationsByRemainingPeriod,
+  leaveItemDeductDays,
+  pickAllocationByRemainingPeriod,
+} from "@/lib/leaveAllocationPool";
 import { calcWorkingDays, getFiscalYearFromStr, listWorkingYmds, splitYmdRangeByFiscalYear } from "@/lib/workdays";
 import { calcHolidayExtFullDays, isHolidayOrWeekendYmd, isValidHolidayExtDay } from "@/lib/holidayExt";
 import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
@@ -434,6 +438,7 @@ export async function POST(req: Request) {
               validFrom: { lte: leaveMaxEnd },
               validUntil: { gte: leaveMinStart },
             },
+            orderBy: [{ validUntil: "asc" }, { validFrom: "asc" }],
           })
         : [];
     const allocsBySource = new Map<string, typeof dedicatedAllocsRaw>();
@@ -441,6 +446,9 @@ export async function POST(req: Request) {
       const list = allocsBySource.get(a.sourceCode) ?? [];
       list.push(a);
       allocsBySource.set(a.sourceCode, list);
+    }
+    for (const list of allocsBySource.values()) {
+      list.sort(compareAllocationsByRemainingPeriod);
     }
 
     const sourceLabel = (sourceCode: string) => {
@@ -495,24 +503,13 @@ export async function POST(req: Request) {
       const d = leaveItemDeductDays(it, lt);
       const rem = simDedRem.get(src)!;
       const list = allocsBySource.get(src) ?? [];
+      const picked = pickAllocationByRemainingPeriod(list, rem, d, (a) =>
+        dedicatedCoversRange(src, it.startDate, it.endDate, a),
+      );
       let ok = false;
-      for (const a of list) {
-        if (!dedicatedCoversRange(src, it.startDate, it.endDate, a)) continue;
-        if ((rem.get(a.id) ?? 0) >= d) {
-          rem.set(a.id, (rem.get(a.id) ?? 0) - d);
-          ok = true;
-          break;
-        }
-      }
-      if (!ok) {
-        const cands = list.filter((a) => dedicatedCoversRange(src, it.startDate, it.endDate, a));
-        const best = cands
-          .filter((a) => (rem.get(a.id) ?? 0) > 0)
-          .sort((a, b) => (rem.get(b.id) ?? 0) - (rem.get(a.id) ?? 0))[0];
-        if (best && (rem.get(best.id) ?? 0) >= d) {
-          rem.set(best.id, (rem.get(best.id) ?? 0) - d);
-          ok = true;
-        }
+      if (picked) {
+        rem.set(picked.id, (rem.get(picked.id) ?? 0) - d);
+        ok = true;
       }
       if (!ok) {
         return NextResponse.json(
@@ -557,21 +554,12 @@ export async function POST(req: Request) {
     function pickDedicatedAllocation(sourceCode: string, days: number, startYmd: string, endYmd: string): string | null {
       const list = allocsBySource.get(sourceCode) ?? [];
       const rem = dedicatedRemainBySource.get(sourceCode)!;
-      for (const a of list) {
-        if (!dedicatedCoversRange(sourceCode, startYmd, endYmd, a)) continue;
-        if ((rem[a.id] ?? 0) >= days) {
-          rem[a.id] -= days;
-          return a.id;
-        }
-      }
-      const best = list
-        .filter((a) => dedicatedCoversRange(sourceCode, startYmd, endYmd, a) && (rem[a.id] ?? 0) > 0)
-        .sort((a, b) => (rem[b.id] ?? 0) - (rem[a.id] ?? 0))[0];
-      if (best && (rem[best.id] ?? 0) >= days) {
-        rem[best.id] = (rem[best.id] ?? 0) - days;
-        return best.id;
-      }
-      return null;
+      const picked = pickAllocationByRemainingPeriod(list, rem, days, (a) =>
+        dedicatedCoversRange(sourceCode, startYmd, endYmd, a),
+      );
+      if (!picked) return null;
+      rem[picked.id] = (rem[picked.id] ?? 0) - days;
+      return picked.id;
     }
 
     const resolvedItems = expandedWorkItems.map((it) => {
