@@ -4,7 +4,11 @@ import prisma from "@/lib/db";
 import Link from "next/link";
 import FormSubmitClient from "@/app/(main)/forms/[id]/FormSubmitClient";
 import { allowsMultipleSubmissions } from "@/lib/formSubmissionPolicy";
-import { checkHealthCheckEligibility, HEALTH_CHECK_FORM_SLUG } from "@/lib/healthCheck";
+import {
+  checkHealthCheckEligibility,
+  healthCheckLockedFieldValues,
+  HEALTH_CHECK_FORM_SLUG,
+} from "@/lib/healthCheck";
 
 export const metadata = { title: "건강검진 신청 수정 | GBIT Portal" };
 
@@ -88,6 +92,7 @@ export default async function HealthCheckEditPage({
         allowMultipleSubmissions={allowsMultipleSubmissions(form)}
         afterSubmitHref="/health-check/my"
         editingSubmissionId={submissionId}
+        lockedFieldValues={healthCheckLockedFieldValues(fields)}
       />
     </div>
   );

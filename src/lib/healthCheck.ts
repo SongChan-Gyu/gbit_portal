@@ -97,7 +97,37 @@ export function healthCheckSelfOnlyError(
   return null;
 }
 
-/** 건강검진은 관계임직원 성명(본인일 때)을 제외하고 공란 제출 불가 */
+export function isHealthCheckEmpNoLabel(label: string): boolean {
+  return label.includes("사원번호");
+}
+
+export function isHealthCheckNotesLabel(label: string): boolean {
+  return label.includes("특이사항");
+}
+
+/** 사원번호는 입력 불가·공란으로 잠근다 (인사정보로 채우지 않음) */
+export function healthCheckLockedFieldValues(
+  fields: { id: string; label: string }[],
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of fields) {
+    if (isHealthCheckEmpNoLabel(f.label)) out[f.id] = "";
+  }
+  return out;
+}
+
+export function applyHealthCheckLockedAnswers(
+  fields: { id: string; label: string }[],
+  answerMap: Record<string, unknown>,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...answerMap };
+  for (const [id, value] of Object.entries(healthCheckLockedFieldValues(fields))) {
+    next[id] = value;
+  }
+  return next;
+}
+
+/** 건강검진은 사원번호·관계임직원 성명(본인일 때)·특이사항을 제외하고 공란 제출 불가 */
 export function healthCheckBlankFieldError(
   fields: { id: string; label: string }[],
   answerMap: Record<string, unknown>,
@@ -112,6 +142,8 @@ export function healthCheckBlankFieldError(
     const value = String(answerMap[f.id] ?? "").trim();
     const isRelatedEmployeeName = f.label.includes("관계임직원");
     if (isRelatedEmployeeName && relationship === "본인") continue;
+    if (isHealthCheckNotesLabel(f.label)) continue;
+    if (isHealthCheckEmpNoLabel(f.label)) continue;
 
     if (!value) {
       if (isRelatedEmployeeName) {

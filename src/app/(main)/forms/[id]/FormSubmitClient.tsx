@@ -37,6 +37,7 @@ export default function FormSubmitClient({
   allowMultipleSubmissions = false,
   afterSubmitHref,
   editingSubmissionId,
+  lockedFieldValues = {},
 }: {
   form: FormData;
   prevSubmission?: PrevSubmission;
@@ -44,12 +45,19 @@ export default function FormSubmitClient({
   afterSubmitHref?: string;
   /** 지정 시 해당 건을 수정 (다건 제출 양식) */
   editingSubmissionId?: string;
+  /** 건강검진 사원번호처럼 수정 불가하고 공란으로 두는 항목 */
+  lockedFieldValues?: Record<string, string>;
 }) {
   const isEditMode = !!editingSubmissionId;
+  const lockedIds = new Set(Object.keys(lockedFieldValues));
 
-  const [answers, setAnswers] = useState<Record<string, string>>(() => {
+  function blankAnswers(): Record<string, string> {
     const init: Record<string, string> = {};
     form.fields.forEach((f) => {
+      if (lockedIds.has(f.id)) {
+        init[f.id] = lockedFieldValues[f.id] ?? "";
+        return;
+      }
       const fromPrev =
         prevSubmission.submitted && prevSubmission.answers[f.id] != null
           ? prevSubmission.answers[f.id]
@@ -60,7 +68,9 @@ export default function FormSubmitClient({
           : "";
     });
     return init;
-  });
+  }
+
+  const [answers, setAnswers] = useState<Record<string, string>>(() => blankAnswers());
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
@@ -77,6 +87,7 @@ export default function FormSubmitClient({
 
   function validate() {
     for (const f of form.fields) {
+      if (lockedIds.has(f.id)) continue;
       const msg = validateFormField(f, answers[f.id] ?? "");
       if (msg) {
         setError(msg);
@@ -135,7 +146,7 @@ export default function FormSubmitClient({
                 type="button"
                 onClick={() => {
                   setSuccess(false);
-                  setAnswers(Object.fromEntries(form.fields.map((f) => [f.id, ""])));
+                  setAnswers(blankAnswers());
                 }}
                 className="btn-ghost px-5 py-2.5 rounded-xl text-sm text-gray-600"
               >
@@ -214,15 +225,21 @@ export default function FormSubmitClient({
               <p className="text-sm text-gray-400 py-6 text-center">질문이 없는 양식입니다.</p>
             ) : (
               <div className="space-y-4">
-                {form.fields.map((f) => (
+                {form.fields.map((f) => {
+                  const locked = lockedIds.has(f.id);
+                  return (
                   <div key={f.id}>
                     <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
                       {f.label}
-                      {f.required && <span className="text-red-500 ml-0.5">*</span>}
+                      {f.required && !locked && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
-                    {renderFormField(f, answers[f.id] ?? "", (v) => setAnswer(f.id, v), isReadOnly)}
+                    {renderFormField(f, answers[f.id] ?? "", (v) => setAnswer(f.id, v), isReadOnly || locked)}
+                    {locked && (
+                      <p className="text-xs text-gray-400 mt-1">입력하지 않으며 수정할 수 없습니다.</p>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

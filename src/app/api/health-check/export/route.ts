@@ -60,10 +60,11 @@ export async function GET() {
       name: answerByLabelIncludes(byLabel, "성명"),
       rrn7: answerByLabelIncludes(byLabel, "주민번호"),
       phone: answerByLabelIncludes(byLabel, "전화번호"),
-      empNo: answerByLabelIncludes(byLabel, "사원번호"),
+      empNo: "",
       relatedEmployeeName: answerByLabelIncludes(byLabel, "관계임직원"),
       relationship: answerByLabelIncludes(byLabel, "직원과의"),
       storedTotalLabel: findHealthCheckSupportAmountLabel(byLabel),
+      notes: answerByLabelIncludes(byLabel, "특이사항"),
     };
   });
 

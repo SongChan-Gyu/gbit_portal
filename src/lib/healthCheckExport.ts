@@ -62,6 +62,7 @@ export type HealthCheckExportRowInput = {
   relatedEmployeeName: string;
   relationship: string;
   storedTotalLabel: string;
+  notes?: string;
 };
 
 export function buildHealthCheckExportDataRow(input: HealthCheckExportRowInput): (string | number)[] {
@@ -72,7 +73,7 @@ export function buildHealthCheckExportDataRow(input: HealthCheckExportRowInput):
   row[1] = input.name;
   row[2] = input.rrn7;
   row[3] = input.phone;
-  row[4] = input.empNo;
+  row[4] = ""; // 사원번호: 공란
   row[5] = ""; // 부서: 공란
   row[6] = input.relatedEmployeeName;
   row[7] = input.relationship;
@@ -80,7 +81,7 @@ export function buildHealthCheckExportDataRow(input: HealthCheckExportRowInput):
   row[9] = mgmtFee;
   if (total != null) row[10] = total;
   row[11] = HEALTH_CHECK_BILLING_DEFAULT;
-  row[12] = ""; // 특이사항: 공란
+  row[12] = input.notes ?? "";
 
   return row;
 }

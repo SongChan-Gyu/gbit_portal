@@ -22,7 +22,7 @@ const FIELDS: FieldDef[] = [
   { label: "성명", fieldType: "text", required: true },
   { label: "주민번호 7자리 (성별 포함)", fieldType: "rrn7", required: true },
   { label: "전화번호", fieldType: "text", required: true },
-  { label: "사원번호", fieldType: "text", required: true },
+  { label: "사원번호", fieldType: "text" },
   { label: "관계임직원 성명 (본인인 경우 공란)", fieldType: "text" },
   { label: "직원과의 관계", fieldType: "text", required: true },
   {
@@ -31,6 +31,7 @@ const FIELDS: FieldDef[] = [
     required: true,
     options: ["32만원", "22만원"],
   },
+  { label: "특이사항", fieldType: "textarea" },
 ];
 
 const FORM_META = {
@@ -44,6 +45,8 @@ const FORM_META = {
     "· 내부 직원은 본인·가족 각각 별도로 신청해 주세요.",
     "· 가족 검진 시 관계임직원 성명·직원과의 관계를 기재해 주세요.",
     "· 외부개발자는 본인만 신청 가능하며, 태어난 해와 신청년도의 홀짝이 같을 때만 신청할 수 있습니다.",
+    "· 사원번호는 입력하지 않으며 수정할 수 없습니다.",
+    "· 특이사항은 필요할 때만 입력하면 됩니다.",
   ].join("\n"),
   isActive: true,
   showInMenu: true,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { auth } from "@/lib/auth";
 import { employeeCanAccessForm } from "@/lib/formAccess";
+import { healthCheckLockedFieldValues, HEALTH_CHECK_FORM_SLUG } from "@/lib/healthCheck";
 
 /** GET: 폼 조회 (slug 또는 id) — 대상(내부/외부/그룹)에 맞는 사용자만 */
 export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }> }) {
@@ -46,6 +47,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     required: f.required,
   }));
 
+  const lockedFieldValues =
+    form.slug === HEALTH_CHECK_FORM_SLUG ? healthCheckLockedFieldValues(fields) : undefined;
+
   return NextResponse.json({
     id: form.id,
     title: form.title,
@@ -53,5 +57,6 @@ export async function GET(_req: Request, ctx: { params: Promise<{ slug: string }
     description: form.description,
     isAnonymous: form.isAnonymous,
     fields,
+    lockedFieldValues,
   });
 }

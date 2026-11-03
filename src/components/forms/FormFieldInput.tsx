@@ -23,7 +23,7 @@ export function renderFormField(
           type="text"
           inputMode="numeric"
           autoComplete="off"
-          className="input w-full font-mono tracking-wide"
+          className="input w-full font-mono tracking-wide disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-not-allowed"
           value={formatRrn7(value)}
           onChange={(e) => onChange(formatRrn7(e.target.value))}
           placeholder={rrn7Placeholder()}
@@ -36,7 +36,7 @@ export function renderFormField(
     case "textarea":
       return (
         <textarea
-          className="input w-full min-h-[80px]"
+          className="input w-full min-h-[80px] disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-not-allowed"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           required={f.required}
@@ -47,7 +47,7 @@ export function renderFormField(
       return (
         <input
           type="number"
-          className="input w-full"
+          className="input w-full disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-not-allowed"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           required={f.required}
@@ -70,7 +70,7 @@ export function renderFormField(
     case "select":
       return (
         <select
-          className="input w-full"
+          className="input w-full disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-not-allowed"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           required={f.required}
@@ -136,7 +136,7 @@ export function renderFormField(
       return (
         <input
           type="text"
-          className="input w-full"
+          className="input w-full disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-not-allowed"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           required={f.required}

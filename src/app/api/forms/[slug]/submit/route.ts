@@ -5,6 +5,7 @@ import { employeeCanAccessForm } from "@/lib/formAccess";
 import { allowsMultipleSubmissions } from "@/lib/formSubmissionPolicy";
 import { isValidRrn7 } from "@/lib/rrn7Input";
 import {
+  applyHealthCheckLockedAnswers,
   checkHealthCheckEligibility,
   healthCheckBlankFieldError,
   healthCheckSelfOnlyError,
@@ -129,7 +130,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ slug: string }
   }
 
   const fieldIds = new Set(form.fields.map((f) => f.id));
-  const answerMap = typeof answers === "object" && answers !== null ? answers : {};
+  let answerMap: Record<string, unknown> =
+    typeof answers === "object" && answers !== null ? { ...(answers as Record<string, unknown>) } : {};
+  if (isHealthCheckForm) {
+    answerMap = applyHealthCheckLockedAnswers(form.fields, answerMap);
+  }
   const requiredMissing = form.fields.filter((f) => f.required && !String(answerMap[f.id] ?? "").trim());
   if (requiredMissing.length > 0)
     return NextResponse.json(

@@ -21,6 +21,7 @@ type FormData = {
   description: string | null;
   fields: Field[];
   isAnonymous?: boolean;
+  lockedFieldValues?: Record<string, string>;
 };
 
 type SubmissionState =
@@ -55,8 +56,13 @@ export default function PublicFormPage() {
         setForm(formData);
         setPrevSubmission(subData);
 
+        const locked = formData.lockedFieldValues ?? {};
         const init: Record<string, string> = {};
         formData.fields.forEach((f) => {
+          if (f.id in locked) {
+            init[f.id] = locked[f.id] ?? "";
+            return;
+          }
           const raw =
             subData.submitted && subData.answers[f.id] != null
               ? subData.answers[f.id]
@@ -82,7 +88,9 @@ export default function PublicFormPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form) return;
+    const locked = form.lockedFieldValues ?? {};
     for (const f of form.fields) {
+      if (f.id in locked) continue;
       const msg = validateFormField(f, answers[f.id] ?? "");
       if (msg) {
         alert(msg);
@@ -189,15 +197,21 @@ export default function PublicFormPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {form.fields.length > 0 && (
                 <div className="space-y-4">
-                  {form.fields.map((f) => (
+                  {form.fields.map((f) => {
+                    const locked = !!(form.lockedFieldValues && f.id in form.lockedFieldValues);
+                    return (
                     <div key={f.id}>
                       <label className="block text-[13px] font-semibold text-gray-700 mb-1.5">
                         {f.label}
-                        {f.required && <span className="text-red-500 ml-0.5">*</span>}
+                        {f.required && !locked && <span className="text-red-500 ml-0.5">*</span>}
                       </label>
-                      {renderField(f, answers[f.id] ?? "", isReadOnly)}
+                      {renderField(f, answers[f.id] ?? "", isReadOnly || locked)}
+                      {locked && (
+                        <p className="text-xs text-gray-400 mt-1">입력하지 않으며 수정할 수 없습니다.</p>
+                      )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
 

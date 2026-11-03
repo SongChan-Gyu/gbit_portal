@@ -4,7 +4,11 @@ import prisma from "@/lib/db";
 import FormSubmitClient from "./FormSubmitClient";
 import { employeeCanAccessForm } from "@/lib/formAccess";
 import { allowsMultipleSubmissions } from "@/lib/formSubmissionPolicy";
-import { checkHealthCheckEligibility, HEALTH_CHECK_FORM_SLUG } from "@/lib/healthCheck";
+import {
+  checkHealthCheckEligibility,
+  healthCheckLockedFieldValues,
+  HEALTH_CHECK_FORM_SLUG,
+} from "@/lib/healthCheck";
 
 export default async function InternalFormPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -91,6 +95,7 @@ export default async function InternalFormPage({ params }: { params: Promise<{ i
         prevSubmission={prevSubmission}
         allowMultipleSubmissions={allowMultiple}
         afterSubmitHref={isHealthCheckForm ? "/health-check/my" : allowMultiple ? "/health-check/my" : undefined}
+        lockedFieldValues={isHealthCheckForm ? healthCheckLockedFieldValues(fields) : undefined}
       />
     </div>
   );
