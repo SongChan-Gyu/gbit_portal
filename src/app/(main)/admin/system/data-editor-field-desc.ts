@@ -10,7 +10,7 @@ export const DATA_EDITOR_FIELD_DESCRIPTIONS: Record<string, Record<string, strin
     id: "팀 고유 ID (변경 불가)",
     name: "팀 표시명",
     sortOrder: "목록 정렬 순서 (작을수록 앞)",
-    leaderId: "팀장으로 지정된 사원 ID",
+    leaderId: "팀장으로 지정된 사원 ID. 바꾸면 역할·알림톡·대기 결재가 같이 맞춰짐",
     leaderName: "팀장 이름 (조회용)",
     createdAt: "생성 시각",
     updatedAt: "마지막 수정 시각",

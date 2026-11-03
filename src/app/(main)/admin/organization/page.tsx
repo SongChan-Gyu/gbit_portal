@@ -115,7 +115,7 @@ export default async function OrganizationPage({
       {/* ── 팀 관리 ──────────────────────────────── */}
       {tab === "teams" && (
         <div>
-          <p className="text-sm text-gray-500 mb-4">팀 구성 및 팀장 지정을 관리합니다.</p>
+          <p className="text-sm text-gray-500 mb-4">팀 구성 및 팀장 지정을 관리합니다. 팀장 변경 시 역할·알림톡·대기 결재가 함께 맞춰집니다.</p>
           <TeamsEditor teams={teams as any} allEmployees={allEmployees as any} />
         </div>
       )}

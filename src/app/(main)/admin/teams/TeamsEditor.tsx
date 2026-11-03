@@ -10,9 +10,10 @@ export default function TeamsEditor({ teams, allEmployees }: { teams:Team[]; all
   const [editing, setEditing] = useState<Partial<Team> & { isNew?:boolean } | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [info, setInfo] = useState("");
 
-  function openNew() { setEditing({ name:"", sortOrder:99, leaderId:null, isNew:true }); setErr(""); }
-  function openEdit(t: Team) { setEditing({ ...t }); setErr(""); }
+  function openNew() { setEditing({ name:"", sortOrder:99, leaderId:null, isNew:true }); setErr(""); setInfo(""); }
+  function openEdit(t: Team) { setEditing({ ...t }); setErr(""); setInfo(""); }
 
   async function save() {
     if (!editing?.name) { setErr("팀 이름을 입력하세요."); return; }
@@ -24,12 +25,18 @@ export default function TeamsEditor({ teams, allEmployees }: { teams:Team[]; all
     const data = await res.json();
     setSaving(false);
     if (!res.ok) { setErr(data.error ?? "저장 실패"); return; }
+    if (data.warning) setInfo(String(data.warning));
+    else setInfo("");
     setEditing(null);
     router.refresh();
   }
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-gray-500">
+        팀장을 바꾸면 역할(팀장/팀원), 알림톡, 대기 중인 휴가·스탬프 결재가 새 팀장에게 맞춰집니다.
+      </p>
+      {info && <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">{info}</p>}
       <button onClick={openNew} className="btn-primary text-sm py-2 px-4">+ 팀 추가</button>
 
       <div className="space-y-3">
@@ -67,7 +74,9 @@ export default function TeamsEditor({ teams, allEmployees }: { teams:Team[]; all
                   {allEmployees.map((e) => (
                     <option key={e.id} value={e.id}>{e.name} ({e.position})</option>
                   ))}
-                </select></div>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">저장 시 새 팀장 역할·알림톡을 맞추고, 팀원 대기 결재도 넘깁니다.</p>
+              </div>
               <div><label className="label">정렬 순서</label>
                 <input type="number" className="input" value={editing.sortOrder??99}
                   onChange={(e)=>setEditing((p)=>p?{...p,sortOrder:parseInt(e.target.value)}:null)} /></div>

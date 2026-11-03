@@ -7,6 +7,7 @@ import { writeAudit, getIp } from "@/lib/audit";
 import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 import { normalizeCompanyStaffNo, ensureInternalUserFromCompanyStaffNo } from "@/lib/employeeCompanyStaffNo";
 import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
+import { applyTeamLeaderChange, TeamLeaderSyncError } from "@/lib/teamLeader";
 
 type EmployeePostBody = {
   empNo?: string;
@@ -79,6 +80,7 @@ export async function POST(req: Request) {
   }
 
   const emailNorm = String(email ?? "").trim() || null;
+  try {
   const emp = await prisma.$transaction(async (tx) => {
     const created = await tx.employee.create({
       data: {
@@ -101,6 +103,9 @@ export async function POST(req: Request) {
     if (companyStaffNo && nextType !== "EXTERNAL") {
       await ensureInternalUserFromCompanyStaffNo(tx, created.id, companyStaffNo);
     }
+    if ((role || "STAFF") === "TEAM_LEAD" && created.teamId) {
+      await applyTeamLeaderChange(tx, created.teamId, created.id);
+    }
     return created;
   });
 
@@ -113,4 +118,10 @@ export async function POST(req: Request) {
     ip: getIp(req) ?? undefined,
   });
   return NextResponse.json({ ok:true, id:emp.id });
+  } catch (e) {
+    if (e instanceof TeamLeaderSyncError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    throw e;
+  }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
+import { applyTeamLeaderChange, TeamLeaderSyncError } from "@/lib/teamLeader";
 
 /** 조회 가능 테이블: id(API용), label(화면표시), editable(수정 가능 여부) */
 const DATA_TABLE_OPTIONS = [
@@ -308,13 +309,33 @@ export async function PATCH(req: Request) {
     }
     if (table === "Team") {
       if (!id) return NextResponse.json({ error: "id 필요" }, { status: 400 });
-      const update: { name?: string; sortOrder?: number; leaderId?: string | null } = {};
+      const update: { name?: string; sortOrder?: number } = {};
       if (typeof data.name === "string") update.name = data.name;
       if (typeof data.sortOrder === "number") update.sortOrder = data.sortOrder;
-      if (data.leaderId === null || data.leaderId === "") update.leaderId = null;
-      else if (typeof data.leaderId === "string") update.leaderId = data.leaderId;
-      await prisma.team.update({ where: { id }, data: update });
-      return NextResponse.json({ ok: true });
+      const leaderSpecified = data.leaderId === null || data.leaderId === "" || typeof data.leaderId === "string";
+      const nextLeaderId =
+        data.leaderId === null || data.leaderId === ""
+          ? null
+          : typeof data.leaderId === "string"
+            ? data.leaderId
+            : undefined;
+      try {
+        const sync = await prisma.$transaction(async (tx) => {
+          if (Object.keys(update).length) {
+            await tx.team.update({ where: { id }, data: update });
+          }
+          if (leaderSpecified && nextLeaderId !== undefined) {
+            return applyTeamLeaderChange(tx, id, nextLeaderId);
+          }
+          return null;
+        });
+        return NextResponse.json({ ok: true, warning: sync?.warning ?? undefined, sync: sync ?? undefined });
+      } catch (e) {
+        if (e instanceof TeamLeaderSyncError) {
+          return NextResponse.json({ error: e.message }, { status: 400 });
+        }
+        throw e;
+      }
     }
     if (table === "AllocationSourceConfig") {
       if (!id) return NextResponse.json({ error: "id 필요" }, { status: 400 });

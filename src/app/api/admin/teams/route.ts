@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { requireAdmin, requirePMOrAdmin } from "@/lib/authGuard";
+import { requirePMOrAdmin } from "@/lib/authGuard";
 import prisma from "@/lib/db";
+import { applyTeamLeaderChange, TeamLeaderSyncError } from "@/lib/teamLeader";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -11,6 +12,21 @@ export async function POST(req: Request) {
   const { name, leaderId, sortOrder } = await req.json();
   if (!name) return NextResponse.json({ error:"팀 이름 필수" }, { status:400 });
 
-  const team = await prisma.team.create({ data:{ name, leaderId:leaderId||null, sortOrder:sortOrder??99 } });
-  return NextResponse.json({ ok:true, id:team.id });
+  try {
+    const team = await prisma.$transaction(async (tx) => {
+      const created = await tx.team.create({
+        data: { name, sortOrder: sortOrder ?? 99 },
+      });
+      if (leaderId) {
+        await applyTeamLeaderChange(tx, created.id, leaderId);
+      }
+      return created;
+    });
+    return NextResponse.json({ ok: true, id: team.id });
+  } catch (e) {
+    if (e instanceof TeamLeaderSyncError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    throw e;
+  }
 }

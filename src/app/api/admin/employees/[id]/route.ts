@@ -13,6 +13,7 @@ import {
   ensureInternalUserFromCompanyStaffNo,
 } from "@/lib/employeeCompanyStaffNo";
 import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
+import { applyTeamLeaderChange, TeamLeaderSyncError } from "@/lib/teamLeader";
 
 type EmployeePatchBody = {
   name: string;
@@ -98,9 +99,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
     }
   }
 
+  const leadingTeam = await prisma.team.findUnique({
+    where: { leaderId: id },
+    select: { id: true, name: true },
+  });
+  const nextTeamId = teamId || null;
+  if (leadingTeam && role === "STAFF") {
+    return NextResponse.json(
+      { error: `${existing.name}님은 ${leadingTeam.name} 팀장입니다. 팀 관리에서 팀장을 먼저 변경해 주세요.` },
+      { status: 400 },
+    );
+  }
+  if (leadingTeam && nextTeamId !== leadingTeam.id) {
+    return NextResponse.json(
+      { error: `${existing.name}님은 ${leadingTeam.name} 팀장입니다. 팀 관리에서 팀장을 먼저 변경해 주세요.` },
+      { status: 400 },
+    );
+  }
+
   const before = { name: existing.name, status: existing.status };
   const oldStaffNorm = normalizeCompanyStaffNo(existing.companyStaffNo);
   const resetPwd = resetPwdRaw === true;
+  const appointAsTeamLead = role === "TEAM_LEAD" && existing.role !== "TEAM_LEAD" && !!nextTeamId;
   try {
     await prisma.$transaction(async (tx) => {
       await tx.employee.update({
@@ -146,8 +166,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id:str
           }
         }
       }
+      if (appointAsTeamLead && nextTeamId) {
+        await applyTeamLeaderChange(tx, nextTeamId, id);
+      }
     });
   } catch (e: unknown) {
+    if (e instanceof TeamLeaderSyncError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
       return NextResponse.json(
         { error: "회사사번 또는 로그인 ID가 다른 사원·계정과 중복입니다." },

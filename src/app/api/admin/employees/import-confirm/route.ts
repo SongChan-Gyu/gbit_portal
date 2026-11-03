@@ -6,6 +6,7 @@ import type { ParsedEmployeeRow } from "@/lib/employeeExcel";
 import { EXTERNAL_DEFAULT_HIRE_YMD } from "@/lib/employeeExcel";
 import { emailEnabledSyncedToAddress } from "@/lib/employeeEmailPrefs";
 import { normalizeCompanyStaffNo, ensureInternalUserFromCompanyStaffNo } from "@/lib/employeeCompanyStaffNo";
+import { applyTeamLeaderChange } from "@/lib/teamLeader";
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -81,6 +82,9 @@ export async function POST(req: Request) {
         });
         if (companyStaffNo && rowType !== "EXTERNAL") {
           await ensureInternalUserFromCompanyStaffNo(tx, createdEmp.id, companyStaffNo);
+        }
+        if ((row.role || "STAFF") === "TEAM_LEAD" && createdEmp.teamId) {
+          await applyTeamLeaderChange(tx, createdEmp.teamId, createdEmp.id);
         }
         return createdEmp;
       });
