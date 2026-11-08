@@ -1,5 +1,5 @@
 import type { DB } from "@/lib/db";
-import { dowLabelKoFromYmd } from "@/lib/dateUtils";
+import { dowLabelKoFromYmd, kstYmd } from "@/lib/dateUtils";
 import { directsendKakaoAlimtalk } from "@/lib/directsendKakao";
 
 /**
@@ -23,8 +23,8 @@ import { directsendKakaoAlimtalk } from "@/lib/directsendKakao";
  *   쉼표·공백·세미콜론으로 여러 개 (예: 01011112222,01033334444)
  *
  * 위 설정이 없거나 해당 템플릿 번호가 JSON에 없으면 MOCKED(미발송), NotificationLog 기록.
- * 스탬프만 예외: STAMP_REQUEST → LEAVE_REQUEST, STAMP_RESULT → LEAVE_RESULT.
- * 전용 번호가 없으면 휴가 번호로 발송하고 변수는 스탬프로 채움.
+ * 전용 번호가 없을 때 휴가 번호로 발송: STAMP_REQUEST → LEAVE_REQUEST, STAMP_RESULT → LEAVE_RESULT,
+ * LEAVE_CANCEL_REQUEST → LEAVE_REQUEST. 변수는 스탬프/취소신청으로 구분해 채움.
  */
 
 /** ALIMTALK_ALLOWED_RECEIVER — 숫자만 비교. 구분자: 쉼표·공백·세미콜론 */
@@ -56,10 +56,11 @@ function loadDirectsendTemplateNos(): Record<string, string> {
   }
 }
 
-/** 스탬프 전용 번호가 없을 때 쓰는 휴가 템플릿 번호. 본문 변수는 스탬프로 채움. */
-const STAMP_TEMPLATE_FALLBACK: Record<string, string> = {
+/** 전용 번호가 없을 때 쓰는 휴가 템플릿 번호. 본문 변수는 각 코드에 맞게 채움. */
+const TEMPLATE_NO_FALLBACK: Record<string, string> = {
   STAMP_REQUEST: "LEAVE_REQUEST",
   STAMP_RESULT: "LEAVE_RESULT",
+  LEAVE_CANCEL_REQUEST: "LEAVE_REQUEST",
 };
 
 export function resolveDirectsendUserTemplateNo(
@@ -68,7 +69,7 @@ export function resolveDirectsendUserTemplateNo(
 ): { userTemplateNo: string; fallbackFrom: string | null } {
   const own = templateNos[templateCode] ?? "";
   if (own) return { userTemplateNo: own, fallbackFrom: null };
-  const fallbackCode = STAMP_TEMPLATE_FALLBACK[templateCode];
+  const fallbackCode = TEMPLATE_NO_FALLBACK[templateCode];
   if (fallbackCode) {
     const leave = templateNos[fallbackCode] ?? "";
     if (leave) return { userTemplateNo: leave, fallbackFrom: fallbackCode };
@@ -127,6 +128,7 @@ function directsendNotesForPortalTemplateV1(
     `${g("입실일")}(${g("입실요일")}) ~ ${g("퇴실일")}(${g("퇴실요일")})`;
 
   switch (templateCode) {
+    case "LEAVE_CANCEL_REQUEST":
     case "LEAVE_REQUEST":
       return [
         g("결재자명"),
@@ -181,6 +183,7 @@ function directsendNotesForPortalTemplateV2(
     `${g("입실일")}(${g("입실요일")}) ~ ${g("퇴실일")}(${g("퇴실요일")})`;
 
   switch (templateCode) {
+    case "LEAVE_CANCEL_REQUEST":
     case "LEAVE_REQUEST":
       return [
         g("결재자명"),
@@ -322,7 +325,7 @@ async function sendAlimtalk(
     if (!username || !apiKey || !plusId) {
       errorMsg = "다이렉트센드 DIRECTSEND_USERNAME / DIRECTSEND_API_KEY / DIRECTSEND_KAKAO_PLUS_ID 미설정";
     } else if (!userTemplateNo) {
-      const fallbackCode = STAMP_TEMPLATE_FALLBACK[templateCode];
+      const fallbackCode = TEMPLATE_NO_FALLBACK[templateCode];
       errorMsg = fallbackCode
         ? `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 ${templateCode}·${fallbackCode} 번호 없음`
         : `DIRECTSEND_ALIMTALK_TEMPLATE_NOS 에 "${templateCode}" 번호 없음`;
@@ -331,7 +334,7 @@ async function sendAlimtalk(
       console.log(`[AlimTalk Mock] to=${receiver} template=${templateCode}`, params);
     }
   } else if (fallbackFrom) {
-    errorMsg = `${templateCode} 번호 없음 → ${fallbackFrom} 번호로 발송 (본문은 스탬프 구분)`;
+    errorMsg = `${templateCode} 번호 없음 → ${fallbackFrom} 번호로 발송 (본문은 ${templateCode} 구분)`;
   }
 
   if (status === "SENT" && receiver) {
@@ -399,6 +402,69 @@ export async function sendLeaveRequestAlimtalk(
     종료일: endDate,
     종료요일: dowLabelKoFromYmd(endDate),
   });
+}
+
+/** 휴가 취소 결재 요청. 전용 번호 없으면 LEAVE_REQUEST 번호로 발송하되 휴가유형에 취소신청을 붙임. */
+const CANCEL_REQUEST_TYPE_PREFIX = "취소신청";
+
+export async function sendLeaveCancelRequestAlimtalk(
+  prisma: DB,
+  approverId: string,
+  phone: string,
+  approverName: string,
+  applicantName: string,
+  leaveTypeName: string,
+  startDate: string,
+  endDate: string,
+) {
+  const typeLabel = leaveTypeName.trim()
+    ? `${CANCEL_REQUEST_TYPE_PREFIX} · ${leaveTypeName.trim()}`
+    : CANCEL_REQUEST_TYPE_PREFIX;
+  await sendAlimtalk(prisma, approverId, phone, "LEAVE_CANCEL_REQUEST", {
+    결재자명: approverName,
+    신청자명: applicantName,
+    휴가유형: typeLabel,
+    시작일: startDate,
+    시작요일: dowLabelKoFromYmd(startDate),
+    종료일: endDate,
+    종료요일: dowLabelKoFromYmd(endDate),
+  });
+}
+
+type LeaveCancelAlimtalkItem = { leaveType: { name: string }; startDate: Date; endDate: Date };
+type LeaveCancelAlimtalkApprover = {
+  id: string;
+  name: string;
+  phone: string;
+  alimtalkEnabled?: boolean | null;
+};
+
+/** 취소 결재자에게 알림톡. 연락처 없음·미사용·발송 실패는 본 처리를 막지 않음. */
+export async function trySendLeaveCancelRequestAlimtalk(
+  prisma: DB,
+  logLabel: string,
+  approver: LeaveCancelAlimtalkApprover | null | undefined,
+  applicantName: string,
+  items: LeaveCancelAlimtalkItem[],
+) {
+  if (!approver?.phone || approver.alimtalkEnabled === false) return;
+  try {
+    const sorted = [...items].sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    await sendLeaveCancelRequestAlimtalk(
+      prisma,
+      approver.id,
+      approver.phone,
+      approver.name,
+      applicantName,
+      sorted.map((i) => i.leaveType.name).join("+"),
+      first ? kstYmd(first.startDate) : "",
+      last ? kstYmd(last.endDate) : "",
+    );
+  } catch (e) {
+    console.warn(`[${logLabel}] 알림톡 발송 실패 (처리는 완료됨)`, e);
+  }
 }
 
 /** 스탬프 서명 요청 알림톡. 전용 번호 없으면 LEAVE_REQUEST 번호로 발송하되 변수는 스탬프로 채움. */

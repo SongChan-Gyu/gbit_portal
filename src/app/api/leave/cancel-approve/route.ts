@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { trySendLeaveCancelRequestAlimtalk } from "@/lib/kakao";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 import { requestHasPmHalfMonth } from "@/lib/halfdayPolicy";
 
@@ -23,7 +24,12 @@ export async function POST(req: Request) {
     where: { id: requestId },
     include: {
       items: { include: { leaveType: true, allocation: true } },
-      approvals: { where: { status: "CANCEL_PENDING" }, orderBy: { step: "asc" } },
+      approvals: {
+        where: { status: "CANCEL_PENDING" },
+        orderBy: { step: "asc" },
+        include: { approver: { select: { id: true, name: true, phone: true, alimtalkEnabled: true } } },
+      },
+      employee: { select: { name: true } },
     },
   });
 
@@ -39,6 +45,13 @@ export async function POST(req: Request) {
   );
   if (!myApproval)
     return NextResponse.json({ error: "결재 권한이 없거나 순서가 아닙니다." }, { status: 403 });
+
+  let nextCancelApprover: {
+    id: string;
+    name: string;
+    phone: string;
+    alimtalkEnabled: boolean;
+  } | null = null;
 
   await prisma.$transaction(async (tx) => {
     if (action === "REJECT") {
@@ -70,6 +83,8 @@ export async function POST(req: Request) {
           where: { id: requestId },
           data: { currentStep: nextStep },
         });
+        const nextAp = request.approvals.find((a) => a.step === nextStep);
+        if (nextAp?.approver) nextCancelApprover = nextAp.approver;
       } else {
         // 최종 승인 → 실제 취소 처리
         await tx.leaveRequest.update({
@@ -95,6 +110,14 @@ export async function POST(req: Request) {
       }
     }
   });
+
+  await trySendLeaveCancelRequestAlimtalk(
+    prisma,
+    "leave/cancel-approve",
+    nextCancelApprover,
+    request.employee?.name ?? "",
+    request.items,
+  );
 
   return NextResponse.json({ ok: true });
 }

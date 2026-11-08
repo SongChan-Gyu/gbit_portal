@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
+import { trySendLeaveCancelRequestAlimtalk } from "@/lib/kakao";
 import { releaseStampSlotsForLeaveRequest } from "@/lib/stampCard";
 import { requestHasPmHalfMonth } from "@/lib/halfdayPolicy";
 
 /**
  * POST /api/leave/request/[id]/cancel-request
  * 승인된 휴가에 대해 취소 신청을 올립니다.
- * - 일반: APPROVED → CANCEL_REQUESTED, 원 결재선에 CANCEL_PENDING 생성
+ * - 일반: APPROVED → CANCEL_REQUESTED, 원 결재선에 CANCEL_PENDING 생성, 1차 결재자에게 알림톡
  * - 자동승인(결재 행 없음)·신청자가 ADMIN/PM: 취소 심사 없이 즉시 CANCELLED (할당·스탬프 복원)
  */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -23,7 +24,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     where: { id },
     include: {
       items: { include: { leaveType: true, allocation: true } },
-      approvals: { orderBy: { step: "asc" } },
+      approvals: {
+        orderBy: { step: "asc" },
+        include: { approver: { select: { id: true, name: true, phone: true, alimtalkEnabled: true } } },
+      },
+      employee: { select: { id: true, name: true, role: true } },
     },
   });
 
@@ -35,19 +40,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (requestHasPmHalfMonth(request.items))
     return NextResponse.json({ error: "하프데이는 취소·철회할 수 없습니다." }, { status: 400 });
 
-  const applicant = await prisma.employee.findUnique({
-    where: { id: request.employeeId },
-    select: { role: true },
-  });
-
   const originalApprovals = request.approvals
     .filter((a, i, arr) => arr.findIndex((x) => x.step === a.step) === i)
     .sort((a, b) => a.step - b.step);
 
   /** 자동승인 건은 LeaveApproval 행이 없어 취소 결재자가 비어 멈춤 → 즉시 취소. ADMIN/PM은 상위 결재 없음 가정으로 즉시 취소. */
   const skipCancelWorkflow =
-    applicant?.role === "ADMIN" ||
-    applicant?.role === "PM" ||
+    request.employee?.role === "ADMIN" ||
+    request.employee?.role === "PM" ||
     originalApprovals.length === 0;
 
   if (skipCancelWorkflow) {
@@ -118,6 +118,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     });
   });
+
+  await trySendLeaveCancelRequestAlimtalk(
+    prisma,
+    "leave/cancel-request",
+    originalApprovals[0]?.approver,
+    request.employee?.name ?? "",
+    request.items,
+  );
 
   return NextResponse.json({ ok: true });
 }
