@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept, calcNights, jejuKstMidnightFromYmdStr } from "@/lib/jeju";
 import { writeAudit, getIp } from "@/lib/audit";
+import { clearJejuCheckoutDelayForCheckInDate } from "@/lib/jejuCheckoutDelay";
 import * as XLSX from "xlsx";
 
 async function canManageJeju(user: { employeeId?: string; role?: string }) {
@@ -77,7 +78,7 @@ export async function POST(req: Request) {
               detail: `${overlap.employee.name}님 예약(${os}~${oe})과 겹칩니다.`,
             });
           }
-          return tx.jejuAccommodation.create({
+          const createdRow = await tx.jejuAccommodation.create({
             data: {
               employeeId: row.employeeId,
               startDate, endDate, nights,
@@ -93,6 +94,8 @@ export async function POST(req: Request) {
               depositConfirmedById: actorId, depositConfirmedAt: now,
             },
           });
+          await clearJejuCheckoutDelayForCheckInDate(tx, startDate, createdRow.id);
+          return createdRow;
         });
 
         await writeAudit({

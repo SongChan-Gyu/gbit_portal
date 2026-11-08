@@ -16,6 +16,7 @@ import {
 } from "@/lib/jejuYearStats";
 import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
 import { formatJejuDepositAccountLine } from "@/lib/jeju";
+import JejuCheckoutDelayPicker from "./JejuCheckoutDelayPicker";
 
 const STATUS_KO: Record<string, string> = {
   PENDING: "복지부 승인 대기",
@@ -41,6 +42,9 @@ type MyRequest = {
   startDate: string;
   endDate: string;
   nights: number;
+  checkoutDelayHours?: number;
+  checkoutTime?: string;
+  checkoutDelayAllowed?: boolean;
   reason: string | null;
   guestName: string;
   guestPhone: string;
@@ -294,7 +298,9 @@ export default function JejuMyClient() {
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-[15px] font-bold text-gray-900 leading-snug">{dateLine(r.startDate, r.endDate)}</p>
-                        <p className="text-sm text-gray-500 mt-0.5 tabular-nums">{r.nights}박</p>
+                        <p className="text-sm text-gray-500 mt-0.5 tabular-nums">
+                          {r.nights}박 · 입실 15:00 · 퇴실 {r.checkoutTime ?? "11:00"} (지연 {r.checkoutDelayHours ?? 0}시간)
+                        </p>
                       </div>
                       <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
                         {STATUS_KO[r.status] ?? r.status}
@@ -327,6 +333,20 @@ export default function JejuMyClient() {
                       )}
                     </dl>
                     {r.reason && <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">{r.reason}</p>}
+                    {["PENDING", "STEP1_APPROVED", "APPROVED"].includes(r.status) && (
+                      <JejuCheckoutDelayPicker
+                        requestId={r.id}
+                        hours={r.checkoutDelayHours ?? 0}
+                        allowed={r.checkoutDelayAllowed !== false}
+                        onChanged={(hours, checkoutTime) => {
+                          setList((prev) =>
+                            prev.map((row) =>
+                              row.id === r.id ? { ...row, checkoutDelayHours: hours, checkoutTime } : row,
+                            ),
+                          );
+                        }}
+                      />
+                    )}
                     <JejuRefundPolicyNotice
                       variant="full"
                       className="mt-1"

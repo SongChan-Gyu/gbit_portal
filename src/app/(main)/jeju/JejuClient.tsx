@@ -351,9 +351,12 @@ export default function JejuClient({
         {config && (
           <div className="mx-4 mb-3 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-600">
             <span>입실 <span className="font-semibold text-slate-900">15:00</span></span>
-            <span>퇴실 <span className="font-semibold text-slate-900">11:00</span> <span className="text-slate-400">(고정)</span></span>
+            <span>퇴실 <span className="font-semibold text-slate-900">11:00</span></span>
             <span>최대 <span className="font-semibold text-slate-900">{config.maxNights}박</span></span>
             <span>예약 가능 <span className="font-semibold text-slate-900">~{config.bookingWindowEnd}</span></span>
+            <p className="col-span-2 text-[11px] text-slate-500 leading-snug">
+              퇴실 당일 입실 예약이 없으면 신청 내역에서 1~3시간 늦출 수 있습니다.
+            </p>
           </div>
         )}
         <div className="px-4 pb-4">

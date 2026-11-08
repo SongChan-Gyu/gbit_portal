@@ -14,6 +14,8 @@ type ListRequest = {
   startDate: string;
   endDate: string;
   nights: number;
+  checkoutDelayHours?: number;
+  checkoutTime?: string;
   status: string;
   employeeName: string;
   empNo: string;
@@ -317,7 +319,10 @@ export default function JejuApproveClient() {
             </span>
           </div>
           <p className="text-sm font-semibold text-slate-800">{dateLine(r.startDate, r.endDate)}</p>
-          <p className="text-xs text-gray-500 tabular-nums">{r.nights}박</p>
+          <p className="text-xs text-gray-500 tabular-nums">
+            {r.nights}박 · 입실 15:00 · 퇴실 {r.checkoutTime ?? "11:00"}
+            {!!r.checkoutDelayHours && <span className="text-amber-700"> (+{r.checkoutDelayHours}시간)</span>}
+          </p>
           <dl className="space-y-1.5 text-sm text-gray-700">
             <div className="flex justify-between gap-3">
               <dt className="text-gray-500 shrink-0">투숙객</dt>
@@ -662,6 +667,9 @@ export default function JejuApproveClient() {
                       <td className="px-3 py-2 text-gray-700 whitespace-nowrap text-xs">
                         {r.startDate} ~ {r.endDate}
                         <span className="text-gray-400 ml-1">{r.nights}박</span>
+                        {!!r.checkoutDelayHours && (
+                          <span className="block text-amber-700">퇴실 {r.checkoutTime}</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-gray-600 text-xs">{r.guestName} · {r.guestCount}명</td>
                       <td className="px-3 py-2 text-gray-500 text-xs tabular-nums">{r.guestPhone || "-"}</td>
@@ -712,7 +720,10 @@ export default function JejuApproveClient() {
                     </div>
                     <p className="text-sm font-medium text-slate-800">{dateLine(r.startDate, r.endDate)}</p>
                     <p className="text-xs text-gray-600">
-                      {r.nights}박 · {r.guestCount}명 · {r.guestName}
+                      {r.nights}박 · 퇴실 {r.checkoutTime ?? "11:00"}
+                      {!!r.checkoutDelayHours && ` (+${r.checkoutDelayHours}시간)`}
+                      {" · "}
+                      {r.guestCount}명 · {r.guestName}
                       {r.guestPhone ? ` · ${r.guestPhone}` : ""}
                       {r.depositorName ? ` · 입금 ${r.depositorName}` : ""}
                     </p>

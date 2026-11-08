@@ -15,6 +15,7 @@ function decryptPIIInResult(value: unknown): void {
   const obj = value as Record<string, unknown>;
   if (typeof obj.phone === "string") obj.phone = decryptField(obj.phone);
   if (typeof obj.email === "string") obj.email = decryptField(obj.email);
+  if (typeof obj.guestPhone === "string") obj.guestPhone = decryptField(obj.guestPhone);
   for (const v of Object.values(obj)) {
     if (v && typeof v === "object") decryptPIIInResult(v);
   }

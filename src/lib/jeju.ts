@@ -9,7 +9,7 @@ export function isWelfareDept(emp: { dutyDept?: string | null } | null): boolean
   return emp.dutyDept === "WELFARE";
 }
 
-/** 1박 = endDate > startDate (KST 달력일 기준). 입실 15시·퇴실 11시 고정 */
+/** 1박 = endDate > startDate (KST 달력일 기준). 입실 15시·퇴실 11시(당일 입실 없으면 1~3시간 지연 가능) */
 export function calcNights(startDate: Date, endDate: Date): number {
   let n = 0;
   let cur = kstYmd(startDate);

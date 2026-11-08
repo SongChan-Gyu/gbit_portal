@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept } from "@/lib/jeju";
+import { jejuCheckoutTimeLabel, resetJejuCheckoutDelaysWhenCheckInExists } from "@/lib/jejuCheckoutDelay";
 import { kstYmd } from "@/lib/dateUtils";
 import { getJejuCalendarYearStatsForEmployees, JEJU_YEARLY_USAGE_LIMIT, isJejuUnlimitedEmployee } from "@/lib/jejuYearStats";
 import { todayStr } from "@/lib/workdays";
@@ -37,6 +38,8 @@ export async function GET() {
     orderBy: [{ status: "asc" }, { startDate: "desc" }],
   });
 
+  const resetIds = await resetJejuCheckoutDelaysWhenCheckInExists(prisma, list);
+
   const calendarYear = parseInt(todayStr().slice(0, 4), 10);
   const statsMap = await getJejuCalendarYearStatsForEmployees(
     prisma,
@@ -49,6 +52,7 @@ export async function GET() {
       const ys = statsMap.get(r.employeeId);
       const submitted = ys?.submittedCount ?? 0;
       const approvedStay = ys?.approvedStayInYearCount ?? 0;
+      const delayHours = resetIds.has(r.id) ? 0 : r.checkoutDelayHours;
       return {
       id: r.id,
       employeeId: r.employeeId,
@@ -58,6 +62,8 @@ export async function GET() {
       startDate: kstYmd(r.startDate),
       endDate: kstYmd(r.endDate),
       nights: r.nights,
+      checkoutDelayHours: delayHours,
+      checkoutTime: jejuCheckoutTimeLabel(delayHours),
       reason: r.reason,
       guestName: r.guestName,
       guestPhone: r.guestPhone,

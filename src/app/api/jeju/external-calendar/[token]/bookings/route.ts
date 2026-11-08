@@ -7,6 +7,13 @@ import {
   verifyJejuExternalStayCookie,
   COOKIE_NAME,
 } from "@/lib/jejuExternalStayView";
+import {
+  JEJU_CHECKIN_TIME,
+  jejuCheckoutDelayHoursLabel,
+  jejuCheckoutTimeLabel,
+  resetJejuCheckoutDelaysWhenCheckInExists,
+} from "@/lib/jejuCheckoutDelay";
+import { decryptField } from "@/lib/fieldCrypto";
 
 /** 복지부 달력과 동일하게: 최종·1차승인·신청 중 점유는 반영하되, 외부(청소)용 표에는 확정·입금대기만 노출 */
 const EXTERNAL_STATUSES = ["APPROVED", "STEP1_APPROVED"] as const;
@@ -57,21 +64,31 @@ export async function GET(req: Request, ctx: { params: Promise<{ token: string }
       guestPhone: true,
       guestCount: true,
       status: true,
+      checkoutDelayHours: true,
     },
     orderBy: { startDate: "asc" },
   });
 
-  const items = rows.map((r) => ({
-    id: r.id,
-    checkIn: kstYmd(new Date(r.startDate)),
-    checkOut: kstYmd(new Date(r.endDate)),
-    nights: r.nights,
-    guestName: r.guestName,
-    guestPhone: r.guestPhone ?? "",
-    guestCount: r.guestCount,
-    status: r.status,
-    statusLabel: r.status === "APPROVED" ? "예약확정" : "입금확인대기",
-  }));
+  const resetIds = await resetJejuCheckoutDelaysWhenCheckInExists(prisma, rows);
+
+  const items = rows.map((r) => {
+    const delayHours = resetIds.has(r.id) ? 0 : r.checkoutDelayHours;
+    return {
+      id: r.id,
+      checkIn: kstYmd(new Date(r.startDate)),
+      checkOut: kstYmd(new Date(r.endDate)),
+      nights: r.nights,
+      guestName: r.guestName,
+      guestPhone: decryptField(r.guestPhone ?? ""),
+      guestCount: r.guestCount,
+      status: r.status,
+      statusLabel: r.status === "APPROVED" ? "예약확정" : "입금확인대기",
+      checkInTime: JEJU_CHECKIN_TIME,
+      checkoutDelayHours: delayHours,
+      checkoutDelayLabel: jejuCheckoutDelayHoursLabel(delayHours),
+      checkOutTime: jejuCheckoutTimeLabel(delayHours),
+    };
+  });
 
   return NextResponse.json({ ok: true, from: fromStr, to: toStr, items });
 }

@@ -195,7 +195,7 @@ export default function JejuSettingsTab() {
       <div className="card max-w-xl border-blue-100 bg-blue-50/40">
         <h3 className="font-semibold text-gray-800 mb-1">외부용 입실 일정 링크</h3>
         <p className="text-xs text-gray-600 mb-4">
-          로그인 없이 <strong>입실·퇴실일, 입실자명, 인원</strong>만 보이게 합니다. 주소에 포함된 긴 토큰과 별도로{" "}
+          로그인 없이 <strong>입실·퇴실일·입퇴실 시간, 입실자명, 인원</strong>만 보이게 합니다. 주소에 포함된 긴 토큰과 별도로{" "}
           <strong>4자리 숫자 비밀번호</strong>를 알려 주세요. 비밀번호만으로는 접근할 수 없습니다.
         </p>
         <label className="flex items-center gap-2 mb-3">

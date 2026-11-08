@@ -12,13 +12,19 @@ type Row = {
   guestPhone: string;
   guestCount: number;
   statusLabel: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  checkoutDelayHours?: number;
+  checkoutDelayLabel?: string;
 };
 
-function formatStayDate(ymd: string) {
-  return formatMDWithDayFromYMD(ymd);
+function formatStayDate(ymd: string, time?: string) {
+  const day = formatMDWithDayFromYMD(ymd);
+  return time ? `${day} ${time}` : day;
 }
 
 function formatPhone(raw: string) {
+  if (!raw || raw.startsWith("ENC:")) return "";
   const d = raw.replace(/\D/g, "");
   if (d.length === 11) return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
   if (d.length === 10) return `${d.slice(0, 3)}-${d.slice(3, 6)}-${d.slice(6)}`;
@@ -60,11 +66,16 @@ function BookingCard({ row }: { row: Row }) {
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm min-w-0">
         <div className="min-w-0">
           <dt className="text-[11px] text-gray-500">입실</dt>
-          <dd className="tabular-nums text-gray-900">{formatStayDate(row.checkIn)}</dd>
+          <dd className="tabular-nums text-gray-900">{formatStayDate(row.checkIn, row.checkInTime ?? "15:00")}</dd>
         </div>
         <div className="min-w-0">
           <dt className="text-[11px] text-gray-500">퇴실</dt>
-          <dd className="tabular-nums text-gray-900">{formatStayDate(row.checkOut)}</dd>
+          <dd className={`tabular-nums ${row.checkoutDelayHours ? "text-amber-800 font-medium" : "text-gray-900"}`}>
+            {formatStayDate(row.checkOut, row.checkOutTime ?? "11:00")}
+            <span className={`block text-[11px] font-normal ${row.checkoutDelayHours ? "text-amber-700" : "text-gray-500"}`}>
+              지연 {row.checkoutDelayLabel ?? `${row.checkoutDelayHours ?? 0}시간`}
+            </span>
+          </dd>
         </div>
         <div>
           <dt className="text-[11px] text-gray-500">박수</dt>
@@ -183,7 +194,7 @@ export default function JejuExternalStayClient({ token }: { token: string }) {
   return (
     <div className="space-y-4 min-w-0">
       <p className="text-xs text-gray-500 leading-relaxed">
-        입실일·퇴실일은 한국 달력 기준입니다. 예약확정·입금확인 대기 건만 표시됩니다.
+        입실 15:00, 퇴실 기본 11:00(지연 0시간)입니다. 당일 입실이 없으면 1~3시간 지연이 표시되고, 그날 입실 예약이 생기면 자동으로 0시간이 됩니다. 예약확정·입금확인 대기 건만 표시됩니다.
       </p>
 
       {items.length === 0 ? (
@@ -201,8 +212,8 @@ export default function JejuExternalStayClient({ token }: { token: string }) {
           <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
             <table className="w-full min-w-[640px] text-sm table-fixed">
               <colgroup>
-                <col className="w-[7.5rem]" />
-                <col className="w-[7.5rem]" />
+                <col className="w-[9.5rem]" />
+                <col className="w-[10rem]" />
                 <col className="w-[3rem]" />
                 <col className="w-[6rem]" />
                 <col className="w-[8rem]" />
@@ -225,8 +236,17 @@ export default function JejuExternalStayClient({ token }: { token: string }) {
                   const phone = formatPhone(r.guestPhone);
                   return (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 align-top">
-                      <td className="px-3 py-2.5 tabular-nums text-gray-900 whitespace-nowrap">{formatStayDate(r.checkIn)}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-gray-900 whitespace-nowrap">{formatStayDate(r.checkOut)}</td>
+                      <td className="px-3 py-2.5 tabular-nums text-gray-900 whitespace-nowrap">
+                        {formatStayDate(r.checkIn, r.checkInTime ?? "15:00")}
+                      </td>
+                      <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
+                        <span className={r.checkoutDelayHours ? "text-amber-800 font-medium" : "text-gray-900"}>
+                          {formatStayDate(r.checkOut, r.checkOutTime ?? "11:00")}
+                        </span>
+                        <span className={`block text-[11px] ${r.checkoutDelayHours ? "text-amber-700" : "text-gray-500"}`}>
+                          지연 {r.checkoutDelayLabel ?? `${r.checkoutDelayHours ?? 0}시간`}
+                        </span>
+                      </td>
                       <td className="px-3 py-2.5 tabular-nums text-gray-900">{r.nights}</td>
                       <td className="px-3 py-2.5 font-medium text-gray-900 truncate" title={r.guestName}>
                         {r.guestName}

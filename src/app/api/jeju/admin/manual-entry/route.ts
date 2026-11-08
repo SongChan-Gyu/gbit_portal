@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import prisma from "@/lib/db";
 import { isWelfareDept, calcNights, jejuKstMidnightFromYmdStr } from "@/lib/jeju";
 import { writeAudit, getIp } from "@/lib/audit";
+import { clearJejuCheckoutDelayForCheckInDate } from "@/lib/jejuCheckoutDelay";
 
 async function canManageJeju(user: { employeeId?: string; role?: string }) {
   if (user.role === "PM" || user.role === "ADMIN") return true;
@@ -105,7 +106,7 @@ export async function POST(req: Request) {
         });
       }
 
-      return tx.jejuAccommodation.create({
+      const createdRow = await tx.jejuAccommodation.create({
         data: {
           employeeId,
           startDate,
@@ -128,6 +129,8 @@ export async function POST(req: Request) {
           depositConfirmedAt: now,
         },
       });
+      await clearJejuCheckoutDelayForCheckInDate(tx, startDate, createdRow.id);
+      return createdRow;
     });
 
     await writeAudit({

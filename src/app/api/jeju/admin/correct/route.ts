@@ -4,6 +4,7 @@ import prisma from "@/lib/db";
 import { jejuKstMidnightFromYmdStr, calcNights } from "@/lib/jeju";
 import { kstYmd } from "@/lib/dateUtils";
 import { writeAudit, getIp } from "@/lib/audit";
+import { clearJejuCheckoutDelayForCheckInDate, jejuHasCheckInOnDate } from "@/lib/jejuCheckoutDelay";
 
 /** PM/ADMIN 전용: 제주 숙소 신청 정보 목록 조회 */
 export async function GET(req: Request) {
@@ -114,6 +115,9 @@ export async function PATCH(req: Request) {
       updates.startDate as Date,
       updates.endDate as Date,
     );
+    if (await jejuHasCheckInOnDate(prisma, updates.endDate as Date, id)) {
+      updates.checkoutDelayHours = 0;
+    }
   }
 
   if (guestName !== undefined) updates.guestName = guestName.trim();
@@ -130,6 +134,9 @@ export async function PATCH(req: Request) {
     where: { id },
     data: updates,
   });
+  if (updates.startDate instanceof Date) {
+    await clearJejuCheckoutDelayForCheckInDate(prisma, updates.startDate as Date, id);
+  }
 
   await writeAudit({
     entityType: "JejuAccommodation",

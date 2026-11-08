@@ -10,6 +10,7 @@ import {
 } from "@/lib/jeju";
 import { writeAudit, getIp } from "@/lib/audit";
 import { sendJejuNotification } from "@/lib/jejuNotify";
+import { clearJejuCheckoutDelayForCheckInDate, jejuHasCheckInOnDate } from "@/lib/jejuCheckoutDelay";
 
 async function getBlockedDates(): Promise<string[]> {
   try {
@@ -115,6 +116,8 @@ export async function PATCH(req: Request) {
     updates.endDate = endDate;
     updates.nights = nights;
     resetApproval = true;
+    const nextEndHasCheckIn = await jejuHasCheckInOnDate(prisma, endDate, requestId);
+    if (nextEndHasCheckIn) updates.checkoutDelayHours = 0;
   }
 
   if (reason !== undefined) updates.reason = reason?.trim() || null;
@@ -143,6 +146,9 @@ export async function PATCH(req: Request) {
     data: updates as any,
     include: { employee: true },
   });
+  if (updates.startDate instanceof Date) {
+    await clearJejuCheckoutDelayForCheckInDate(prisma, updates.startDate as Date, requestId);
+  }
 
   await writeAudit({
     entityType: "JejuAccommodation", entityId: requestId, action: "UPDATED",

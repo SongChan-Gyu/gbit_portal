@@ -9,6 +9,7 @@ import {
   JEJU_MAX_NIGHTS_DEFAULT,
 } from "@/lib/jeju";
 import { sendJejuNotification } from "@/lib/jejuNotify";
+import { clearJejuCheckoutDelayForCheckInDate } from "@/lib/jejuCheckoutDelay";
 import {
   canSubmitJejuInCalendarYear,
   formatJejuYearlyUsageLimitError,
@@ -119,7 +120,7 @@ export async function POST(req: Request) {
       if (overlapping) {
         throw new Error("OVERLAP");
       }
-      return tx.jejuAccommodation.create({
+      const createdRow = await tx.jejuAccommodation.create({
         data: {
           employeeId: user.employeeId,
           startDate,
@@ -133,6 +134,8 @@ export async function POST(req: Request) {
           status: "PENDING",
         },
       });
+      await clearJejuCheckoutDelayForCheckInDate(tx, startDate, createdRow.id);
+      return createdRow;
     });
     const { writeAudit, getIp } = await import("@/lib/audit");
     await writeAudit({
