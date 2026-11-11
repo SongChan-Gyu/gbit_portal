@@ -16,6 +16,7 @@ import {
 } from "@/lib/jejuYearStats";
 import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
 import { formatJejuDepositAccountLine } from "@/lib/jeju";
+import { JEJU_CHECKIN_TIME } from "@/lib/jejuCheckoutDelay";
 import JejuCheckoutDelayPicker from "./JejuCheckoutDelayPicker";
 
 const STATUS_KO: Record<string, string> = {
@@ -45,6 +46,7 @@ type MyRequest = {
   checkoutDelayHours?: number;
   checkoutTime?: string;
   checkoutDelayAllowed?: boolean;
+  checkoutDelayLocked?: boolean;
   reason: string | null;
   guestName: string;
   guestPhone: string;
@@ -299,7 +301,7 @@ export default function JejuMyClient() {
                       <div className="min-w-0">
                         <p className="text-[15px] font-bold text-gray-900 leading-snug">{dateLine(r.startDate, r.endDate)}</p>
                         <p className="text-sm text-gray-500 mt-0.5 tabular-nums">
-                          {r.nights}박 · 입실 15:00 · 퇴실 {r.checkoutTime ?? "11:00"} (지연 {r.checkoutDelayHours ?? 0}시간)
+                          {r.nights}박 · 입실 {JEJU_CHECKIN_TIME} · 퇴실 {r.checkoutTime ?? "11:00"} (지연 {r.checkoutDelayHours ?? 0}시간)
                         </p>
                       </div>
                       <span className={`badge shrink-0 ${STATUS_CLS[r.status] ?? "badge-default"}`}>
@@ -338,6 +340,7 @@ export default function JejuMyClient() {
                         requestId={r.id}
                         hours={r.checkoutDelayHours ?? 0}
                         allowed={r.checkoutDelayAllowed !== false}
+                        locked={r.checkoutDelayLocked === true}
                         onChanged={(hours, checkoutTime) => {
                           setList((prev) =>
                             prev.map((row) =>

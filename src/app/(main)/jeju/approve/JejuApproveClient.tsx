@@ -7,6 +7,7 @@ import { formatMDWithDayFromYMD, todayKstYmd } from "@/lib/dateUtils";
 import { formatJejuYearStatsSummary, JEJU_YEARLY_HIGH_SUBMISSION_HINT } from "@/lib/jejuYearStats";
 import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
 import { formatJejuDepositAccountLine } from "@/lib/jeju";
+import { JEJU_CHECKIN_TIME } from "@/lib/jejuCheckoutDelay";
 
 type ListRequest = {
   id: string;
@@ -320,7 +321,7 @@ export default function JejuApproveClient() {
           </div>
           <p className="text-sm font-semibold text-slate-800">{dateLine(r.startDate, r.endDate)}</p>
           <p className="text-xs text-gray-500 tabular-nums">
-            {r.nights}박 · 입실 15:00 · 퇴실 {r.checkoutTime ?? "11:00"}
+            {r.nights}박 · 입실 {JEJU_CHECKIN_TIME} · 퇴실 {r.checkoutTime ?? "11:00"}
             {!!r.checkoutDelayHours && <span className="text-amber-700"> (+{r.checkoutDelayHours}시간)</span>}
           </p>
           <dl className="space-y-1.5 text-sm text-gray-700">

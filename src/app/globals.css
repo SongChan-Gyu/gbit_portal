@@ -269,6 +269,37 @@
     @apply text-gray-400;
   }
 
+  /* 공지 본문·작성 에디터. Tailwind 기본값이 목록 기호를 지우므로 여기서 되살림 */
+  .notice-content,
+  .rich-editor-content {
+    @apply text-[15px] leading-7 text-gray-800 break-words;
+  }
+  .notice-content :where(p),
+  .rich-editor-content :where(p) {
+    @apply my-2;
+  }
+  .notice-content :where(ul),
+  .rich-editor-content :where(ul) {
+    @apply my-2 list-disc pl-5;
+  }
+  .notice-content :where(ol),
+  .rich-editor-content :where(ol) {
+    @apply my-2 list-decimal pl-5;
+  }
+  .notice-content :where(li),
+  .rich-editor-content :where(li) {
+    @apply my-1;
+    display: list-item;
+  }
+  .notice-content :where(a),
+  .rich-editor-content :where(a) {
+    @apply text-blue-700 underline underline-offset-2 break-all;
+  }
+  .notice-content :where(img),
+  .rich-editor-content :where(img) {
+    @apply my-3 h-auto max-w-full rounded-lg;
+  }
+
   /* ─── 모바일: 체크박스 터치 영역 확대 (label에 min-h 적용) */
   @media (max-width: 768px) {
     label.checkbox-touch,

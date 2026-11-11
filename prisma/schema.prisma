@@ -496,7 +496,7 @@ model JejuAccommodation {
   employee      Employee  @relation(fields: [employeeId], references: [id])
   startDate     DateTime
   endDate       DateTime
-  nights        Int       // 1 이상 (입실일 15시 ~ 퇴실일 11시, 박 단위)
+  nights        Int       // 1 이상 (입실일 16시 ~ 퇴실일 11시, 박 단위)
   /// 퇴실 지연 시간(0=11시, 1~3시간). 퇴실 당일 입실 예약이 없을 때만 1~3 허용
   checkoutDelayHours Int  @default(0)
   reason        String?

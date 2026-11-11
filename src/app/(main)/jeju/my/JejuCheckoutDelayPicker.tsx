@@ -13,17 +13,19 @@ export default function JejuCheckoutDelayPicker({
   requestId,
   hours,
   allowed,
+  locked = false,
   onChanged,
 }: {
   requestId: string;
   hours: number;
   allowed: boolean;
+  locked?: boolean;
   onChanged: (hours: number, checkoutTime: string) => void;
 }) {
   const [saving, setSaving] = useState(false);
 
   async function select(next: 0 | 1 | 2 | 3) {
-    if (next === hours || saving) return;
+    if (next === hours || saving || locked) return;
     if (!allowed && next > 0) return;
     setSaving(true);
     try {
@@ -49,12 +51,12 @@ export default function JejuCheckoutDelayPicker({
       <div className="grid grid-cols-4 gap-1.5">
         {OPTIONS.map((opt) => {
           const selected = hours === opt.hours;
-          const disabled = !allowed && opt.hours > 0;
+          const disabled = locked ? !selected : !allowed && opt.hours > 0;
           return (
             <button
               key={opt.hours}
               type="button"
-              disabled={disabled || saving}
+              disabled={disabled || saving || locked}
               onClick={() => select(opt.hours)}
               className={`min-h-[44px] rounded-lg border text-center px-1 py-1.5 touch-manipulation ${
                 selected
@@ -73,7 +75,9 @@ export default function JejuCheckoutDelayPicker({
         })}
       </div>
       <p className="text-[11px] text-slate-500 leading-snug">
-        {allowed
+        {locked
+          ? "퇴실일 당일부터는 퇴실 시간을 변경할 수 없습니다."
+          : allowed
           ? "0시간은 기본 퇴실 11:00입니다. 당일 입실 예약이 생기면 자동으로 0시간이 됩니다."
           : "퇴실 당일 입실 예약이 있어 지연 0시간(11:00)만 가능합니다."}
       </p>

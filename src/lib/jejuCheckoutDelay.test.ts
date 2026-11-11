@@ -1,5 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { jejuCheckoutDelayHoursLabel, jejuCheckoutTimeLabel, parseCheckoutDelayHours } from "./jejuCheckoutDelay";
+import {
+  isJejuCheckoutDelayLocked,
+  jejuCheckoutDelayHoursLabel,
+  jejuCheckoutTimeLabel,
+  parseCheckoutDelayHours,
+} from "./jejuCheckoutDelay";
+
+describe("isJejuCheckoutDelayLocked", () => {
+  const endDate = new Date("2026-11-12T00:00:00+09:00");
+  it("퇴실 전날까지는 변경 가능", () => {
+    expect(isJejuCheckoutDelayLocked(endDate, "2026-11-11")).toBe(false);
+  });
+  it("퇴실일 당일과 이후에는 잠긴다", () => {
+    expect(isJejuCheckoutDelayLocked(endDate, "2026-11-12")).toBe(true);
+    expect(isJejuCheckoutDelayLocked(endDate, "2026-11-13")).toBe(true);
+  });
+});
 
 describe("parseCheckoutDelayHours", () => {
   it("0~3만 허용", () => {

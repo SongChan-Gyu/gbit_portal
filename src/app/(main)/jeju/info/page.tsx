@@ -63,7 +63,7 @@ export default async function JejuInfoPage() {
             입실·퇴실 시간
           </h3>
           <ul className="text-[13px] text-gray-700 space-y-1">
-            <li>입실: 15:00 (오후 3시)</li>
+            <li>입실: 16:00 (오후 4시)</li>
             <li>퇴실: 11:00 (오전 11시). 퇴실 당일 입실 예약이 없으면 예약 신청 내역에서 1~3시간 늦출 수 있습니다.</li>
           </ul>
         </div>

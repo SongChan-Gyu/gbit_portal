@@ -5,6 +5,7 @@ import { writeAudit, getIp } from "@/lib/audit";
 import {
   JEJU_OCCUPYING_STATUSES,
   jejuCheckoutTimeLabel,
+  isJejuCheckoutDelayLocked,
   jejuHasCheckInOnDate,
   parseCheckoutDelayHours,
 } from "@/lib/jejuCheckoutDelay";
@@ -12,7 +13,7 @@ import {
 /**
  * PATCH /api/jeju/checkout-delay
  * 본인 예약의 퇴실 지연(0~3시간). 결재 상태는 바꾸지 않음.
- * 1~3시간은 퇴실 당일 입실 예약이 없을 때만 가능.
+ * 1~3시간은 퇴실 당일 입실 예약이 없을 때만 가능. 퇴실일 당일부터는 변경 불가.
  */
 export async function PATCH(req: Request) {
   const session = await auth();
@@ -37,6 +38,9 @@ export async function PATCH(req: Request) {
   }
   if (!(JEJU_OCCUPYING_STATUSES as readonly string[]).includes(row.status)) {
     return NextResponse.json({ error: "진행 중인 예약만 퇴실 시간을 변경할 수 있습니다." }, { status: 400 });
+  }
+  if (isJejuCheckoutDelayLocked(row.endDate)) {
+    return NextResponse.json({ error: "퇴실일 당일부터는 퇴실 시간을 변경할 수 없습니다." }, { status: 400 });
   }
 
   if (hours > 0) {

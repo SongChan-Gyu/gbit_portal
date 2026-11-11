@@ -43,7 +43,7 @@ export default async function NoticeDetailPage({ params }: { params: Promise<{ i
           </p>
         </div>
         <div
-          className="p-4 sm:p-6 prose prose-sm max-w-none text-gray-700 notice-content"
+          className="notice-content p-4 sm:p-6"
           dangerouslySetInnerHTML={{ __html: sanitizeHtml(notice.content) }}
         />
       </article>

@@ -1,7 +1,8 @@
 import type { DB, DBTx } from "@/lib/db";
+import { kstYmd, todayKstYmd } from "@/lib/dateUtils";
 
 export const JEJU_OCCUPYING_STATUSES = ["PENDING", "STEP1_APPROVED", "APPROVED"] as const;
-export const JEJU_CHECKIN_TIME = "15:00";
+export const JEJU_CHECKIN_TIME = "16:00";
 export const JEJU_CHECKOUT_BASE_HOUR = 11;
 
 type JejuDb = DB | DBTx;
@@ -17,6 +18,11 @@ export function parseCheckoutDelayHours(v: unknown): 0 | 1 | 2 | 3 | null {
 export function jejuCheckoutTimeLabel(delayHours: number): string {
   const extra = delayHours === 1 || delayHours === 2 || delayHours === 3 ? delayHours : 0;
   return `${String(JEJU_CHECKOUT_BASE_HOUR + extra).padStart(2, "0")}:00`;
+}
+
+/** 퇴실일 당일(KST)부터는 퇴실 지연을 바꿀 수 없음 */
+export function isJejuCheckoutDelayLocked(endDate: Date, todayYmd: string = todayKstYmd()): boolean {
+  return todayYmd >= kstYmd(endDate);
 }
 
 export async function jejuHasCheckInOnDate(

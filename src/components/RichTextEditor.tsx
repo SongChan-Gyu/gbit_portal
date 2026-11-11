@@ -137,7 +137,7 @@ export default function RichTextEditor({
       <div
         ref={editorRef}
         contentEditable
-        className="rich-editor-content p-3 outline-none prose prose-sm max-w-none"
+        className="rich-editor-content p-3 outline-none"
         style={{ minHeight }}
         data-placeholder={placeholder}
         onInput={emit}

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { formatMDWithDayFromYMD } from "@/lib/dateUtils";
+import { JEJU_CHECKIN_TIME } from "@/lib/jejuCheckoutDelay";
 
 type Row = {
   id: string;
@@ -66,7 +67,7 @@ function BookingCard({ row }: { row: Row }) {
       <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm min-w-0">
         <div className="min-w-0">
           <dt className="text-[11px] text-gray-500">입실</dt>
-          <dd className="tabular-nums text-gray-900">{formatStayDate(row.checkIn, row.checkInTime ?? "15:00")}</dd>
+          <dd className="tabular-nums text-gray-900">{formatStayDate(row.checkIn, row.checkInTime ?? JEJU_CHECKIN_TIME)}</dd>
         </div>
         <div className="min-w-0">
           <dt className="text-[11px] text-gray-500">퇴실</dt>
@@ -194,7 +195,7 @@ export default function JejuExternalStayClient({ token }: { token: string }) {
   return (
     <div className="space-y-4 min-w-0">
       <p className="text-xs text-gray-500 leading-relaxed">
-        입실 15:00, 퇴실 기본 11:00(지연 0시간)입니다. 당일 입실이 없으면 1~3시간 지연이 표시되고, 그날 입실 예약이 생기면 자동으로 0시간이 됩니다. 예약확정·입금확인 대기 건만 표시됩니다.
+        입실 {JEJU_CHECKIN_TIME}, 퇴실 기본 11:00(지연 0시간)입니다. 당일 입실이 없으면 1~3시간 지연이 표시되고, 그날 입실 예약이 생기면 자동으로 0시간이 됩니다. 예약확정·입금확인 대기 건만 표시됩니다.
       </p>
 
       {items.length === 0 ? (
@@ -237,7 +238,7 @@ export default function JejuExternalStayClient({ token }: { token: string }) {
                   return (
                     <tr key={r.id} className="border-b border-gray-50 last:border-0 align-top">
                       <td className="px-3 py-2.5 tabular-nums text-gray-900 whitespace-nowrap">
-                        {formatStayDate(r.checkIn, r.checkInTime ?? "15:00")}
+                        {formatStayDate(r.checkIn, r.checkInTime ?? JEJU_CHECKIN_TIME)}
                       </td>
                       <td className="px-3 py-2.5 tabular-nums whitespace-nowrap">
                         <span className={r.checkoutDelayHours ? "text-amber-800 font-medium" : "text-gray-900"}>

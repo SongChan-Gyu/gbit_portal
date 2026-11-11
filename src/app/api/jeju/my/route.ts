@@ -6,6 +6,7 @@ import { getJejuCalendarYearStats, buildJejuYearlyUsageInfo } from "@/lib/jejuYe
 import { todayStr } from "@/lib/workdays";
 import {
   JEJU_OCCUPYING_STATUSES,
+  isJejuCheckoutDelayLocked,
   jejuCheckoutTimeLabel,
   resetJejuCheckoutDelaysWhenCheckInExists,
 } from "@/lib/jejuCheckoutDelay";
@@ -59,6 +60,7 @@ export async function GET() {
         checkoutDelayHours: delayHours,
         checkoutTime: jejuCheckoutTimeLabel(delayHours),
         checkoutDelayAllowed,
+        checkoutDelayLocked: isJejuCheckoutDelayLocked(r.endDate),
         reason: r.reason,
         guestName: r.guestName,
         guestPhone: r.guestPhone,

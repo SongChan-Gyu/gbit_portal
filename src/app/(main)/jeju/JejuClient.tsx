@@ -30,6 +30,7 @@ import {
   type JejuYearlyUsageInfo,
 } from "@/lib/jejuYearStats";
 import { JejuRefundPolicyNotice } from "@/components/jeju/JejuRefundPolicyNotice";
+import { JEJU_CHECKIN_TIME } from "@/lib/jejuCheckoutDelay";
 
 type JejuConfig = {
   maxNights: number;
@@ -350,7 +351,7 @@ export default function JejuClient({
         </div>
         {config && (
           <div className="mx-4 mb-3 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-slate-600">
-            <span>입실 <span className="font-semibold text-slate-900">15:00</span></span>
+            <span>입실 <span className="font-semibold text-slate-900">{JEJU_CHECKIN_TIME}</span></span>
             <span>퇴실 <span className="font-semibold text-slate-900">11:00</span></span>
             <span>최대 <span className="font-semibold text-slate-900">{config.maxNights}박</span></span>
             <span>예약 가능 <span className="font-semibold text-slate-900">~{config.bookingWindowEnd}</span></span>
@@ -441,7 +442,7 @@ export default function JejuClient({
             <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 space-y-2">
               <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">이용 일정</p>
               <p className="text-[15px] font-semibold text-slate-900 leading-snug">
-                입실 {checkInDate.slice(5).replace("-", "/")}({dowLabelKoFromYmd(checkInDate)}) 15:00
+                입실 {checkInDate.slice(5).replace("-", "/")}({dowLabelKoFromYmd(checkInDate)}) {JEJU_CHECKIN_TIME}
               </p>
               <p className="text-[15px] font-semibold text-slate-900 leading-snug">
                 퇴실 {checkOutDate.slice(5).replace("-", "/")}({dowLabelKoFromYmd(checkOutDate)}) 11:00

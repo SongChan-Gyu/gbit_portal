@@ -7,6 +7,7 @@ import {
   JEJU_DEPOSIT_ACCOUNT_DEFAULT,
   type JejuDepositAccount,
 } from "@/lib/jeju";
+import { JEJU_CHECKIN_TIME } from "@/lib/jejuCheckoutDelay";
 
 /** GET /api/jeju/config - 예약 규칙, 예약금·계좌, 예약 불가일 */
 export async function GET() {
@@ -53,7 +54,7 @@ export async function GET() {
 
   return NextResponse.json({
     maxNights,
-    checkIn: "15:00",
+    checkIn: JEJU_CHECKIN_TIME,
     checkOut: "11:00",
     bookingWindowEnd: getJejuBookingWindowEndYmd(),
     depositAmount: JEJU_DEPOSIT_AMOUNT,

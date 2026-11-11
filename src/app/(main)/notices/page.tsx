@@ -39,10 +39,10 @@ export default async function NoticesPage() {
             <li key={n.id}>
               <Link
                 href={`/notices/${n.id}`}
-                className="block rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50 transition"
+                className="block rounded-lg border border-gray-200 bg-white px-4 py-3.5 hover:bg-gray-50 transition"
               >
-                <span className="font-medium text-gray-800">{n.title}</span>
-                <span className="ml-2 text-xs text-gray-500">
+                <span className="block font-medium text-gray-900 leading-snug">{n.title}</span>
+                <span className="mt-1 block text-xs text-gray-500">
                   {n.author.name} · {formatYMD(n.createdAt)}
                 </span>
               </Link>
