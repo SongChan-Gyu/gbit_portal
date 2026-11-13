@@ -20,3 +20,28 @@ export function isAnnualPoolSourceCode(sourceCode: string): boolean {
   if (sourceCode === "ANNUAL") return true; // 레거시 단일 소스코드 호환
   return false;
 }
+
+type LeaveTypePoolLink = {
+  deductFromBalance?: boolean | null;
+  allocationSourceCode?: string | null;
+};
+
+/**
+ * 연차 차감 대상인지.
+ * 연차 유형은 관리자 이월을 위해 allocationSourceCode가 BASE_ANNUAL이어도,
+ * 신청·차감은 기본연차·근속가산·이월을 한 풀로 본다.
+ */
+export function leaveTypeUsesAnnualPool(lt: LeaveTypePoolLink | null | undefined): boolean {
+  if (!lt?.deductFromBalance) return false;
+  const src = lt.allocationSourceCode?.trim() ?? "";
+  return src.length === 0 || isAnnualPoolSourceCode(src);
+}
+
+/** 연차 풀이 아닌 전용 부여 코드. 연차 풀 코드면 null. */
+export function leaveTypeDedicatedSourceCode(
+  lt: { allocationSourceCode?: string | null } | null | undefined,
+): string | null {
+  const src = lt?.allocationSourceCode?.trim() ?? "";
+  if (!src || isAnnualPoolSourceCode(src)) return null;
+  return src;
+}

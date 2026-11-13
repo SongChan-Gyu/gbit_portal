@@ -19,7 +19,12 @@ import {
 import { calcWorkingDays, getFiscalYearFromStr, listWorkingYmds, splitYmdRangeByFiscalYear } from "@/lib/workdays";
 import { calcHolidayExtFullDays, isHolidayOrWeekendYmd, isValidHolidayExtDay } from "@/lib/holidayExt";
 import { normalizeTimeSlotInput, type LeaveTimeSlot } from "@/lib/leaveTimeSlot";
-import { ANNUAL_CORE_SOURCE_CODES, isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import {
+  ANNUAL_CORE_SOURCE_CODES,
+  isAnnualPoolSourceCode,
+  leaveTypeDedicatedSourceCode,
+  leaveTypeUsesAnnualPool,
+} from "@/lib/annualPoolSource";
 import { isHealingHalfReplaceCode, HEALING_DAY_HALF_REPLACE_CODE } from "@/lib/healingLeaveCodes";
 import {
   PM_HALF_MONTH_CODE,
@@ -337,13 +342,13 @@ export async function POST(req: Request) {
       }
     }
 
-    /** 전용 풀(BASE_ANNUAL·CARE 등): 귀속 말일~익 귀속 초일을 한 덩어리로 두면 한 할당으로 구간 전체를 못 덮음 → 귀속연도별로 쪼갬 */
+    /** 전용 풀(CARE·포상 등): 귀속 말일~익 귀속 초일을 한 덩어리로 두면 한 할당으로 구간 전체를 못 덮음 → 귀속연도별로 쪼갬. 연차 풀은 아래 영업일 분리로 처리 */
     const splitWorkItems: WorkItem[] = [];
     for (const it of workItems) {
       const lt = ltMap[it.leaveTypeId]!;
       const needSplit =
         lt.deductFromBalance &&
-        Boolean(lt.allocationSourceCode?.trim()) &&
+        leaveTypeDedicatedSourceCode(lt) != null &&
         it.timeSlot === "FULL" &&
         it.startDate <= it.endDate &&
         getFiscalYearFromStr(it.startDate) !== getFiscalYearFromStr(it.endDate);
@@ -370,8 +375,8 @@ export async function POST(req: Request) {
     const expandedWorkItems: WorkItem[] = [];
     for (const it of splitWorkItems) {
       const lt = ltMap[it.leaveTypeId];
-      // allocationSourceCode 없을 때만: 영업일마다 1일씩 분리(신청·차감 단위). 예전 0.5+0.5 이중 행은 내역에 4줄로 보여 혼란스러워 1일 1행으로 통일.
-      if (lt?.deductFromBalance && !lt.allocationSourceCode && it.timeSlot === "FULL") {
+      // 연차 풀(기본·근속·이월, BASE_ANNUAL에 연결된 연차 포함): 영업일마다 1일씩 분리(신청·차감 단위).
+      if (lt && leaveTypeUsesAnnualPool(lt) && it.timeSlot === "FULL") {
         const ymds = listWorkingYmds(it.startDate, it.endDate, holidayList);
         for (const d of ymds) {
           expandedWorkItems.push({ ...it, startDate: d, endDate: d, days: 1 });
@@ -425,7 +430,7 @@ export async function POST(req: Request) {
       ...new Set(
         items
           .map((i) => ltMap[i.leaveTypeId]?.allocationSourceCode?.trim())
-          .filter((s): s is string => Boolean(s)),
+          .filter((s): s is string => Boolean(s) && !isAnnualPoolSourceCode(s)),
       ),
     ];
     const dedicatedAllocsRaw =
@@ -467,7 +472,7 @@ export async function POST(req: Request) {
     const simPoolRem = new Map(poolAllocs.map((a) => [a.id, Math.max(0, a.totalDays - a.usedDays)]));
     for (const it of expandedWorkItems) {
       const lt = ltMap[it.leaveTypeId];
-      if (!lt?.deductFromBalance || lt.allocationSourceCode) continue;
+      if (!leaveTypeUsesAnnualPool(lt)) continue;
       const d = leaveItemDeductDays(it, lt);
       let ok = false;
       for (const a of poolAllocs) {
@@ -498,8 +503,8 @@ export async function POST(req: Request) {
     }
     for (const it of expandedWorkItems) {
       const lt = ltMap[it.leaveTypeId];
-      if (!lt?.allocationSourceCode) continue;
-      const src = lt.allocationSourceCode;
+      const src = leaveTypeDedicatedSourceCode(lt);
+      if (!src) continue;
       const d = leaveItemDeductDays(it, lt);
       const rem = simDedRem.get(src)!;
       const list = allocsBySource.get(src) ?? [];
@@ -566,9 +571,10 @@ export async function POST(req: Request) {
       const lt = ltMap[it.leaveTypeId];
       const days = leaveItemDeductDays(it, lt);
       let allocationId = it.allocationId || null;
-      if (lt?.allocationSourceCode && !allocationId) {
-        allocationId = pickDedicatedAllocation(lt.allocationSourceCode, days, it.startDate, it.endDate);
-      } else if (lt?.deductFromBalance && !allocationId) {
+      const dedicatedSrc = leaveTypeDedicatedSourceCode(lt);
+      if (dedicatedSrc && !allocationId) {
+        allocationId = pickDedicatedAllocation(dedicatedSrc, days, it.startDate, it.endDate);
+      } else if (leaveTypeUsesAnnualPool(lt) && !allocationId) {
         allocationId = pickAllocation(days, it.startDate, it.endDate);
       }
       return { ...it, days, allocationId };
@@ -576,7 +582,7 @@ export async function POST(req: Request) {
 
     for (const it of resolvedItems) {
       const lt = ltMap[it.leaveTypeId];
-      if (lt?.allocationSourceCode && !it.allocationId) {
+      if (leaveTypeDedicatedSourceCode(lt) && !it.allocationId) {
         return NextResponse.json(
           {
             error: `${lt.name}: 부여된 일수가 없거나 잔여가 부족합니다. 휴가 부여(할당)를 확인해 주세요.`,

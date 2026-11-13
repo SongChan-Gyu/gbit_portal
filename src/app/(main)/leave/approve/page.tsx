@@ -11,7 +11,7 @@ import { mergedLeaveTypeLabel, formatLeaveRequestDaysLabel } from "@/lib/leaveDi
 import { summarizeLeaveApprovals } from "@/lib/leaveApprovalDisplay";
 import { leaveApprovalStatusMeta, leaveApproveEntryKindMeta, leaveCancelApprovalStatusMeta, leaveRequestStatusMeta } from "@/lib/statusMeta";
 import { formatLeaveDayDisplay } from "@/lib/leaveOverviewTable";
-import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { isAnnualPoolSourceCode, leaveTypeDedicatedSourceCode } from "@/lib/annualPoolSource";
 import { AFTERNOON_STAMP_THRESHOLD, HEALING_STAMP_THRESHOLD } from "@/lib/stampCard";
 
 function reqDaysLabel(req: {
@@ -203,10 +203,10 @@ export default async function ApprovePage({
           balanceComment: `${it.leaveType.name} 잔여 ${couponRemaining}개 / 신청 ${needStamp}개`,
         };
       }
+      const dedicatedSrc = leaveTypeDedicatedSourceCode(it.leaveType);
       const remaining = empAllocs
         .filter((a) => {
-          const src = it.leaveType.allocationSourceCode?.trim();
-          if (src) return a.sourceCode === src;
+          if (dedicatedSrc) return a.sourceCode === dedicatedSrc;
           if (!it.leaveType.deductFromBalance) return false;
           return isAnnualPoolSourceCode(a.sourceCode);
         })

@@ -8,7 +8,7 @@ import { calendarUtcDowFromYMD, eachYmdInInclusiveRange, formatYMD } from "@/lib
 import { leaveItemDeductDays, leaveItemFormDisplayDays } from "@/lib/leaveAllocationPool";
 import { resolveItemTimeSlot } from "@/lib/leaveTimeSlot";
 import { leaveTypeWithPolicy } from "@/lib/leaveTypePolicy";
-import { isAnnualPoolSourceCode } from "@/lib/annualPoolSource";
+import { isAnnualPoolSourceCode, leaveTypeDedicatedSourceCode, leaveTypeUsesAnnualPool } from "@/lib/annualPoolSource";
 import { buildHolidayDisplaySet, isRedCalendarDay, CALENDAR_HOLIDAY_COLOR } from "@/lib/calendarHolidayDisplay";
 import { ChevronRight, Info, AlertCircle, CheckCircle2, ExternalLink, Calendar } from "lucide-react";
 import { isHealingHalfReplaceCode } from "@/lib/healingLeaveCodes";
@@ -876,7 +876,7 @@ export default function LeaveApplyForm({
     for (const it of items) {
       if (!needsLeaveRowValidation(it)) continue;
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-      if (!lt?.deductFromBalance || lt.allocationSourceCode) continue;
+      if (!leaveTypeUsesAnnualPool(lt)) continue;
       annualNeed += leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, lt, holidaySet);
     }
     if (annualNeed > annualPoolRemaining + 1e-6) {
@@ -889,8 +889,8 @@ export default function LeaveApplyForm({
     for (const it of items) {
       if (!needsLeaveRowValidation(it)) continue;
       const lt = leaveTypes.find((t) => t.id === it.leaveTypeId);
-      const src = lt?.allocationSourceCode?.trim();
-      if (!lt || !src) continue;
+      const src = leaveTypeDedicatedSourceCode(lt);
+      if (!src) continue;
       const d = leaveItemFormDisplayDays({ days: it.days, timeSlot: it.timeSlot, startDate: it.startDate }, lt, holidaySet);
       dedicatedTotals[src] = (dedicatedTotals[src] ?? 0) + d;
     }
