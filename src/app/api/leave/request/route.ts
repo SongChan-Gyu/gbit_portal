@@ -430,7 +430,7 @@ export async function POST(req: Request) {
       ...new Set(
         items
           .map((i) => ltMap[i.leaveTypeId]?.allocationSourceCode?.trim())
-          .filter((s): s is string => Boolean(s) && !isAnnualPoolSourceCode(s)),
+          .filter((s): s is string => typeof s === "string" && s.length > 0 && !isAnnualPoolSourceCode(s)),
       ),
     ];
     const dedicatedAllocsRaw =
